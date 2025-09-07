@@ -1,0 +1,56 @@
+services:
+  backend:
+    container_name: axon-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    volumes:
+      - ./apps/backend:/app/apps/backend
+      - ./packages/api-contract:/app/packages/api-contract
+      - /app/node_modules
+      - /app/apps/backend/node_modules
+      - /app/packages/api-contract/node_modules
+
+    depends_on:
+      db:
+        condition: service_started
+    env_file:
+      - .env
+    ports:
+      - '3001:3001'
+    command: >
+      sh -c 'pnpm --filter @axon/backend exec prisma migrate deploy --schema ./src/prisma/schema.prisma &&
+            pnpm --filter @axon/backend run dev:watch'
+    networks:
+      - axon-network
+    restart: unless-stopped
+
+  db:
+    container_name: axon-db
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: axon
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - axon-network
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U postgres -d axon -h 127.0.0.1 -p 5432']
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  db_data:
+
+networks:
+  axon-network:
+    driver: bridge

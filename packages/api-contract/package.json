@@ -1,0 +1,29 @@
+{
+  "name": "@axon/api-contract",
+  "version": "1.0.0",
+  "description": "",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs --dts",
+    "dev": "tsup src/index.ts --format cjs --dts --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "packageManager": "pnpm@10.14.0",
+  "dependencies": {
+    "@orpc/contract": "^1.8.6",
+    "@orpc/server": "^1.8.5",
+    "zod": "^4.1.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "tsconfig-paths": "^4.2.0",
+    "tsup": "^8.2.2",
+    "typescript": "^5.9.2"
+  }
+}

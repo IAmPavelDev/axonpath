@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "target": "ES2021",
+    "lib": [
+        "ES2021"
+    ],
+    "declaration": false,
+    "sourceMap": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "baseUrl": ".",
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@schema/*": ["./src/schema/*"],
+      "@contract/*": ["./src/contract/*"]
+    }
+  },
+  "exclude": [
+    "node_modules"
+  ],
+  "include": ["src"]
+}

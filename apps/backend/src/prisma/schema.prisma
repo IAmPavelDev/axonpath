@@ -1,0 +1,217 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm, pgcrypto, vector]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  output          = "generated"
+  previewFeatures = ["postgresqlExtensions"]
+  binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+// ----- Existing Authentication Models -----
+enum UserRole {
+  USER
+  ADMIN
+  MODERATOR
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model User {
+  id                Int        @id @default(autoincrement())
+  email             String     @unique @db.VarChar(255)
+  password          String
+  firstName         String
+  lastName          String
+  role             UserRole    @default(USER)
+  status            UserStatus @default(PENDING_VERIFICATION)
+  lastLogin         DateTime?
+  emailVerified     Boolean    @default(false)
+  verificationToken String?    @unique
+  resetToken        String?
+  resetTokenExpires DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  // Relationships
+  skills  Skill[]
+  answers Answer[]
+  events  Event[]
+  Session Session[]
+
+  @@index([email, status])
+  @@index([createdAt])
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  valid     Boolean  @default(true)
+  userAgent String?
+  ipAddress String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, valid])
+  @@index([expiresAt])
+}
+
+// ----- Learning Service Models -----
+enum SkillStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  OPEN_ENDED
+}
+
+enum VectorSource {
+  AI_INITIAL
+  AI_NEXT
+  ANSWER_DERIVED
+}
+
+enum EventType {
+  SKILL_CREATED
+  CLASS_GENERATED
+  ANSWER_SUBMITTED
+  CONTEXT_SELECTED
+  ERROR_OCCURRED
+  VECTOR_UPSERTED
+}
+
+model Skill {
+  id        Int             @id @default(autoincrement())
+  user      User            @relation(fields: [userId], references: [id])
+  userId    Int
+  topic     String          @db.VarChar(255)
+  status    SkillStatus     @default(DRAFT)
+  lambda    Float           @default(0.02)
+  requestId Int?            @unique
+  classes   Class[]
+  questions Question[]
+  answers   Answer[]
+  progress  SkillProgress[]
+  events    Event[]
+  vectors   Vector[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([requestId])
+}
+
+model Class {
+  id        Int        @id @default(autoincrement())
+  skill     Skill      @relation(fields: [skillId], references: [id])
+  skillId   Int
+  index     Int
+  title     String     @db.VarChar(255)
+  contentMd String     @db.Text
+  aiModel   String?
+  vectors   Vector[]
+  questions Question[]
+  createdAt DateTime   @default(now())
+
+  @@unique([skillId, index])
+  @@index([skillId, index])
+}
+
+model Question {
+  id        Int          @id @default(autoincrement())
+  skill     Skill        @relation(fields: [skillId], references: [id])
+  skillId   Int
+  class     Class?       @relation(fields: [classId], references: [id])
+  classId   Int?
+  type      QuestionType
+  text      String       @db.Text
+  choices   Json?
+  answerKey Json?
+  aiModel   String?
+  answers   Answer[]
+  createdAt DateTime     @default(now())
+
+  @@index([skillId, classId])
+  @@index([type])
+}
+
+model Answer {
+  id          Int      @id @default(autoincrement())
+  question    Question @relation(fields: [questionId], references: [id])
+  questionId  Int
+  user        User     @relation(fields: [userId], references: [id])
+  userId      Int
+  content     Json
+  score       Float?
+  isCorrect   Boolean?
+  timeSpentMs Int
+  device      String?  @db.VarChar(255)
+  vectors     Vector[]
+  createdAt   DateTime @default(now())
+  Skill       Skill?   @relation(fields: [skillId], references: [id])
+  skillId     Int?
+
+  @@index([questionId])
+  @@index([userId])
+  @@index([isCorrect])
+}
+
+model SkillProgress {
+  id        Int      @id @default(autoincrement())
+  skill     Skill    @relation(fields: [skillId], references: [id])
+  skillId   Int
+  snapshot  Json
+  updatedAt DateTime @updatedAt
+
+  @@index([skillId])
+}
+
+model Event {
+  id        Int       @id @default(autoincrement())
+  skill     Skill     @relation(fields: [skillId], references: [id])
+  skillId   Int
+  type      EventType
+  payload   Json
+  createdAt DateTime  @default(now())
+  User      User?     @relation(fields: [userId], references: [id])
+  userId    Int?
+
+  @@index([skillId, type])
+  @@index([createdAt])
+}
+
+model Vector {
+  id          Int                         @id @default(autoincrement())
+  skill       Skill                       @relation(fields: [skillId], references: [id])
+  skillId     Int
+  embedding   Unsupported("vector(1536)")
+  source      VectorSource
+  textSnippet String                      @db.Text
+  classIndex  Int?
+  tokenCount  Int?
+  createdAt   DateTime                    @default(now())
+  Class       Class?                      @relation(fields: [classId], references: [id])
+  classId     Int?
+  Answer      Answer?                     @relation(fields: [answerId], references: [id])
+  answerId    Int?
+
+  @@index([skillId])
+  @@index([classIndex])
+  @@index([source])
+}

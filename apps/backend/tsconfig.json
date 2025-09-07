@@ -1,0 +1,61 @@
+{
+    "extends": "fastify-tsconfig",
+    "compilerOptions": {
+        "noEmit": true,
+        "outDir": "dist",
+        "rootDir": "src",
+        "target": "ES2021",
+        "lib": [
+            "ES2021"
+        ],
+        "declaration": false,
+        "sourceMap": true,
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
+        "baseUrl": ".",
+        "forceConsistentCasingInFileNames": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "allowImportingTsExtensions": true,
+        "paths": {
+            "@/*": [
+                "src/*"
+            ],
+            "@router/*": [
+                "src/router/*"
+            ],
+            "@services/*": [
+                "src/services/*"
+            ],
+            "@prisma/*": [
+                "src/prisma/*"
+            ],
+            "@middleware/*": [
+                "src/middleware/*"
+            ],
+            "@utils/*": [
+                "src/utils/*"
+            ],
+            "@config": [
+                "src/config.ts"
+            ],
+            "@controllers/*": [
+                "src/controllers/*"
+            ],
+            "@types": [
+                "src/types/index.ts"
+            ]
+        }
+    },
+    "include": [
+        "src/**/*.ts",
+        "@types/**/*.d.ts",
+        "prisma/prisma.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

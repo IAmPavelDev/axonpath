@@ -1,0 +1,26 @@
+ services:
+  backend:
+    volumes:
+      - .:/app
+      - /app/node_modules
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      db:
+        condition: service_started
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - APP_PORT=${APP_PORT}
+      - APP_HOST=${APP_HOST}
+      - DATABASE_URL=${DATABASE_HOST}
+
+    ports: 
+      - "3001:3001"
+    command: >
+      sh -c "pnpm run prisma:migrate:deploy && pnpm run build && node dist/main.js"
+
+    networks:
+      - axon-network
+
+    restart: always
