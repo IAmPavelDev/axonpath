@@ -1,6 +1,12 @@
+import { ContextType } from "@/types/Context";
 import { prisma } from "@prisma/index.ts";
 
-export const authMiddleware = async ({ context, next }: any) => {
+type AuthMiddlewareInput = {
+  context: ContextType;
+  next: any;
+}
+
+export const authMiddleware = async ({ context, next }: AuthMiddlewareInput) => {
   let user;
   try {
     user = await prisma.user.upsert({
@@ -25,6 +31,6 @@ export const authMiddleware = async ({ context, next }: any) => {
   return next({
     context: {
       user
-    },
+    } as ContextType,
   });
 };

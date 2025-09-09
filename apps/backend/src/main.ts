@@ -7,7 +7,6 @@ import env from '@fastify/env';
 import { router} from '@router/index.ts';
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import { experimental_ZodSmartCoercionPlugin as ZodSmartCoercionPlugin } from '@orpc/zod/zod4';
-import { OpenAPIHandler } from '@orpc/openapi/fetch';
 import { OpenAPIGenerator } from '@orpc/openapi';
 
 interface AppConfig {
@@ -25,10 +24,6 @@ declare module 'fastify' {
 const handler = new RPCHandler(router, {
   plugins: [new CORSPlugin(), new ZodSmartCoercionPlugin()],
 });
-
-// const openAPIHandler = new OpenAPIHandler(router, {
-//   plugins: [new CORSPlugin(), new ZodSmartCoercionPlugin()],
-// });
 
 const openAPIGenerator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],

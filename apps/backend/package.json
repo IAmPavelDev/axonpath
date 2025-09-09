@@ -23,6 +23,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
+    "@types/amqplib": "^0.10.7",
     "@types/node": "^24.3.0",
     "fastify-tsconfig": "^3.0.0",
     "nodemon": "^3.1.10",
@@ -44,6 +45,7 @@
     "@orpc/server": "^1.8.6",
     "@orpc/zod": "^1.8.6",
     "@prisma/client": "6.15.0",
+    "amqplib": "^0.10.9",
     "fastify": "^5.5.0",
     "module-alias": "^2.2.3",
     "prisma": "^6.15.0",

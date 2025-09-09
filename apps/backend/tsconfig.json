@@ -46,7 +46,7 @@
                 "src/controllers/*"
             ],
             "@types": [
-                "src/types/index.ts"
+                "src/types/*"
             ]
         }
     },

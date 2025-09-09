@@ -4,7 +4,7 @@ export const CreateSkillInput = z.object({
   topic: z.string(),
 });
 
-export const SkillIdInput = z.object({ id: z.string().min(1) });
+export const SkillIdInput = z.object({ id: z.number().min(1) });
 
 export const CreateSkillOutput = z.object({
   id: z.string(),

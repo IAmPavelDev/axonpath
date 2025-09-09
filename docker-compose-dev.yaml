@@ -21,6 +21,7 @@ services:
       - '3001:3001'
     command: >
       sh -c 'pnpm --filter @axon/backend exec prisma migrate deploy --schema ./src/prisma/schema.prisma &&
+            pnpm --filter @axon/backend run prisma:generate &&
             pnpm --filter @axon/backend run dev:watch'
     networks:
       - axon-network
@@ -48,8 +49,21 @@ services:
       retries: 30
       start_period: 5s
 
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+
 volumes:
   db_data:
+  rabbitmq_data:
 
 networks:
   axon-network:
