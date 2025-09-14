@@ -11,5 +11,10 @@ export const config = {
     : 0.02,
   ai: {
     AI_API_KEY: process.env.GEMINI_API_KEY,
+    models: {
+      weak: 'gemini-2.0-flash-lite',
+      pro: 'gemini-2.5-pro',
+      embedding: 'gemini-embedding-001'
+    }
   }
 };

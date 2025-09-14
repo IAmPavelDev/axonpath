@@ -143,7 +143,7 @@ CREATE TABLE "public"."Event" (
 CREATE TABLE "public"."Vector" (
     "id" SERIAL NOT NULL,
     "skillId" INTEGER NOT NULL,
-    "embedding" vector(1536) NOT NULL,
+    "embedding" vector(3072) NOT NULL,
     "source" "public"."VectorSource" NOT NULL,
     "textSnippet" TEXT NOT NULL,
     "classIndex" INTEGER,

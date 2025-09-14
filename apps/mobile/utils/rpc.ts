@@ -1,6 +1,6 @@
 import { createORPCClient, onError } from '@orpc/client'
 import { RPCLink } from '@orpc/client/fetch'
-import type { AppRouter } from '@axon/api-contract'
+import type { AppContract } from '@axon/api-contract'
 import { ContractRouterClient } from '@orpc/contract'
 
 const link = new RPCLink({
@@ -8,7 +8,6 @@ const link = new RPCLink({
   headers: () => ({
     authorization: 'Bearer token',
   }),
-  // fetch: <-- provide fetch polyfill fetch if needed
   interceptors: [
     onError((error) => {
       console.error(error)
@@ -16,6 +15,6 @@ const link = new RPCLink({
   ],
 })
 
-const client: ContractRouterClient<AppRouter> = createORPCClient(link)
+const client: ContractRouterClient<AppContract> = createORPCClient(link)
 
 export default client

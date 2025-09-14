@@ -1,17 +1,22 @@
 import { GoogleGenAI } from "@google/genai";
-import { prisma } from '@/prisma/index.ts';
-import { config } from '@/config.ts';
-import { EventType } from "@/prisma/generated/index.ts";
+import { prisma } from "@/prisma/index.ts";
+import { config } from "@/config.ts";
+import { EventType, QuestionType } from "@/prisma/generated/client";
+import { AiModelType } from "@/types/AiModels";
 
-const models = {
-  weak: 'gemini-2.0-flash-lite',
-  pro: 'gemini-2.5-pro',
+type QuestionResponse = {
+  type: QuestionType;
+  text: string;
+  choices: string[];
+  answerKey: string;
 };
 
 type InitSkillResponse = {
+  classTitle: string;
   classContentMd: string;
-  questions: string[];
+  questions: QuestionResponse[];
   contextSnippets: string[];
+  model: AiModelType;
 };
 
 type NextClassResponse = {
@@ -22,78 +27,113 @@ type NextClassResponse = {
 
 type ContentGenerationResponse = {
   response: string;
-  model: typeof models[keyof typeof models];
+  model: AiModelType;
 };
 
 const genAI = new GoogleGenAI({
-  apiKey: config.ai.AI_API_KEY
+  apiKey: config.ai.AI_API_KEY,
 });
 
-// const weakGeneration = async (contents: string): Promise<ContentGenerationResponse> => {
-//   try {
-//     const response = await genAI.models.generateContent({
-//       model: models.weak,
-//       contents,
-//     });
-  
-//     return {
-//       response: response.text ?? '',
-//       model: models.weak,
-//     };
-//   } catch (error) {
-//     console.error('AI generation failed:', error);
-
-//     return {
-//       response: '',
-//       model: models.weak,
-//     };;
-//   }
-// };
-
-const performantGeneration = async (contents: string): Promise<ContentGenerationResponse> => {
+const generate = async (
+  contents: string,
+  model: AiModelType,
+  responseSchema: Record<string, any>
+): Promise<ContentGenerationResponse> => {
   try {
     const response = await genAI.models.generateContent({
-      model: models.pro,
+      model,
       contents,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema,
+      },
     });
-  
+
     return {
-      response: response.text ?? '',
-      model: models.pro,
+      response: response.text ?? "",
+      model,
     };
   } catch (error) {
-    console.error('AI generation failed:', error);
+    console.error("AI generation failed:", error);
   }
-  
+
   return {
-    response: '',
-    model: models.pro,
+    response: "",
+    model,
   };
 };
+const weakGeneration = async (
+  contents: string,
+  responseSchema: Record<string, any>
+) => generate(contents, config.ai.models.weak, responseSchema);
+const performantGeneration = async (
+  contents: string,
+  responseSchema: Record<string, any>
+) => generate(contents, config.ai.models.pro, responseSchema);
+
+const generateEmbeddings = async (content: string[]): Promise<number[][]> => {
+  const response = await genAI.models.embedContent({
+    model: config.ai.models.embedding,
+    contents: content,
+  })
+
+  return response.embeddings?.map(emb => emb.values ?? []) ?? [];
+}
 
 const generateInitSkill = async (
-  params: InitSkillParams,
+  params: InitSkillParams
 ): Promise<InitSkillResponse | undefined> => {
   const prompt = `Generate initial learning content for topic: ${params.topic}. Include:
-      - Detailed markdown lesson (500-700 words)
-      - 5-10 key context snippets (bullet points)
-      - 5-10 multiple choice questions with answers
+      - classTitle: title of the lesson
+      - classContentMd: detailed markdown lesson (500-700 words)
+      - questions: 5-10 multiple choice questions with answers
+      - contextSnippets: 5-10 key context snippets strictly about the user to reference personalized information in the future learning`;
 
-      Format as JSON: { "classContentMd": "...", "questions": ["..."], "contextSnippets": ["..."] }`;
+  const responseSchema = {
+    type: "object",
+    properties: {
+      classTitle: { type: "string" },
+      classContentMd: { type: "string" },
+      questions: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: Object.values(QuestionType) },
+            text: { type: "string" },
+            choices: { type: "array", items: { type: "string" } },
+            answerKey: { type: "string" },
+          },
+          required: ["type", "text", "choices", "answerKey"],
+        },
+      },
+      contextSnippets: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: ["classTitle", "classContentMd", "questions", "contextSnippets"],
+  };
 
   try {
-    const { response, model } = await performantGeneration(prompt);
+    const { response, model } = await performantGeneration(
+      prompt,
+      responseSchema
+    );
 
     // Log to audit events
-    const cleanedText = response.replace(/```json/g, '').replace(/```/g, '');
+    const cleanedText = response.replace(/```json/g, "").replace(/```/g, "");
     const responseData = JSON.parse(cleanedText);
 
     await prisma.event.create({
       data: {
         type: EventType.SKILL_CREATED,
         skillId: params.skillId,
+        userId: params.userId,
         payload: {
-          action: 'init_skill',
+          action: "init_skill",
           prompt: prompt.substring(0, 2000),
           model,
           response: cleanedText,
@@ -101,60 +141,69 @@ const generateInitSkill = async (
       },
     });
 
-    return responseData;
+    return {
+      classTitle: responseData.classTitle ?? "Unknown title",
+      classContentMd: responseData.classContentMd ?? "",
+      questions: responseData.questions ?? [],
+      contextSnippets: responseData.contextSnippets ?? [],
+      model,
+    };
   } catch (error) {
-    console.error('AI generation failed:', error);
+    console.error("AI generation failed:", error);
   }
 };
 
-const generateNextClass = async (
-  params: NextClassParams,
-): Promise<NextClassResponse> => {
-  const prompt = `Generate next class based on:
-      - Previous context: ${params.selectedContext.join('\n')}
-      - User answers: ${JSON.stringify(params.answers)}
+// const generateNextClass = async (
+//   params: NextClassParams
+// ): Promise<NextClassResponse> => {
+//   const prompt = `Generate next class based on:
+//       - Previous context: ${params.selectedContext.join("\n")}
+//       - User answers: ${JSON.stringify(params.answers)}
 
-      Produce:
-      - Continuation lesson in markdown
-      - 5-10 new context snippets
-      - 5-10 new questions
+//       Produce:
+//       - Continuation lesson in markdown
+//       - 5-10 new context snippets
+//       - 5-10 new questions
 
-      Format as JSON: { "classContentMd": "...", "questions": ["..."], "newContextSnippets": ["..."] }`;
+//       Format as JSON: { "classContentMd": "...", "questions": ["..."], "newContextSnippets": ["..."] }`;
 
-  try {
-    const { response, model } = await performantGeneration(prompt);
+//   try {
+//     const { response, model } = await performantGeneration(prompt);
 
-    const cleanedText = response.replace(/```json/g, '').replace(/```/g, '');
+//     const cleanedText = response.replace(/```json/g, "").replace(/```/g, "");
 
-    await prisma.event.create({
-      data: {
-        type: EventType.CLASS_GENERATED,
-        skillId: params.skillId,
-        payload: {
-          prompt,
-          response: cleanedText,
-          model,
-        },
-      },
-    });
+//     await prisma.event.create({
+//       data: {
+//         type: EventType.CLASS_GENERATED,
+//         skillId: params.skillId,
+//         payload: {
+//           prompt,
+//           response: cleanedText,
+//           model,
+//         },
+//       },
+//     });
 
-    return JSON.parse(cleanedText);
-  } catch (error: unknown) {
-    console.error('Next class generation failed:', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    throw new Error(`AI service error: ${message}`);
-  }
-};
+//     return JSON.parse(cleanedText);
+//   } catch (error: unknown) {
+//     console.error("Next class generation failed:", error);
+//     const message = error instanceof Error ? error.message : "Unknown error";
+//     throw new Error(`AI service error: ${message}`);
+//   }
+// };
 
 export interface InitSkillParams {
-  skillId: string;
+  userId: number;
+  skillId: number;
   topic: string;
 }
 
 export interface NextClassParams {
-  skillId: string;
+  skillId: number;
   skillTopic: string;
   lastClassIdx: number;
   answers: string[];
   selectedContext: string[];
 }
+
+export default { generateInitSkill, generateEmbeddings };

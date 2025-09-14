@@ -11,7 +11,7 @@ generator client {
   binaryTargets   = ["native", "linux-musl-openssl-3.0.x"]
 }
 
-// ----- Existing Authentication Models -----
+// ----- Existing Authentication Models -----s
 enum UserRole {
   USER
   ADMIN
@@ -30,7 +30,7 @@ model User {
   password          String
   firstName         String
   lastName          String
-  role             UserRole    @default(USER)
+  role              UserRole   @default(USER)
   status            UserStatus @default(PENDING_VERIFICATION)
   lastLogin         DateTime?
   emailVerified     Boolean    @default(false)
@@ -200,7 +200,7 @@ model Vector {
   id          Int                         @id @default(autoincrement())
   skill       Skill                       @relation(fields: [skillId], references: [id])
   skillId     Int
-  embedding   Unsupported("vector(1536)")
+  embedding   Unsupported("vector(3072)")
   source      VectorSource
   textSnippet String                      @db.Text
   classIndex  Int?
