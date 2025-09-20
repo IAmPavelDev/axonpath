@@ -1,14 +1,18 @@
-import { Spinner } from '@/components/ui/spinner';
-import { ClassById } from '@/types/class';
-import rpc from '@/utils/rpc';
-import { useQuery } from '@tanstack/react-query';
-import { Tabs, useLocalSearchParams } from 'expo-router';
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Tabs, useLocalSearchParams } from 'expo-router';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useQuery } from '@tanstack/react-query';
 
-const ClassContext = createContext<ClassById | null>(null);
+import { Spinner } from '@/components/ui/spinner';
+import type { ClassById } from '@/types/class';
+import rpc from '@/utils/rpc';
 
-export function useClassData() {
+type ClassContextValue = ClassById;
+
+const ClassContext = createContext<ClassContextValue | undefined>(undefined);
+
+export function useClassData(): ClassContextValue {
   const context = useContext(ClassContext);
   if (!context) {
     throw new Error('useClassData must be used within a ClassProvider');
@@ -16,12 +20,16 @@ export function useClassData() {
   return context;
 }
 
-function CustomTabBar({ state, descriptors, navigation }) {
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   return (
     <View style={styles.tabBarContainer}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
-        const label = options.title !== undefined ? options.title : route.name;
+        const label =
+          options.title !== undefined
+            ? options.title
+            : route.name;
+
         const isFocused = state.index === index;
 
         const onPress = () => {
@@ -32,7 +40,8 @@ function CustomTabBar({ state, descriptors, navigation }) {
           });
 
           if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(route.name);
+            // The BottomTabBarProps navigation is untyped for route names here, so cast is common.
+            navigation.navigate(route.name as never);
           }
         };
 
@@ -42,8 +51,11 @@ function CustomTabBar({ state, descriptors, navigation }) {
             accessibilityRole="button"
             accessibilityState={isFocused ? { selected: true } : {}}
             onPress={onPress}
-            style={[styles.tabButton, isFocused && styles.tabButtonActive]}>
-            <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{label}</Text>
+            style={[styles.tabButton, isFocused && styles.tabButtonActive]}
+          >
+            <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
+              {label}
+            </Text>
           </Pressable>
         );
       })}
@@ -52,20 +64,50 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 export default function ClassDetailsLayout() {
-  const { classId } = useLocalSearchParams();
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['classById'],
-    queryFn: () => rpc.class.get({ id: Number(classId) }),
+  const params = useLocalSearchParams<{ classId?: string | string[] }>();
+
+  const classIdNum = useMemo(() => {
+    const idStr = Array.isArray(params.classId) ? params.classId?.[0] : params.classId;
+    const n = Number(idStr);
+    return Number.isFinite(n) ? n : undefined;
+  }, [params.classId]);
+
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+  } = useQuery<ClassById, Error>({
+    queryKey: ['classById', classIdNum],
+    queryFn: () => rpc.class.get({ id: classIdNum! }),
+    enabled: classIdNum !== undefined,
+    staleTime: 60_000,
   });
+
+  if (classIdNum === undefined) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>Invalid or missing classId.</Text>
+      </View>
+    );
+  }
 
   if (isLoading || !data) {
     return <Spinner />;
   }
 
+  if (isError) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.errorText}>Failed to load class: {error?.message ?? 'Unknown error'}</Text>
+      </View>
+    );
+  }
+
   return (
     <ClassContext.Provider value={data}>
       <View style={{ flex: 1 }}>
-        <Text style={styles.title}>{data?.title}</Text>
+        <Text style={styles.title}>{data.title}</Text>
 
         <Tabs tabBar={(props) => <CustomTabBar {...props} />}>
           <Tabs.Screen
@@ -120,5 +162,15 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  errorText: {
+    color: '#b00020',
+    textAlign: 'center',
   },
 });
