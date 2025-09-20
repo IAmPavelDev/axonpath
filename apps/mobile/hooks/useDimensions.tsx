@@ -5,13 +5,17 @@ export const useDimensions = () => {
   const [dimensions, setDimensions] = React.useState<{
     width: number;
     height: number;
-  }>({ width: 0, height: 0 });
+    screenWidth: number;
+    screenHeight: number;
+  }>({ width: 0, height: 0, screenWidth: 0, screenHeight: 0 });
 
   React.useEffect(() => {
     const updateDimensions = () => {
       setDimensions({
         width: Dimensions.get('window').width,
         height: Dimensions.get('window').height,
+        screenWidth: Dimensions.get('screen').width,
+        screenHeight: Dimensions.get('screen').height,
       });
     };
 

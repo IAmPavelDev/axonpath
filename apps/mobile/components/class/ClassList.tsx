@@ -17,11 +17,11 @@ const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {
   );
 };
 
-export const ClassList: FC<{ classesData: Class[] }> = ({ classesData }) => {
+export const ClassList: FC<{ data: Class[] }> = ({ data }) => {
   const { height } = useDimensions();
   return (
     <FlatList
-      data={classesData}
+      data={data}
       style={{ paddingHorizontal: 16, marginBottom: height / 2 }}
       renderItem={({ item: classData }) => <ClassListItem classData={classData} />}
       keyExtractor={(classData) => classData.id.toString()}

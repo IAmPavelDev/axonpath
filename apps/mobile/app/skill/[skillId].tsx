@@ -1,7 +1,7 @@
-import { Text } from '@/components/ui/text';
 import { useLocalSearchParams } from 'expo-router';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
+import { Spinner } from '@/components/ui/spinner';
 import { ClassList } from '@/components/class/ClassList';
 
 export default function Route() {
@@ -11,5 +11,5 @@ export default function Route() {
     queryFn: () => rpc.class.list({ skillId: Number(skillId) }),
   });
 
-  return <ClassList classesData={data ?? []} />;
+  return isLoading || !data ? <Spinner /> : <ClassList data={data} />;
 }

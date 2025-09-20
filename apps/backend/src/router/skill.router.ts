@@ -4,7 +4,7 @@ import { rpc } from "@/lib/orpc";
 const create = rpc.skill.create.handler(createSkillHandler);
 const list = rpc.skill.list.handler(getSkillListHandler);
 
-export const skill = {
+export const skillRouter = {
   create,
   list,
 };
