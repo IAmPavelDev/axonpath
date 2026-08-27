@@ -3,7 +3,8 @@ import { classContract, type ClassContractType } from "./contract/class.contract
 import * as skillSchema from "./schema/skill.schema.js";
 import * as classSchema from "./schema/class.schema.js";
 import * as quizSchema from "./schema/quiz.schema.js";
-import { quizContract, QuizContractType } from "./contract/quiz.contract.js";
+import { quizContract, type QuizContractType } from "./contract/quiz.contract.js";
+import { type Question } from "./schema/quiz.schema.js";
 
 export const contract = {
   skill: skillContract,
@@ -16,6 +17,8 @@ export const schema = {
   class: classSchema,
   quiz: quizSchema
 }
+
+export type { Question };
 
 export type AppContract = {
   skill: SkillContractType;

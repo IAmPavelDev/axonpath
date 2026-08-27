@@ -1,12 +1,15 @@
 import { ContextType } from "@/types/Context";
 import { prisma } from "@prisma/index.ts";
+import type { Middleware, ORPCErrorConstructorMap } from "@orpc/server";
 
-type AuthMiddlewareInput = {
-  context: ContextType;
-  next: any;
-}
-
-export const authMiddleware = async ({ context, next }: AuthMiddlewareInput) => {
+export const authMiddleware: Middleware<
+  Record<string, never>,
+  ContextType,
+  unknown,
+  unknown,
+  ORPCErrorConstructorMap<Record<never, never>>,
+  Record<never, never>
+> = async ({ next }) => {
   let user;
   try {
     user = await prisma.user.upsert({

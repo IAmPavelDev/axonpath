@@ -1,17 +1,18 @@
-import z from "zod";
+import { z } from "zod";
 
 export const GetQuizByClassIdInput = z.object({
   classId: z.number(),
 });
 
-const QuestionType = z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "OPEN_ENDED"]);
+export const QuestionType = z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "OPEN_ENDED"]);
 
-const Question = z.object({
+export const Question = z.object({
   id: z.number(),
   type: QuestionType,
   text: z.string(),
   choices: z.array(z.string()),
 });
+export type Question = z.infer<typeof Question>;
 
 export const GetQuizByClassIdOutput = z.array(Question);
 

@@ -23,7 +23,6 @@ export const submitQuizHandler: OrpcHandler<
   z.infer<typeof SubmitQuizAnswersInput>,
   z.infer<typeof SubmitQuizAnswersOutput>
 > = async ({ input }) => {
-  const { answers } = input;
-  const questions = await QuizService.submitAnswers(answers);
+  const { questions } = await QuizService.submitAnswers(input);
   return questions;
 };

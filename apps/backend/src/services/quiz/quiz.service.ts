@@ -4,14 +4,11 @@ import {
   CreateQuestionOutputDto,
 } from "./dto/CreateQuestion.dto";
 import {
-  CreateAnswerInputDto,
-  CreateAnswerOutputDto,
-} from "./dto/CreateAnswer.dto";
-import {
   GetQuestionsByClassIdInputDto,
   GetQuestionsByClassIdOutputDto,
 } from "./dto/GetQuestionsByClassId.dto";
 import { SubmitQuizAnswersInputDto, SubmitQuizAnswersOutputDto } from "./dto/SubmitAnswer.dto";
+import { QuestionRow, toQuestionDto } from "./question.mapper";
 
 const createQuestion = async (
   input: CreateQuestionInputDto
@@ -34,27 +31,6 @@ const createQuestion = async (
   return { questionId: question.id };
 };
 
-const createAnswer = async (
-  input: CreateAnswerInputDto
-): Promise<CreateAnswerOutputDto> => {
-  const answer = await prisma.answer.create({
-    data: {
-      questionId: input.questionId,
-      userId: input.userId,
-      content: input.content,
-      score: input.score,
-      isCorrect: input.isCorrect,
-      timeSpentMs: input.timeSpentMs,
-      device: input.device,
-    },
-    select: {
-      id: true,
-    },
-  });
-
-  return { answerId: answer.id };
-};
-
 const getQuestionsByClassId = async (
   input: GetQuestionsByClassIdInputDto
 ): Promise<GetQuestionsByClassIdOutputDto> => {
@@ -70,7 +46,7 @@ const getQuestionsByClassId = async (
     },
   });
 
-  return { questions } as GetQuestionsByClassIdOutputDto;
+  return { questions: questions.map((row) => toQuestionDto(row as QuestionRow)) };
 };
 
 const submitAnswers = async (input: SubmitQuizAnswersInputDto): Promise<SubmitQuizAnswersOutputDto> => {
@@ -89,7 +65,7 @@ const submitAnswers = async (input: SubmitQuizAnswersInputDto): Promise<SubmitQu
     },
   });
 
-  return { questions };
+  return { questions: questions.map((row) => toQuestionDto(row as QuestionRow)) };
 };
 
-export default { createQuestion, getQuestionsByClassId };
+export default { createQuestion, getQuestionsByClassId, submitAnswers };

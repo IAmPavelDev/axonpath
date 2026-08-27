@@ -1,4 +1,3 @@
-import { Question } from "@/prisma/generated";
 import { AiModelType } from "@/types/AiModels";
 
 export interface CreateClassInputDto {

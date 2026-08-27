@@ -1,4 +1,4 @@
-import { Question } from "@/prisma/generated/client";
+import { QuestionDto } from "../question.mapper";
 
 export type SubmitQuizAnswersInputDto = {
   answers: {
@@ -8,5 +8,5 @@ export type SubmitQuizAnswersInputDto = {
 };
 
 export type SubmitQuizAnswersOutputDto = {
-  questions: Pick<Question, 'id' | 'type' | 'text' | 'choices'>[];
+  questions: QuestionDto[];
 };

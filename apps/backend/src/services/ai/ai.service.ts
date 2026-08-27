@@ -19,12 +19,6 @@ type InitSkillResponse = {
   model: AiModelType;
 };
 
-type NextClassResponse = {
-  classContentMd: string;
-  questions: string[];
-  newContextSnippets: string[];
-};
-
 type ContentGenerationResponse = {
   response: string;
   model: AiModelType;
@@ -62,10 +56,6 @@ const generate = async (
     model,
   };
 };
-const weakGeneration = async (
-  contents: string,
-  responseSchema: Record<string, any>
-) => generate(contents, config.ai.models.weak, responseSchema);
 const performantGeneration = async (
   contents: string,
   responseSchema: Record<string, any>

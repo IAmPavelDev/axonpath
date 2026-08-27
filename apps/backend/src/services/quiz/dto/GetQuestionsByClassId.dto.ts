@@ -1,4 +1,4 @@
-import { QuestionType } from "@/prisma/generated";
+import { QuestionDto } from "../question.mapper";
 
 export type GetQuestionsByClassIdInputDto = {
   classId: number;
@@ -6,11 +6,4 @@ export type GetQuestionsByClassIdInputDto = {
 
 export type GetQuestionsByClassIdOutputDto = {
   questions: QuestionDto[];
-};
-
-type QuestionDto = {
-  id: number;
-  type: QuestionType;
-  text: string;
-  choices: string[];
 };
