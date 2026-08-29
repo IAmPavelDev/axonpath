@@ -41,6 +41,8 @@
 
 ## 🟠 5. Quiz submit is dead
 - **Evidence:** mobile `Quiz.tsx` Submit button does `console.log('submit')`. `quiz.submit` un-wired.
+  A handler already exists as dead code (`controllers/quiz.controller.ts:22`, `submitQuizHandler`)
+  — only the contract export + router wiring are missing.
 - **Impact:** quiz is cosmetic; no data, no scoring, no adaptation trigger.
 - **Acceptance (beta):** submitting records answers, scores them, and (per 🔴1) triggers next-class
   generation.
@@ -63,8 +65,8 @@
 - **Acceptance (beta):** "x/y classes done, n% score" visible per skill.
 
 ## 🟡 9. Answer schema/flow incomplete
-- **Evidence:** `quiz.service.submitAnswers` re-fetches questions but doesn't call `createAnswer`,
-  doesn't score, `Question.answerKey` is dropped from the quiz.get output so there's nothing to
+- **Evidence:** `quiz.service.submitAnswers` re-fetches questions but never persists `Answer` rows
+  or scores them; `Question.answerKey` is dropped from the quiz.get output so there's nothing to
   grade against. `Answer` has `skillId` nullable; answer→vector derivation unimplemented.
 - **Acceptance (beta):** answers persisted with score + correctness; `ANSWER_DERIVED` vectors
   extracted for retrievable memory.
@@ -72,14 +74,14 @@
 ## 🟡 10. Hard-coded / dead config
 - **Evidence:** `queue.service.ts` literal `amqp://user:password@localhost`; RabbitMQ container
   declared but no queue consumer/producer; `config.ts` has dead `vectorDb.endpoint` placeholder and
-  `aws.region`; unused `airtifacts` (OpenSearch deps `@aws-sdk/client-opensearchserverless`,
+  `aws.region`; unused `artifacts` (OpenSearch deps `@aws-sdk/client-opensearchserverless`,
   `@opensearch-project/opensearch`).
 - **Acceptance (beta):** RabbitMQ either works (used for gen jobs) or is removed; dead vectorDb/aws
   config and OpenSearch deps removed; queue URL from env.
 
 ## 🟡 11. Errors are not surfaced to the client
 - **Evidence:** controller throws plain `new Error("Class not found")`; `runDetached` swallows
-  failures; no typed error mapping; mobile only hags a generic error from react-query.
+  failures; no typed error mapping; mobile only shows a generic error from react-query.
 - **Acceptance (beta):** structured error responses (code + message) surfaced in the UI.
 
 ## 🟡 12. No tests
@@ -102,7 +104,10 @@
 ## 🟢 15. Build/dev reproducibility
 - **Evidence:** no monorepo root dev script (root `backend:dev` = compose); mobile + backend start
   are two manual steps; `packages/api-contract/dist` is required but must be built before backend
-  resolves `@axon/api-contract`.
+  resolves `@axon/api-contract`. No `.env.example` exists — the gitignored root `.env` is the only
+  env documentation outside knowledge-base/ARCHITECTURE.md §7.
+  The backend `dev-db`/`dev-db:stop` scripts reference `apps/backend/dev-db/docker-compose.yaml`,
+  which does not exist (broken scripts).
 - **Acceptance (beta):** a single documented `pnpm dev` (or compose) boots the full stack
   deterministically.
 

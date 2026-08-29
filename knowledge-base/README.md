@@ -39,3 +39,17 @@ ROADMAP.md      → the 3–4 week sequenced plan to beta
   truth. Keep vocabulary consistent with CONCEPT.md §3.
 - Diagrams are `mermaid` blocks — keep them accurate when you change code; update the matching doc
   (GAPS/ARCHITECTURE/API) in the same change.
+
+## Getting started (dev)
+
+1. `pnpm install` (pnpm 10; workspaces: `apps/backend`, `apps/mobile`, `packages/api-contract`).
+2. Root `.env` (no `.env.example` exists yet — see GAPS #15): `DATABASE_URL` (Postgres+pgvector),
+   `GEMINI_API_KEY`, `APP_PORT`, `NODE_ENV`. Compose maps the backend on **3001**.
+3. Build the shared contract **before** starting the backend — the backend resolves
+   `@axon/api-contract` from its `dist/`: `pnpm --filter @axon/api-contract build`.
+4. Boot the stack: `docker compose -f docker-compose-dev.yaml up -d`
+   (backend auto-runs `prisma migrate deploy` + `prisma generate` + `dev:watch`).
+   DB-only alternative: `pnpm --filter @axon/backend dev-db`.
+5. Verify: `http://localhost:3001/health`, `/spec.json`, and `/` (Scalar docs).
+
+Full env/config details: ARCHITECTURE.md §7–8.

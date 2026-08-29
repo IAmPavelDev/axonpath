@@ -29,7 +29,7 @@ router
 │   └── get
 └── quiz
     ├── get
-    └── submit   ← [UNWIRED] contract exists, no router/handler
+    └── submit   ← [UNWIRED] contract declares submit, no router/handler
 ```
 
 ## 3. Skill
@@ -102,10 +102,12 @@ Contract:
 Input:  { answers: Array<{ questionId: number, answer: string }> }
 Output: Array<Question>   // same shape as quiz.get
 ```
-**Reality:** the contract (`quiz.contract.ts` declares `submit`), but `router/quiz.router.ts` only
-wires `get`. `quiz.service.submitAnswers` exists but only re-fetches questions — it does **not**
-record answers, score them, or derive vectors. **Nothing calls it. The mobile Submit button does
-nothing.**
+**Reality:** `quiz.contract.ts` declares `submit`, but the exported `quizContract` omits it — so
+`rpc.quiz.submit` is unreachable — and `router/quiz.router.ts` only wires `get`.
+A controller for it **already exists** as dead code (`controllers/quiz.controller.ts:22`,
+`submitQuizHandler` → `QuizService.submitAnswers`) — it is never wired by the router.
+`QuizService.submitAnswers` itself only re-fetches questions — it does **not** record answers,
+score them, or derive vectors. **Nothing calls it. The mobile Submit button does nothing.**
 
 ## 6. Auth context
 
@@ -122,7 +124,9 @@ checked, the client's `Bearer token` is ignored. See ARCHITECTURE §4.5 and ROAD
 | class.list | ✅ | `ClassService.getClassesList` | ✅ | ✅ | ✅ |
 | class.get | ✅ | `ClassService.getClassById` | ✅ | ✅ | ✅ |
 | quiz.get | ✅ | `QuizService.getQuestionsByClassId` | ✅ | ✅ | ✅ |
-| quiz.submit | ✅ | `QuizService.submitAnswers` (stub) | ❌ | ❌ | ❌ |
+| quiz.submit | ⚠️ | `QuizService.submitAnswers` (stub) | ❌ | ⚠️ handler exists, unwired | ❌ |
+> `quiz.submit` is declared in `quiz.contract.ts` but omitted from the exported `quizContract`, so
+> the typed client (`AppContract`) has no `quiz.submit` to call either.
 
 ## 8. Out-of-band endpoints (Fastify, not RPC)
 

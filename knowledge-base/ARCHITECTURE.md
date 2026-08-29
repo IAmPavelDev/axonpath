@@ -95,7 +95,7 @@ axon/
 ### 4.2 Contract-first RPC (oRPC)
 ```mermaid
 graph LR
-    A["@axon/api-contract\n(oc.route + zod)"] --> B["src/lib/orpc.ts\nrpc = implement(contract)\n.$context().use(authMiddleware)"]
+    A["@axon/api-contract\n(oc.route + zod)"] --> B["src/lib/orpc.ts\nrpc = implement(contract)\n.use(authMiddleware)"]
     B --> C["routers (skill/class/quiz)"]
     C --> D["controllers"]
     D --> E["services"]
@@ -121,9 +121,8 @@ graph LR
 ### 4.4 Services
 - **skill.service** — `createSkill`, `getSkillsList`. Thin CRUD over Prisma.
 - **class.service** — `createClass`, `getClassesList`, `getClassById`. Thin CRUD.
-- **quiz.service** — `createQuestion`, `createAnswer`, `getQuestionsByClassId`, `submitAnswers`.
-  - `submitAnswers` is **incomplete**: it loads the questions but never records or scores answers
-    via `createAnswer`. `createAnswer` exists but the submit flow does not call it.
+- **quiz.service** — `createQuestion`, `getQuestionsByClassId`, `submitAnswers`.
+  - `submitAnswers` is **incomplete**: it loads the questions but never records or scores answers.
   - `quiz.router.ts` does not expose `submit`, so the whole answer flow is dead.
 - **ai.service** — Gemini wrapper. Implements `generateInitSkill` (builds first class + quiz +
   context snippets + embeddings) and `generateEmbeddings`. `generateNextClass` is **commented
@@ -257,7 +256,8 @@ flowchart TD
 | `APP_HOST` (default 0.0.0.0) | Bind host |
 | `GEMINI_API_KEY` | Google Gemini auth |
 
-`src/config.ts` (backend) additionally hard-codes:
+`src/config.ts` (backend) defaults — each is a `process.env` override, not a literal
+(`AWS_REGION`, `VECTOR_DB_URL`, `LAMBDA_DECAY_DEFAULT`):
 ```
 aws.region        = us-east-1
 vectorDb.endpoint = https://your-opensearch-endpoint   [placeholder — unused]
@@ -278,6 +278,10 @@ lambda default    = 0.02
 
 **prod** (`docker-compose-prod.yaml`): mounts repo, runs `prisma migrate deploy` + `tsc build` +
 `node dist/main.js`; maps 3001:3001.
+
+> ⚠️ Verified gaps: the Dockerfile has **no `production` stage**, so the prod compose build falls
+> through to the last stage (`development`) — prod runs on the dev image. And
+> `DATABASE_URL=${DATABASE_HOST}` in `docker-compose-prod.yaml` is a real wiring bug (see ROADMAP W4).
 
 ## 9. What this codebase is today
 
