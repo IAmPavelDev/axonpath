@@ -9,8 +9,56 @@ import { runDetached } from "@/helpers/runTaskDetached.ts";
 import { VectorSource } from "@/prisma/generated/index.js";
 import { schema } from "@axon/api-contract";
 
-const { CreateSkillInput, GetSkillListOutput, StatusOnly, SkillIdInput } =
+const { CreateSkillInput, GetSkillListOutput, StatusOnly, SkillIdInput, GetSkillByIdOutput } =
   schema.skill;
+
+export const editDescriptionHandler: OrpcHandler<
+  z.infer<typeof schema.skill.EditDescriptionInput>,
+  z.infer<typeof StatusOnly>
+> = async ({ input, context }) => {
+  const { id: userId } = context.user;
+
+  const skill = await SkillService.updateDescription({
+    id: input.id,
+    userId,
+    description: input.description,
+  });
+
+  return skill;
+};
+
+export const editTopicHandler: OrpcHandler<
+  z.infer<typeof schema.skill.EditTopicInput>,
+  z.infer<typeof StatusOnly>
+> = async ({ input, context }) => {
+  const { id: userId } = context.user;
+
+  const skill = await SkillService.updateTopic({
+    id: input.id,
+    userId,
+    topic: input.topic,
+  });
+
+  return skill;
+};
+
+export const getSkillByIdHandler: OrpcHandler<
+  z.infer<typeof SkillIdInput>,
+  z.infer<typeof GetSkillByIdOutput>
+> = async ({ input, context }) => {
+  const { id: userId } = context.user;
+
+  const skill = await SkillService.getSkillById({
+    id: input.id,
+    userId,
+  });
+
+  if (!skill) {
+    throw new Error("Skill not found");
+  }
+
+  return skill;
+};
 
 export const createSkillHandler: OrpcHandler<
   z.infer<typeof CreateSkillInput>,

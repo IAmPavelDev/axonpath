@@ -4,6 +4,12 @@ export const CreateSkillInput = z.object({
   topic: z.string(),
 });
 
+export const EditSkillInput = z.object({
+  id: z.number().int().positive().min(1),
+  topic: z.string().optional(),
+  description: z.string().optional(),
+});
+
 export const SkillIdInput = z.object({ id: z.number().int().positive().min(1) });
 
 export const CreateSkillOutput = z.object({
@@ -19,12 +25,10 @@ export const GetSkillListOutput = z.array(z.object({
 }));
 
 export const GetSkillByIdOutput = z.object({
-  skillId: z.string(),
+  id: z.number(),
   topic: z.string(),
-  latestClass: z.object({
-    title: z.string(),
-    content: z.string(),
-  }),
+  description: z.string(),
+  status: z.string(),
 });
 
 export const StatusOnly = z.object({ status: z.string() });

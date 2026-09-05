@@ -1,9 +1,22 @@
 import { prisma } from "@/prisma";
-import { CreateSkillInputDto, CreateSkillOutputDto } from "./dto/CreateSkill.dto";
-import { SkillStatus } from "@/prisma/generated";
-import { GetSkillsListInputDto, GetSkillsListOutputDto } from "./dto/GetSkillsList.dto";
+import {
+  CreateSkillInputDto,
+  CreateSkillOutputDto,
+} from "./dto/CreateSkill.dto";
+import { Prisma, SkillStatus } from "@/prisma/generated";
+import {
+  GetSkillsListInputDto,
+  GetSkillsListOutputDto,
+} from "./dto/GetSkillsList.dto";
+import { EditSkillOutputDto, EditSkillInputDto } from "./dto/EditSkill.dto";
+import {
+  GetSkillByIdInputDto,
+  GetSkillByIdOutputDto,
+} from "./dto/GetSkillById.dto";
 
-const createSkill = async (input: CreateSkillInputDto): Promise<CreateSkillOutputDto> => {
+const createSkill = async (
+  input: CreateSkillInputDto,
+): Promise<CreateSkillOutputDto> => {
   const { topic, userId } = input;
   const skill = await prisma.skill.create({
     data: {
@@ -19,7 +32,50 @@ const createSkill = async (input: CreateSkillInputDto): Promise<CreateSkillOutpu
   return skill;
 };
 
-const getSkillsList = async (input: GetSkillsListInputDto): Promise<GetSkillsListOutputDto> => {
+const update = async (
+  input: EditSkillInputDto,
+): Promise<EditSkillOutputDto> => {
+  const { id, userId, topic, description } = input;
+
+  const data: Partial<Pick<EditSkillInputDto, 'topic' | 'description'>> = {};
+  if (topic !== undefined) data.topic = topic;
+  if (description !== undefined) data.description = description;
+
+  const where = { id, userId };
+  const select = {
+    id: true,
+    status: true,
+  } satisfies Prisma.SkillSelect;
+
+  const skill =
+    Object.keys(data).length > 0
+      ? await prisma.skill.update({ where, data, select })
+      : await prisma.skill.findUniqueOrThrow({ where, select });
+
+  return skill;
+};
+
+const getSkillById = async (
+  input: GetSkillByIdInputDto,
+): Promise<GetSkillByIdOutputDto | null> => {
+  const skill = await prisma.skill.findFirst({
+    where: {
+      id: input.id,
+      userId: input.userId,
+    },
+    select: {
+      id: true,
+      topic: true,
+      description: true,
+      status: true,
+    },
+  });
+  return skill;
+};
+
+const getSkillsList = async (
+  input: GetSkillsListInputDto,
+): Promise<GetSkillsListOutputDto> => {
   const skills = await prisma.skill.findMany({
     where: {
       userId: input.userId,
@@ -31,5 +87,7 @@ const getSkillsList = async (input: GetSkillsListInputDto): Promise<GetSkillsLis
 
 export default {
   createSkill,
-  getSkillsList
+  update,
+  getSkillById,
+  getSkillsList,
 };

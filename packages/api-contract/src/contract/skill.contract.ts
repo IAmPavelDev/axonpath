@@ -13,6 +13,26 @@ const create = oc
   .input(schema.CreateSkillInput)
   .output(schema.CreateSkillOutput);
 
+const edit = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/edit`,
+    summary: "Edit skill",
+    tags: ["Skill", "Edit"],
+  })
+  .input(schema.EditSkillInput)
+  .output(schema.StatusOnly);
+
+const get = oc
+  .route({
+    method: "GET",
+    path: `${BASE_PATH}/:id`,
+    summary: "Get a skill by id",
+    tags: ["Skill", "Get"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.GetSkillByIdOutput);
+
 const list = oc
   .route({
     method: "GET",
@@ -24,6 +44,8 @@ const list = oc
 
 export const skillContract = {
   create,
+  edit,
+  get,
   list
 }
 
