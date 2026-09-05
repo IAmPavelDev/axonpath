@@ -27,10 +27,11 @@ ROADMAP.md      → the 3–4 week sequenced plan to beta
 ## Status
 
 - Monorepo: pnpm workspaces (`apps/backend`, `apps/mobile`, `packages/api-contract`).
-- Backend: Fastify + oRPC (contract-first) + Prisma + Postgres/**pgvector** + Gemini.
+- Backend: Fastify + oRPC (contract-first) + Prisma + Postgres + Qdrant + Gemini.
 - Mobile: Expo / React Native (expo-router, NativeWind, TanStack Query, Zustand).
 - **Current reality:** a read→quiz happy path works in dev against one hard-coded user; the
-  adaptive next-class loop and vector *retrieval* are not yet wired (see GAPS.md #1/#2).
+  adaptive next-class loop is not yet wired (GAPS.md #1); vector retrieval is live — per-user
+  prior context is pulled from Qdrant to personalize each new skill (GAPS.md #2 addresses most of it).
 - **Target:** workable beta in **3–4 weeks** (ROADMAP.md).
 
 ## Conventions for AI agents
@@ -43,8 +44,9 @@ ROADMAP.md      → the 3–4 week sequenced plan to beta
 ## Getting started (dev)
 
 1. `pnpm install` (pnpm 10; workspaces: `apps/backend`, `apps/mobile`, `packages/api-contract`).
-2. Root `.env` (no `.env.example` exists yet — see GAPS #15): `DATABASE_URL` (Postgres+pgvector),
-   `GEMINI_API_KEY`, `APP_PORT`, `NODE_ENV`. Compose maps the backend on **3001**.
+2. Root `.env` (no `.env.example` exists yet — see GAPS #15): `DATABASE_URL` (Postgres),
+   `QDRANT_URL` (Qdrant vector store), `GEMINI_API_KEY`, `APP_PORT`, `NODE_ENV`. Compose maps the
+   backend on **3001**.
 3. Build the shared contract **before** starting the backend — the backend resolves
    `@axon/api-contract` from its `dist/`: `pnpm --filter @axon/api-contract build`.
 4. Boot the stack: `docker compose -f docker-compose-dev.yaml up -d`

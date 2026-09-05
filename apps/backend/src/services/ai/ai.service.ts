@@ -3,6 +3,7 @@ import { prisma } from "@/prisma/index.ts";
 import { config } from "@/config.ts";
 import { EventType, QuestionType } from "@/prisma/generated/client";
 import { AiModelType } from "@/types/AiModels";
+import VectorService from "@/services/vector/vector.service.ts";
 
 type QuestionResponse = {
   type: QuestionType;
@@ -73,11 +74,34 @@ const generateEmbeddings = async (content: string[]): Promise<number[][]> => {
 const generateInitSkill = async (
   params: InitSkillParams
 ): Promise<InitSkillResponse | undefined> => {
-  const prompt = `Generate initial learning content for topic: ${params.topic}. Include:
+  // Retrieve the user's prior learned context to personalize this skill.
+  const queryEmbedding = (
+    await generateEmbeddings([params.topic])
+  )[0];
+  const priorContext = queryEmbedding
+    ? await VectorService.searchSimilar({
+        userId: params.userId,
+        embedding: queryEmbedding,
+        topK: 5,
+        excludeSkillId: params.skillId,
+      })
+    : [];
+
+  let prompt = `Generate initial learning content for topic: ${params.topic}. Include:
       - classTitle: title of the lesson
       - classContentMd: detailed markdown lesson (500-700 words)
       - questions: 5-10 multiple choice questions with answers
       - contextSnippets: 5-10 key context snippets strictly about the user to reference personalized information in the future learning`;
+
+  if (priorContext.length > 0) {
+    const learnedContext = priorContext
+      .map((hit) => `- ${hit.textSnippet}`)
+      .join("\n");
+    prompt += `
+
+The learner already knows these related facts from previous skills. Do not repeat them verbatim; build on them:
+${learnedContext}`;
+  }
 
   const responseSchema = {
     type: "object",

@@ -1,10 +1,7 @@
 // /home/iampaul/Projects/axonpath/be/src/config.ts
 export const config = {
-  aws: {
-    region: process.env.AWS_REGION || 'us-east-1',
-  },
-  vectorDb: {
-    endpoint: process.env.VECTOR_DB_URL || 'https://your-opensearch-endpoint',
+  qdrant: {
+    url: process.env.QDRANT_URL || 'http://localhost:6333',
   },
   skillLambdaDecayDefault: process.env.LAMBDA_DECAY_DEFAULT
     ? Number(process.env.LAMBDA_DECAY_DEFAULT)

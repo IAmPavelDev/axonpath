@@ -60,9 +60,10 @@ forced AI failure shows `ERROR` and can be retried. Integration test covers it.
     only hide them from `.get` output) and **record `Answer` rows** (content, `score`, `isCorrect`,
     `timeSpentMs`).
   - Return a real result (total score, per-question correctness) — update the submit output schema.
-- **Write retrieval** 🔴: add vector search over `pgvector` (cosine similarity via `<=>`, or another
-  distance metric) bounded to the skill — returns top-K context snippets. This is the "memory read"
-  the loop needs.
+- **Write retrieval** 🔴: ~~add vector search over `pgvector`~~ — **done**: vectors moved to Qdrant
+  (collection `axon_vectors`); `searchSimilar` (filtered by `userId`) feeds prior user context into
+  `generateInitSkill`. Next step is binding retrieval into `generateNextClass` for per-class, per-user
+  personalization.
 - **Re-enable `generateNextClass`** 🔴 in `ai.service.ts`, now fed by:
   - this class's questions + user's answers (scores, incorrect ones in particular),
   - top-K retrieved `contextSnippets` (personalization — GAPS 2),
@@ -131,7 +132,7 @@ works for a service user; the critical-path tests pass; the docs are accurate.
 ## Explicitly out of scope (after beta)
 - Real multi-tenant scaling / billing.
 - `lambda` decay tuning (needs real usage data).
-- OpenSearch / external vector DB (pgvector is enough).
+- OpenSearch (Qdrant is the vector store; OpenSearch was removed — see GAPS #10).
 - Model-graded open-ended answers; user-generated content.
 - Web admin panel / instructor tools.
 

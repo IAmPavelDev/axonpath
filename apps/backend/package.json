@@ -33,13 +33,12 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@aws-sdk/client-opensearchserverless": "^3.879.0",
+    "@qdrant/js-client-rest": "1.19.0",
     "@axon/api-contract": "workspace:*",
     "@fastify/env": "^5.0.2",
     "@fastify/sensible": "^6.0.3",
     "@fastify/type-provider-typebox": "^5.2.0",
     "@google/genai": "^1.16.0",
-    "@opensearch-project/opensearch": "^3.5.1",
     "@orpc/client": "^1.8.6",
     "@orpc/openapi": "^1.8.6",
     "@orpc/server": "^1.8.6",

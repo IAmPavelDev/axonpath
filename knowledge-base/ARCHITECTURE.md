@@ -29,7 +29,7 @@ flowchart LR
         C["controllers"]
         S["services"]
         AI["AI service (Gemini)"]
-        V["Vector service (pgvector)"]
+        V["Vector service (Qdrant)"]
         EV["Event log (audit)"]
     end
 
@@ -38,9 +38,9 @@ flowchart LR
     end
 
     subgraph Infra["Infrastructure"]
-        DB[("PostgreSQL 16 + pgvector")]
+        DB[("PostgreSQL 18")]
+        QD[("Qdrant v1.19.1 (vectors)")]
         MQ["RabbitMQ [STUB]"]
-        OS["OpenSearch [UNWIRED]"]
     end
 
     M --> RPC --> API
@@ -50,15 +50,13 @@ flowchart LR
     S --> V
     S --> EV
     S --> DB
-    AI --> DB
-    V --> DB
+    V --> QD
     S -.->|planned| MQ
-    V -.->|deprecated intent| OS
 ```
 
-> Note: `apps/backend/docker-compose-dev.yaml` also declares RabbitMQ and pgvector containers.
-> RabbitMQ is a stub (no consumer wiring); OpenSearch config exists but nothing uses it — the
-> system actually stores vectors in Postgres `pgvector` instead.
+> Note: `apps/backend/docker-compose-dev.yaml` declares backend, Postgres (plain `postgres:18`, vectors no longer stored here), Qdrant (`qdrant/qdrant:v1.19.1`) and RabbitMQ
+> (still a stub). Vector embeddings live in the Qdrant collection `axon_vectors`; Postgres `Vector`
+> rows keep only relational metadata. OpenSearch/AWS config and deps were removed.
 
 ## 3. Repo layout (pnpm monorepo)
 
@@ -127,8 +125,10 @@ graph LR
 - **ai.service** — Gemini wrapper. Implements `generateInitSkill` (builds first class + quiz +
   context snippets + embeddings) and `generateEmbeddings`. `generateNextClass` is **commented
   out** — this is the core adaptive loop that is not yet wired.
-- **vector.service** — raw SQL inserts of `Vector` rows (embedding JSON → `::vector` cast) into
-  Postgres pgvector. No retrieval/search implemented.
+- **vector.service** — writes `Vector` metadata rows to Postgres and upserts the embedding to Qdrant
+  (`axon_vectors`); `searchSimilar` runs a matched-vector query filtered by `userId` and returns
+  top-K context snippets. Qdrant client setup lives in `services/vector/qdrant.ts`
+  (`ensureCollection` + `getQdrantClient`).
 - **queue.service** — a RabbitMQ wrapper class; **no producer/consumer integration** (stub).
 
 ### 4.5 Auth middleware (`src/middleware/auth.ts`) — **[STUB / insecure]**
@@ -173,9 +173,10 @@ Key observations:
 - Status stays `DRAFT` — nothing ever transitions it to `ACTIVE`.
 - The whole init pipeline is **not transactional** and is not observable by the client (no
   progress/status channel).
-- `Vector` rows are persisted but **never read back** (no retrieval).
+- `Vector` rows are persisted to Postgres; embeddings are upserted to Qdrant and **read back** to
+  personalize subsequent skill generation (`generateInitSkill` queries prior user context).
 
-## 5. Data model (Postgres + pgvector)
+## 5. Data model (Postgres + Qdrant)
 
 ```mermaid
 erDiagram
@@ -201,8 +202,12 @@ erDiagram
     Answer { int id PK; int questionId FK; int userId FK; int skillId FK; json content; float score; bool isCorrect; int timeSpentMs; string device }
     SkillProgress { int id PK; int skillId FK; json snapshot }
     Event { int id PK; int skillId FK; int userId FK; enum type; json payload }
-    Vector { int id PK; int skillId FK; int classId FK; int answerId FK; vector(3072) embedding; enum source; text textSnippet; int classIndex; int tokenCount }
+    Vector { int id PK; int skillId FK; int classId FK; int answerId FK; enum source; text textSnippet; int classIndex; int tokenCount }
 ```
+
+> The agent's embedding (`vector(3072)` in the old model) is now stored only in the Qdrant
+> collection `axon_vectors` (C-continuation `Cosine`, point id = `Vector.id`). `Vector` retains
+> the relational metadata (`skillId`/`classId`/`answerId`/`source`/`textSnippet`/...).
 
 ### Key enums
 - **UserRole**: `USER | ADMIN | MODERATOR`
@@ -250,17 +255,17 @@ flowchart TD
 `.env` (root) declares:
 | Key | Used for |
 |---|---|
-| `DATABASE_URL` | Prisma → Postgres (pgvector) |
+| `DATABASE_URL` | Prisma → Postgres |
+| `QDRANT_URL` | Qdrant vector store (REST 6333) |
 | `NODE_ENV` | Runtime mode |
 | `APP_PORT` (default 3000) | HTTP port; compose maps **3001:3001** |
 | `APP_HOST` (default 0.0.0.0) | Bind host |
 | `GEMINI_API_KEY` | Google Gemini auth |
 
 `src/config.ts` (backend) defaults — each is a `process.env` override, not a literal
-(`AWS_REGION`, `VECTOR_DB_URL`, `LAMBDA_DECAY_DEFAULT`):
+(`QDRANT_URL`, `LAMBDA_DECAY_DEFAULT`):
 ```
-aws.region        = us-east-1
-vectorDb.endpoint = https://your-opensearch-endpoint   [placeholder — unused]
+qdrant.url        = http://localhost:6333   (docker-compose: http://qdrant:6333)
 ai.models.weak    = gemini-2.0-flash-lite
 ai.models.pro     = gemini-2.5-pro
 ai.models.embedding = gemini-embedding-001
@@ -272,8 +277,9 @@ lambda default    = 0.02
 
 ## 8. Infrastructure (docker-compose)
 
-**dev** (`docker-compose-dev.yaml`): backend (volume mounts source), `postgres:pgvector/pgvector:16`
-(on 5432), `rabbitmq:3.12-management` (5672/15672). Backend auto-runs `prisma migrate deploy` +
+**dev** (`docker-compose-dev.yaml`): backend (volume mounts source),
+`postgres:18` (Postgres 18, on 5432), `qdrant/qdrant:v1.19.1` (6333 REST /
+6334 gRPC), `rabbitmq:3.12-management` (5672/15672). Backend auto-runs `prisma migrate deploy` +
 `prisma generate` + `dev:watch`.
 
 **prod** (`docker-compose-prod.yaml`): mounts repo, runs `prisma migrate deploy` + `tsc build` +
@@ -294,6 +300,7 @@ backend.
 2. Create-skill entry point in the UI.
 3. Answer submission + scoring (`quiz.submit` not wired; `submitAnswers` is a stub).
 4. The **adaptive next-class loop** (`generateNextClass` commented out) — the core idea.
-5. Vector **retrieval** (vectors written, never read).
+5. ~~Vector retrieval (vectors written, never read)~~ — live: `searchSimilar` (Qdrant, filtered by
+   `userId`) feeds prior user context into `generateInitSkill`. Next-class retrieval still pending.
 6. Progress tracking (`SkillProgress` table unused).
 7. Adult lifecycle: status transitions, error surfacing to client, observability.

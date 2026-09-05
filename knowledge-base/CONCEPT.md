@@ -44,7 +44,7 @@ user fact, and uses that to make the *next* lesson personally relevant.
 | **Question** | MC / True-False / Open-ended; has choices + `answerKey`. | `Question` model |
 | **Answer** | A user's recorded attempt at a question (content, score, correctness, time). | `Answer` model |
 | **Context snippet** | A short atomic fact about the user stored for personalization. | `Vector` (source `AI_INITIAL/NEXT/ANSWER_DERIVED`) + `textSnippet` |
-| **Vector** | A `pgvector` embedding of a snippet, or of derived answer content. | `Vector` model (`vector(3072)`) |
+| **Vector** | An embedding of a snippet, or of derived answer content. | Qdrant `axon_vectors`, point id = `Vector.id` |
 | **Adaptive loop** | Read → quiz → (retrieve context + score) → generate next class. | **NOT YET WIRED** |
 | **lambda (0.02)** | Suggested decay rate for the relevance of stored context over time (memory half-life). | `Skill.lambda` — **unused** |
 | **Event log** | Lightweight audit trail of key moments (skill created, class generated, answer submitted...). | `Event` model |
@@ -83,13 +83,14 @@ The `Vector` model is the heart of the concept, and currently the most under-bui
   - `AI_NEXT` — facts learned as new classes are generated **[PLANNED]**.
   - `ANSWER_DERIVED` — facts mined from a user's answers **[PLANNED]**.
 - **The intent:** instead of dumping the user's whole history into every prompt, the system
-  *retrieves only the most relevant vectors* (semantic search over `pgvector`), and feeds them to
+  *retrieves only the most relevant vectors* (semantic search over Qdrant), and feeds them to
   Gemini so the next class is personalized and doesn't repeat known material.
 - **`Skill.lambda`** exists to let older memories "decay" so stale context doesn't dominate — a
   recall/relevance weight. Unused today.
 
-**Status:** vectors are written during skill creation but **never read**. The memory doesn't
-influence anything yet. This is the single most valuable missing piece.
+**Status:** vectors are written on skill creation to Qdrant and **retrieved** on later skill
+creation (`searchSimilar` filters prior user context into `generateInitSkill`). Next-class ("loop")
+and answer-derived retrieval remain **[PLANNED]**.
 
 ## 6. User journey map (desired)
 
@@ -127,8 +128,8 @@ journey
 - **Do not** add unrelated features while closing the adaptive loop. The loop is the product.
 - **Do not** build multi-tenant auth complexity for beta — a single real account or minimal email
   auth is enough to prove the loop.
-- **Do not** chase OpenSearch/AWS — vector storage is already Postgres `pgvector`; remove the
-  dead OpenSearch config rather than wiring it.
+- **Do not** add OpenSearch/AWS — vector storage is **Qdrant**; the old OpenSearch config and deps
+  were already removed during the migration.
 - **Do not** over-engineer `lambda`/decay until retrieval exists and there's data to tune against.
 
 ## 9. Design intentions worth preserving

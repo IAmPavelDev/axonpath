@@ -20,12 +20,15 @@
 - **Acceptance (beta):** answering a quiz produces a new, adapted lesson that references the user's
   mistakes, end-to-end.
 
-## 🔴 B2. Vector memory is write-only
-- **Evidence:** `vector.service.ts` only inserts (`createVector(s)`). No similarity-search function
-  exists; nothing queries `pgvector`.
-- **Impact:** the personalization memory (`Vector`, `contextSnippets`) never influences generation.
-- **Acceptance (beta):** retrieval-by-similarity over a skill's vectors returns top-k snippets, used
-  in the `generateNextClass` prompt.
+## 🟢 B2. Vector memory — write + retrieve (mostly closed)
+- **Evidence:** Vectors are now stored in **Qdrant** (`qdrant/qdrant:v1.19.1`, collection
+  `axon_vectors`); `vector.service.ts` provides `createVectors` (upsert) and `searchSimilar`.
+  The `embedding vector(3072)` column and `vector` extension were dropped from Postgres (migration
+  `20260905120000_qdrant_vectors`); `Vector` retains relational metadata only.
+- **Status:** `searchSimilar` is wired into `generateInitSkill` — a new skill retrieves the user's
+  prior context (filtered by `userId`, excluding the new skill) and feeds it to Gemini.
+- **Remaining:** retrieval is not yet bound to per-class `generateNextClass` (still commented out) nor
+  to `ANSWER_DERIVED` vectors.
 
 ## 🟠 3. No real authentication
 - **Evidence:** `middleware/auth.ts` upserts hard-coded user id 1 and ignores the client's Bearer
@@ -71,13 +74,13 @@
 - **Acceptance (beta):** answers persisted with score + correctness; `ANSWER_DERIVED` vectors
   extracted for retrievable memory.
 
-## 🟡 10. Hard-coded / dead config
+## 🟡 10. Hard-coded / dead config (partially closed)
 - **Evidence:** `queue.service.ts` literal `amqp://user:password@localhost`; RabbitMQ container
-  declared but no queue consumer/producer; `config.ts` has dead `vectorDb.endpoint` placeholder and
-  `aws.region`; unused `artifacts` (OpenSearch deps `@aws-sdk/client-opensearchserverless`,
-  `@opensearch-project/opensearch`).
-- **Acceptance (beta):** RabbitMQ either works (used for gen jobs) or is removed; dead vectorDb/aws
-  config and OpenSearch deps removed; queue URL from env.
+  declared but no queue consumer/producer.
+- **Status:** Dead OpenSearch/aws config and deps (`@aws-sdk/client-opensearchserverless`,
+  `@opensearch-project/opensearch`) and the `vectorDb.endpoint` placeholder were removed during the
+  Qdrant migration.
+- **Acceptance (beta):** RabbitMQ either works (used for gen jobs) or is removed; queue URL from env.
 
 ## 🟡 11. Errors are not surfaced to the client
 - **Evidence:** controller throws plain `new Error("Class not found")`; `runDetached` swallows

@@ -14,6 +14,7 @@
       - APP_PORT=${APP_PORT}
       - APP_HOST=${APP_HOST}
       - DATABASE_URL=${DATABASE_HOST}
+      - QDRANT_URL=${QDRANT_URL}
 
     ports: 
       - "3001:3001"

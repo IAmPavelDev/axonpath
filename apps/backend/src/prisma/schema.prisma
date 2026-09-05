@@ -1,7 +1,7 @@
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [pg_trgm, pgcrypto, vector]
+  extensions = [pg_trgm, pgcrypto]
 }
 
 generator client {
@@ -200,7 +200,6 @@ model Vector {
   id          Int                         @id @default(autoincrement())
   skill       Skill                       @relation(fields: [skillId], references: [id])
   skillId     Int
-  embedding   Unsupported("vector(3072)")
   source      VectorSource
   textSnippet String                      @db.Text
   classIndex  Int?

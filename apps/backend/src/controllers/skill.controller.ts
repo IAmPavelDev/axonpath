@@ -61,6 +61,7 @@ export const createSkillHandler: OrpcHandler<
         vectors: [
           {
             skillId: skill.id,
+            userId,
             classId: classData.classId,
             embedding: embeddings[i],
             source: VectorSource.AI_INITIAL,
