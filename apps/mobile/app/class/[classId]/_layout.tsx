@@ -4,7 +4,7 @@ import { Tabs, useLocalSearchParams } from 'expo-router';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useQuery } from '@tanstack/react-query';
 
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@/components/atomics/spinner';
 import type { ClassById } from '@/types/class';
 import rpc from '@/utils/rpc';
 

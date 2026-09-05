@@ -1,7 +1,7 @@
 import { useClassData } from './_layout';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@/components/atomics/spinner';
 import { ScrollView } from 'react-native';
 import { Quiz } from '@/components/quiz/Quiz';
 

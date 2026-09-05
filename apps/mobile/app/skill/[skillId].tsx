@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
-import { Spinner } from '@/components/ui/spinner';
+import { Spinner } from '@/components/atomics/spinner';
 import { ClassList } from '@/components/class/ClassList';
 
 export default function Route() {

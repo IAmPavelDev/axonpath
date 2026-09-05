@@ -1,7 +1,7 @@
 import { FC, useContext } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { StyleSheet } from 'react-native';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Checkbox } from '@/components/atomics/checkbox';
 import { QuestionContext, QuestionContextType } from '../Quiz';
 import { useQuizStore } from '@/store/quiz.store';
 

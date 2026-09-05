@@ -1,8 +1,8 @@
 import { Link } from 'expo-router';
 import { FC } from 'react';
 import { FlatList } from 'react-native';
-import { buttonTextVariants, buttonVariants } from '../ui/button';
-import { Text } from '../ui/text';
+import { buttonTextVariants, buttonVariants } from '../atomics/button';
+import { Text } from '../atomics/text';
 import { useDimensions } from '@/hooks/useDimensions';
 import { Class } from '@/types/class';
 

@@ -2,9 +2,9 @@ import { Skill } from '@/types/skill';
 import { Link } from 'expo-router';
 import { FC, Fragment } from 'react';
 import { FlatList } from 'react-native';
-import { buttonTextVariants, buttonVariants } from '../ui/button';
-import { Separator } from '../ui/separator';
-import { Text } from '../ui/text';
+import { buttonTextVariants, buttonVariants } from '../atomics/button';
+import { Separator } from '../atomics/separator';
+import { Text } from '../atomics/text';
 import { useDimensions } from '@/hooks/useDimensions';
 
 const SkillListItem: FC<{ skill: Skill }> = ({ skill }) => {

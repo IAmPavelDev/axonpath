@@ -2,7 +2,7 @@ import { createContext, FC, useLayoutEffect } from 'react';
 import { View, Text } from 'react-native';
 import { Question as QuestionDataType } from '@/types/quiz';
 import { Question } from './Question/index';
-import { Button } from '../ui/button';
+import { Button } from '../atomics/button';
 import { StyleSheet } from 'react-native';
 import { useQuizStore } from '@/store/quiz.store';
 
