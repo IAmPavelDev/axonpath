@@ -4,9 +4,6 @@ CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 -- CreateExtension
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- CreateExtension
-CREATE EXTENSION IF NOT EXISTS "vector";
-
 -- CreateEnum
 CREATE TYPE "public"."UserRole" AS ENUM ('USER', 'ADMIN', 'MODERATOR');
 
@@ -143,7 +140,6 @@ CREATE TABLE "public"."Event" (
 CREATE TABLE "public"."Vector" (
     "id" SERIAL NOT NULL,
     "skillId" INTEGER NOT NULL,
-    "embedding" vector(3072) NOT NULL,
     "source" "public"."VectorSource" NOT NULL,
     "textSnippet" TEXT NOT NULL,
     "classIndex" INTEGER,
