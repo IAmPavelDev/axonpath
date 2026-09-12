@@ -12,31 +12,15 @@ import { schema } from "@axon/api-contract";
 const { CreateSkillInput, GetSkillListOutput, StatusOnly, SkillIdInput, GetSkillByIdOutput } =
   schema.skill;
 
-export const editDescriptionHandler: OrpcHandler<
-  z.infer<typeof schema.skill.EditDescriptionInput>,
+export const editSkillHandler: OrpcHandler<
+  z.infer<typeof schema.skill.EditSkillInput>,
   z.infer<typeof StatusOnly>
 > = async ({ input, context }) => {
   const { id: userId } = context.user;
 
-  const skill = await SkillService.updateDescription({
-    id: input.id,
+  const skill = await SkillService.update({
     userId,
-    description: input.description,
-  });
-
-  return skill;
-};
-
-export const editTopicHandler: OrpcHandler<
-  z.infer<typeof schema.skill.EditTopicInput>,
-  z.infer<typeof StatusOnly>
-> = async ({ input, context }) => {
-  const { id: userId } = context.user;
-
-  const skill = await SkillService.updateTopic({
-    id: input.id,
-    userId,
-    topic: input.topic,
+    ...input
   });
 
   return skill;

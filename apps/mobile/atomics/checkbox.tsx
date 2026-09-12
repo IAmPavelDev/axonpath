@@ -1,4 +1,4 @@
-import { Icon } from '@/components/atomics/icon';
+import { Icon } from '@atomics/icon';
 import { cn } from '@/lib/utils';
 import * as CheckboxPrimitive from '@rn-primitives/checkbox';
 import { Check } from 'lucide-react-native';

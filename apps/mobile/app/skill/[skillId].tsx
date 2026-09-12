@@ -1,5 +1,5 @@
-import { SkillDetail } from '@/components/skill/SkillDetail';
-import { Spinner } from '@/components/atomics/spinner';
+import { SkillDetail } from '@components/skill/SkillDetail';
+import { Spinner } from '@atomics/spinner';
 import { useLocalSearchParams } from 'expo-router';
 
 export default function Route() {

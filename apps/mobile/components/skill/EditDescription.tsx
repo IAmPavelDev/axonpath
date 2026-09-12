@@ -1,7 +1,7 @@
-import { Button } from '@/components/atomics/button';
-import { Input } from '@/components/atomics/input';
-import { Text } from '@/components/atomics/text';
-import { useDimensions } from '@/hooks/useDimensions';
+import { Button } from '@atomics/button';
+import { Textarea } from '@atomics/textarea';
+import { Text } from '@atomics/text';
+import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -40,13 +40,11 @@ export const EditSkillDescription: FC = () => {
         gap: 16,
       }}>
       <Text variant="h2">Describe your skill</Text>
-      <Input
+      <Textarea
         value={description}
         onChangeText={setDescription}
         placeholder="Short description (optional)"
         editable={!isPending}
-        returnKeyType="done"
-        onSubmitEditing={submit}
         autoFocus
       />
       {error && (

@@ -1,8 +1,8 @@
 import { FC, useContext } from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { StyleSheet } from 'react-native';
-import { Checkbox } from '@/components/atomics/checkbox';
-import { QuestionContext, QuestionContextType } from '../Quiz';
+import { Checkbox } from '@atomics/checkbox';
+import { QuestionContext, QuestionContextType } from '@components/quiz/Quiz';
 import { useQuizStore } from '@/store/quiz.store';
 
 export const MultipleChoiceQuestion: FC<{ options: string[]; questionId: number }> = (props) => {

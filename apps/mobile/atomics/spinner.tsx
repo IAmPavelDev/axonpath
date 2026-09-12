@@ -1,4 +1,4 @@
-import { useDimensions } from '@/hooks/useDimensions';
+import { useDimensions } from '@hooks/useDimensions';
 import { Loader } from 'lucide-react-native';
 import { StyleSheet, View, Animated, Easing } from 'react-native';
 import { useEffect, useRef } from 'react';

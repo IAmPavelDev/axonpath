@@ -1,4 +1,4 @@
-import { ClassConspect } from '@/components/class/ClassConspect';
+import { ClassConspect } from '@components/class/ClassConspect';
 import { ScrollView, View } from 'react-native';
 import { useClassData } from './_layout';
 

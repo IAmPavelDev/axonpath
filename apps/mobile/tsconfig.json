@@ -5,6 +5,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["*"],
+      "@components/*": ["./components/*"],
+      "@atomics/*": ["./atomics/*"],
+      "@hooks/*": ["./hooks/*"],
       "@axon/api-contract": ["../../packages/api-contract/src"],
       "@axon/api-contract/*": ["../../packages/api-contract/src/*"]
     }

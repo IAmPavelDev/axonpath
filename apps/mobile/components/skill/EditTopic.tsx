@@ -1,7 +1,7 @@
-import { Button } from '@/components/atomics/button';
-import { Input } from '@/components/atomics/input';
-import { Text } from '@/components/atomics/text';
-import { useDimensions } from '@/hooks/useDimensions';
+import { Button } from '@atomics/button';
+import { Input } from '@atomics/input';
+import { Text } from '@atomics/text';
+import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';

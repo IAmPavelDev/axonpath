@@ -1,7 +1,7 @@
 import { Link } from 'expo-router';
 import { FC } from 'react';
-import { buttonTextVariants, buttonVariants } from '../atomics/button';
-import { Text } from '../atomics/text';
+import { buttonTextVariants, buttonVariants } from '@atomics/button';
+import { Text } from '@atomics/text';
 import { Class } from '@/types/class';
 
 export const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {

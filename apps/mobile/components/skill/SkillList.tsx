@@ -1,11 +1,9 @@
 import { Skill } from '@/types/skill';
 import { Link, useRouter } from 'expo-router';
-import { FC, Fragment } from 'react';
-import { FlatList } from 'react-native';
-import { Button, buttonTextVariants, buttonVariants } from '../atomics/button';
-import { Separator } from '../atomics/separator';
-import { Text } from '../atomics/text';
-import { useDimensions } from '@/hooks/useDimensions';
+import { FC } from 'react';
+import { FlatList, View } from 'react-native';
+import { Button, buttonTextVariants, buttonVariants } from '@atomics/button';
+import { Text } from '@atomics/text';
 
 const OpenCreateSkillButton: FC = () => {
   const router = useRouter();
@@ -30,14 +28,21 @@ const SkillListItem: FC<{ skill: Skill }> = ({ skill }) => {
 };
 
 export const SkillList: FC<{ skills: Skill[] }> = ({ skills }) => {
-  const { height } = useDimensions();
   return (
-    <FlatList
-      data={skills}
-      style={{ paddingHorizontal: 16, marginBottom: height / 2 }}
-      ListHeaderComponent={<OpenCreateSkillButton />}
-      renderItem={({ item: skill }) => <SkillListItem skill={skill} />}
-      keyExtractor={(skill) => skill.id.toString()}
-    />
+    <View style={{ flex: 1, alignItems: 'center', paddingTop: 4 }}>
+      <OpenCreateSkillButton />
+      <FlatList
+        data={skills}
+        style={{
+          flex: 1,
+          alignSelf: 'stretch',
+          paddingHorizontal: 16,
+          marginTop: 4,
+          marginBottom: 20,
+        }}
+        renderItem={({ item: skill, index }) => <SkillListItem skill={skill} />}
+        keyExtractor={skill => skill.id.toString()}
+      />
+    </View>
   );
 };

@@ -1,9 +1,10 @@
-import { Button } from '@/components/atomics/button';
-import { Input } from '@/components/atomics/input';
-import { Spinner } from '@/components/atomics/spinner';
-import { Text } from '@/components/atomics/text';
-import { ClassListItem } from '@/components/class/ClassList';
-import { useDimensions } from '@/hooks/useDimensions';
+import { Button } from '@atomics/button';
+import { Input } from '@atomics/input';
+import { Textarea } from '@atomics/textarea';
+import { Spinner } from '@atomics/spinner';
+import { Text } from '@atomics/text';
+import { ClassListItem } from '@components/class/ClassList';
+import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FC, useEffect, useState } from 'react';
@@ -41,7 +42,11 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     await queryClient.invalidateQueries({ queryKey: ['skillList'] });
   };
 
-  const { mutate: saveTopic, isPending: topicPending, error: topicError } = useMutation({
+  const {
+    mutate: saveTopic,
+    isPending: topicPending,
+    error: topicError,
+  } = useMutation({
     mutationFn: (value: string) => rpc.skill.edit({ id: skillId, topic: value.trim() }),
     onSuccess: invalidate,
   });
@@ -51,8 +56,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     isPending: descriptionPending,
     error: descriptionError,
   } = useMutation({
-    mutationFn: (value: string) =>
-      rpc.skill.edit({ id: skillId, description: value.trim() }),
+    mutationFn: (value: string) => rpc.skill.edit({ id: skillId, description: value.trim() }),
     onSuccess: invalidate,
   });
 
@@ -75,68 +79,62 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const isSaving = topicPending || descriptionPending;
 
   return (
-    <FlatList
-      data={classes ?? []}
-      style={{
-        flex: 1,
-        paddingHorizontal: 16,
-        marginBottom: screenHeight / 4,
-      }}
-      keyExtractor={(classData) => classData.id.toString()}
-      ListHeaderComponent={
-        <View style={{ gap: 12, paddingVertical: 16 }}>
-          {error && (
-            <Text variant="muted" className="text-destructive">
-              {error.message}
-            </Text>
-          )}
+    <View style={{ gap: 12, padding: 16 }}>
+      {error && (
+        <Text variant="muted" className="text-destructive">
+          {error.message}
+        </Text>
+      )}
 
-          <Text variant="h2">Topic</Text>
-          <Input
-            value={topic}
-            onChangeText={setTopic}
-            placeholder="Topic you are learning"
-            editable={!isSaving}
-            returnKeyType="done"
-            onSubmitEditing={submitTopic}
-          />
-          {topicError && (
-            <Text variant="muted" className="text-destructive">
-              {topicError.message}
-            </Text>
-          )}
+      <Text variant="h4">Topic</Text>
+      <Input
+        value={topic}
+        onChangeText={setTopic}
+        placeholder="Topic you are learning"
+        editable={!isSaving}
+        returnKeyType="done"
+        onSubmitEditing={submitTopic}
+      />
+      {topicError && (
+        <Text variant="muted" className="text-destructive">
+          {topicError.message}
+        </Text>
+      )}
 
-          <Text variant="h2">Description</Text>
-          <Input
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Short description"
-            editable={!isSaving}
-            returnKeyType="done"
-            onSubmitEditing={submitDescription}
-          />
-          {descriptionError && (
-            <Text variant="muted" className="text-destructive">
-              {descriptionError.message}
-            </Text>
-          )}
+      <Text variant="h4">Description</Text>
+      <Textarea
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Short description"
+        editable={!isSaving}
+      />
+      {descriptionError && (
+        <Text variant="muted" className="text-destructive">
+          {descriptionError.message}
+        </Text>
+      )}
 
-          <Button
-            onPress={() => {
-              submitTopic();
-              submitDescription();
-            }}
-            disabled={isSaving}>
-            <Text>Save changes</Text>
-          </Button>
+      <Button
+        onPress={() => {
+          submitTopic();
+          submitDescription();
+        }}
+        disabled={isSaving}>
+        <Text>Save changes</Text>
+      </Button>
 
-          <Text variant="h2">Lessons</Text>
-        </View>
-      }
-      renderItem={({ item: classData }) => <ClassListItem classData={classData} />}
-      ListEmptyComponent={
-        <Text variant="muted">No lessons yet</Text>
-      }
-    />
+      <Text variant="h4">Lessons</Text>
+      <FlatList
+        data={classes ?? []}
+        style={{
+          flex: 1,
+          paddingHorizontal: 16,
+          marginBottom: screenHeight / 4,
+        }}
+        keyExtractor={(classData) => classData.id.toString()}
+        renderItem={({ item: classData }) => <ClassListItem classData={classData} />}
+        ListEmptyComponent={<Text variant="muted">No lessons yet</Text>}
+      />
+    </View>
   );
 };

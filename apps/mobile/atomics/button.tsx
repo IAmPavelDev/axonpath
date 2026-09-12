@@ -1,4 +1,4 @@
-import { TextClassContext } from '@/components/atomics/text';
+import { TextClassContext } from '@atomics/text';
 import { cn } from '@/lib/utils';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Platform, Pressable } from 'react-native';
