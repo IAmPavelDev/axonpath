@@ -7,11 +7,10 @@ export const config = {
     ? Number(process.env.LAMBDA_DECAY_DEFAULT)
     : 0.02,
   ai: {
-    AI_API_KEY: process.env.GEMINI_API_KEY,
+    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
     models: {
-      weak: 'gemini-2.0-flash-lite',
-      pro: 'gemini-2.5-pro',
-      embedding: 'gemini-embedding-001'
+      chat: 'deepseek/deepseek-v4.1-flash',
+      embedding: 'google/gemini-embedding-001'
     }
   }
 };

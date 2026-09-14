@@ -100,7 +100,7 @@ model Skill {
   user      User            @relation(fields: [userId], references: [id])
   userId    Int
   topic     String          @db.VarChar(255)
-  description String      @default("") @db.VarChar(255)
+  description String      @default("") @db.Text
   status    SkillStatus     @default(DRAFT)
   lambda    Float           @default(0.02)
   requestId Int?            @unique

@@ -1,6 +1,5 @@
 export interface EditSkillInputDto {
   id: number;
-  userId: number;
   topic?: string;
   description?: string;
 }

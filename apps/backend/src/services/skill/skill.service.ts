@@ -35,13 +35,13 @@ const createSkill = async (
 const update = async (
   input: EditSkillInputDto,
 ): Promise<EditSkillOutputDto> => {
-  const { id, userId, topic, description } = input;
+  const { id, topic, description } = input;
 
   const data: Partial<Pick<EditSkillInputDto, 'topic' | 'description'>> = {};
   if (topic !== undefined) data.topic = topic;
   if (description !== undefined) data.description = description;
 
-  const where = { id, userId };
+  const where = { id };
   const select = {
     id: true,
     status: true,
@@ -59,10 +59,7 @@ const getSkillById = async (
   input: GetSkillByIdInputDto,
 ): Promise<GetSkillByIdOutputDto | null> => {
   const skill = await prisma.skill.findFirst({
-    where: {
-      id: input.id,
-      userId: input.userId,
-    },
+    where: input,
     select: {
       id: true,
       topic: true,
@@ -79,6 +76,17 @@ const getSkillsList = async (
   const skills = await prisma.skill.findMany({
     where: {
       userId: input.userId,
+    },
+    select: {
+      id: true,
+      topic: true,
+      description: true,
+      status: true,
+      userId: true,
+      lambda: true,
+      requestId: true,
+      createdAt: true,
+      updatedAt: true,
     },
   });
 

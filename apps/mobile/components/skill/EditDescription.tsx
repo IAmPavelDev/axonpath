@@ -3,7 +3,7 @@ import { Textarea } from '@atomics/textarea';
 import { Text } from '@atomics/text';
 import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FC, useState } from 'react';
 import { View } from 'react-native';
@@ -14,7 +14,15 @@ export const EditSkillDescription: FC = () => {
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const skillId = Number(id);
-  const [description, setDescription] = useState('');
+
+  const { data } = useQuery({
+    queryKey: ['skillData', skillId],
+    queryFn: () => rpc.skill.get({ id: skillId }),
+    refetchInterval: 2000,
+    retry: true,
+  })
+
+  const [description, setDescription] = useState(data?.description ?? '');
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: (input: { description: string }) =>

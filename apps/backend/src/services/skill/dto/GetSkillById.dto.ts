@@ -1,6 +1,5 @@
 export interface GetSkillByIdInputDto {
   id: number;
-  userId: number;
 }
 
 export interface GetSkillByIdOutputDto {

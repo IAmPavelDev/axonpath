@@ -9,33 +9,24 @@ import { runDetached } from "@/helpers/runTaskDetached.ts";
 import { VectorSource } from "@/prisma/generated/index.js";
 import { schema } from "@axon/api-contract";
 
-const { CreateSkillInput, GetSkillListOutput, StatusOnly, SkillIdInput, GetSkillByIdOutput } =
-  schema.skill;
+const {
+  CreateSkillInput,
+  GetSkillListOutput,
+  StatusOnly,
+  SkillIdInput,
+  GetSkillByIdOutput,
+} = schema.skill;
 
 export const editSkillHandler: OrpcHandler<
   z.infer<typeof schema.skill.EditSkillInput>,
   z.infer<typeof StatusOnly>
-> = async ({ input, context }) => {
-  const { id: userId } = context.user;
-
-  const skill = await SkillService.update({
-    userId,
-    ...input
-  });
-
-  return skill;
-};
+> = async ({ input, context }) => SkillService.update(input);
 
 export const getSkillByIdHandler: OrpcHandler<
   z.infer<typeof SkillIdInput>,
   z.infer<typeof GetSkillByIdOutput>
 > = async ({ input, context }) => {
-  const { id: userId } = context.user;
-
-  const skill = await SkillService.getSkillById({
-    id: input.id,
-    userId,
-  });
+  const skill = await SkillService.getSkillById(input);
 
   if (!skill) {
     throw new Error("Skill not found");
@@ -56,24 +47,35 @@ export const createSkillHandler: OrpcHandler<
   });
 
   runDetached(async () => {
-    const response = await AiService.generateInitSkill({
+    const skillInitDescription = await AiService.generateSkillDescription(
+      input.topic,
+    );
+
+    if (skillInitDescription) {
+      await SkillService.update({
+        id: skill.id,
+        description: skillInitDescription.description,
+      });
+    }
+
+    const skillInitData = await AiService.generateInitSkill({
       userId,
       skillId: skill.id,
       topic: input.topic,
     });
-    if (!response) {
+    if (!skillInitData) {
       throw new Error("Failed to generate init skill");
     }
 
     const classData = await ClassService.createClass({
       skillId: skill.id,
       index: 0,
-      title: response.classTitle,
-      contentMd: response.classContentMd,
-      aiModel: response.model,
+      title: skillInitData.classTitle,
+      contentMd: skillInitData.classContentMd,
+      aiModel: skillInitData.model,
     });
 
-    for (const question of response.questions) {
+    for (const question of skillInitData.questions) {
       await QuestionService.createQuestion({
         skillId: skill.id,
         classId: classData.classId,
@@ -81,12 +83,12 @@ export const createSkillHandler: OrpcHandler<
         text: question.text,
         choices: question.choices,
         answerKey: question.answerKey,
-        aiModel: response.model,
+        aiModel: skillInitData.model,
       });
     }
 
     const embeddings = await AiService.generateEmbeddings(
-      response.contextSnippets
+      skillInitData.contextSnippets,
     );
     for (let i = 0; i < embeddings.length; i++) {
       await VectorService.createVectors({
@@ -97,7 +99,7 @@ export const createSkillHandler: OrpcHandler<
             classId: classData.classId,
             embedding: embeddings[i],
             source: VectorSource.AI_INITIAL,
-            textSnippet: response.contextSnippets[i],
+            textSnippet: skillInitData.contextSnippets[i],
             classIndex: 0,
           },
         ],

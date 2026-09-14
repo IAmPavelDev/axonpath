@@ -1,4 +1,5 @@
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
+import type { ChatCompletion, ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
 import { prisma } from "@/prisma/index.ts";
 import { config } from "@/config.ts";
 import { EventType, QuestionType } from "@/prisma/generated/client";
@@ -20,64 +21,107 @@ type InitSkillResponse = {
   model: AiModelType;
 };
 
-type ContentGenerationResponse = {
-  response: string;
+type SkillDescriptionResponse = {
+  description: string;
   model: AiModelType;
 };
 
-const genAI = new GoogleGenAI({
-  apiKey: config.ai.AI_API_KEY,
+const CHAT_MODEL = config.ai.models.chat;
+const EMBEDDING_MODEL = config.ai.models.embedding;
+
+const openrouter = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: config.ai.OPENROUTER_API_KEY,
+  defaultHeaders: {
+    "HTTP-Referer": "https://axon.app",
+    "X-Title": "Axon",
+  },
 });
 
-const generate = async (
+const extractJson = (raw: string): string => {
+  const trimmed = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = trimmed.indexOf("{");
+  const end = trimmed.lastIndexOf("}");
+  return start !== -1 && end > start ? trimmed.slice(start, end + 1) : trimmed;
+};
+
+const generateJson = async (
   contents: string,
-  model: AiModelType,
+  schemaName: string,
   responseSchema: Record<string, any>
-): Promise<ContentGenerationResponse> => {
-  try {
-    const response = await genAI.models.generateContent({
-      model,
-      contents,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema,
+): Promise<string> => {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    // OpenRouter-only `provider` routing field is not in the openai SDK types yet.
+    const params = {
+      model: CHAT_MODEL,
+      messages: [{ role: "user", content: contents }],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: schemaName,
+          strict: true,
+          schema: responseSchema,
+        },
       },
-    });
+      provider: {
+        require_parameters: true,
+      },
+    } as unknown as ChatCompletionCreateParamsNonStreaming;
+    const completion = await openrouter.chat.completions.create(params) as ChatCompletion;
+    const choice = completion.choices[0];
+    if (!choice?.message?.content) continue;
+
+    return extractJson(choice.message.content);
+  }
+
+  throw new Error(`generateJson(${schemaName}): no parsable completion after retries`);
+};
+
+const generateSkillDescription = async (
+  topic: string
+): Promise<SkillDescriptionResponse> => {
+  const prompt = `Write a concise description (about 50 tokens, 1-2 sentences) for a learning skill about: ${topic}. The description should state what the learner will learn and why it matters. Do not use markdown formatting.`;
+
+  const responseSchema = {
+    type: "object",
+    properties: {
+      description: { type: "string" },
+    },
+    required: ["description"],
+  };
+
+  try {
+    const raw = await generateJson(prompt, "skill_description", responseSchema);
+    const parsed = JSON.parse(raw);
 
     return {
-      response: response.text ?? "",
-      model,
+      description: parsed.description ?? "",
+      model: CHAT_MODEL,
     };
   } catch (error) {
-    console.error("AI generation failed:", error);
+    console.error("Skill description generation failed:", error);
   }
 
   return {
-    response: "",
-    model,
+    description: "",
+    model: CHAT_MODEL,
   };
 };
-const performantGeneration = async (
-  contents: string,
-  responseSchema: Record<string, any>
-) => generate(contents, config.ai.models.pro, responseSchema);
 
 const generateEmbeddings = async (content: string[]): Promise<number[][]> => {
-  const response = await genAI.models.embedContent({
-    model: config.ai.models.embedding,
-    contents: content,
-  })
+  const response = await openrouter.embeddings.create({
+    model: EMBEDDING_MODEL,
+    input: content,
+  });
 
-  return response.embeddings?.map(emb => emb.values ?? []) ?? [];
-}
+  return response.data.map((item) => item.embedding);
+};
 
 const generateInitSkill = async (
   params: InitSkillParams
 ): Promise<InitSkillResponse | undefined> => {
   // Retrieve the user's prior learned context to personalize this skill.
-  const queryEmbedding = (
-    await generateEmbeddings([params.topic])
-  )[0];
+  const queryEmbedding = (await generateEmbeddings([params.topic]))[0];
   const priorContext = queryEmbedding
     ? await VectorService.searchSimilar({
         userId: params.userId,
@@ -132,14 +176,8 @@ ${learnedContext}`;
   };
 
   try {
-    const { response, model } = await performantGeneration(
-      prompt,
-      responseSchema
-    );
-
-    // Log to audit events
-    const cleanedText = response.replace(/```json/g, "").replace(/```/g, "");
-    const responseData = JSON.parse(cleanedText);
+    const raw = await generateJson(prompt, "init_skill", responseSchema);
+    const responseData = JSON.parse(raw);
 
     await prisma.event.create({
       data: {
@@ -149,8 +187,8 @@ ${learnedContext}`;
         payload: {
           action: "init_skill",
           prompt: prompt.substring(0, 2000),
-          model,
-          response: cleanedText,
+          model: CHAT_MODEL,
+          response: raw,
         },
       },
     });
@@ -160,51 +198,12 @@ ${learnedContext}`;
       classContentMd: responseData.classContentMd ?? "",
       questions: responseData.questions ?? [],
       contextSnippets: responseData.contextSnippets ?? [],
-      model,
+      model: CHAT_MODEL,
     };
   } catch (error) {
     console.error("AI generation failed:", error);
   }
 };
-
-// const generateNextClass = async (
-//   params: NextClassParams
-// ): Promise<NextClassResponse> => {
-//   const prompt = `Generate next class based on:
-//       - Previous context: ${params.selectedContext.join("\n")}
-//       - User answers: ${JSON.stringify(params.answers)}
-
-//       Produce:
-//       - Continuation lesson in markdown
-//       - 5-10 new context snippets
-//       - 5-10 new questions
-
-//       Format as JSON: { "classContentMd": "...", "questions": ["..."], "newContextSnippets": ["..."] }`;
-
-//   try {
-//     const { response, model } = await performantGeneration(prompt);
-
-//     const cleanedText = response.replace(/```json/g, "").replace(/```/g, "");
-
-//     await prisma.event.create({
-//       data: {
-//         type: EventType.CLASS_GENERATED,
-//         skillId: params.skillId,
-//         payload: {
-//           prompt,
-//           response: cleanedText,
-//           model,
-//         },
-//       },
-//     });
-
-//     return JSON.parse(cleanedText);
-//   } catch (error: unknown) {
-//     console.error("Next class generation failed:", error);
-//     const message = error instanceof Error ? error.message : "Unknown error";
-//     throw new Error(`AI service error: ${message}`);
-//   }
-// };
 
 export interface InitSkillParams {
   userId: number;
@@ -212,12 +211,8 @@ export interface InitSkillParams {
   topic: string;
 }
 
-export interface NextClassParams {
-  skillId: number;
-  skillTopic: string;
-  lastClassIdx: number;
-  answers: string[];
-  selectedContext: string[];
-}
-
-export default { generateInitSkill, generateEmbeddings };
+export default {
+  generateInitSkill,
+  generateSkillDescription,
+  generateEmbeddings,
+};
