@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "prisma:generate": "prisma generate --schema ./src/prisma/schema.prisma",
     "prisma:pull": "prisma db pull --schema ./src/prisma/schema.prisma",
     "prisma:migrate": "prisma migrate --schema ./src/prisma/schema.prisma",
@@ -23,14 +23,14 @@
   "license": "ISC",
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
-    "@types/amqplib": "^0.10.7",
     "@types/node": "^24.3.0",
     "fastify-tsconfig": "^3.0.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.20.5",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "vitest": "^5.0.0"
   },
   "dependencies": {
     "@axon/api-contract": "workspace:*",
@@ -43,7 +43,6 @@
     "@orpc/zod": "^1.8.6",
     "@prisma/client": "6.15.0",
     "@qdrant/js-client-rest": "1.19.0",
-    "amqplib": "^0.10.9",
     "fastify": "^5.5.0",
     "module-alias": "^2.2.3",
     "openai": "^7.15.0",

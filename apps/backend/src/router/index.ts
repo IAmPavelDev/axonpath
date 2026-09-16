@@ -1,9 +1,37 @@
-import { classRouter } from "./class.router"
-import { quizRouter } from "./quiz.router"
-import { skillRouter } from "./skill.router"
+import { rpc } from "@/lib/orpc";
+import { makeSkillHandlers, type SkillApiDeps } from "@/modules/learning/api/skill.handlers";
+import { makeClassHandlers, type ClassApiDeps } from "@/modules/learning/api/class.handlers";
+import { makeQuizHandlers, type QuizApiDeps } from "@/modules/learning/api/quiz.handlers";
 
-export const router = {
-  skill: skillRouter,
-  class: classRouter,
-  quiz: quizRouter,
-}
+export type LearningApiDeps = SkillApiDeps & ClassApiDeps & QuizApiDeps;
+
+export const buildSkillRouter = (deps: SkillApiDeps) => {
+  const handlers = makeSkillHandlers(deps);
+  return {
+    create: rpc.skill.create.handler(handlers.create),
+    edit: rpc.skill.edit.handler(handlers.edit),
+    get: rpc.skill.get.handler(handlers.get),
+    list: rpc.skill.list.handler(handlers.list),
+  };
+};
+
+export const buildClassRouter = (deps: ClassApiDeps) => {
+  const handlers = makeClassHandlers(deps);
+  return {
+    list: rpc.class.list.handler(handlers.list),
+    get: rpc.class.get.handler(handlers.get),
+  };
+};
+
+export const buildQuizRouter = (deps: QuizApiDeps) => {
+  const handlers = makeQuizHandlers(deps);
+  return {
+    get: rpc.quiz.get.handler(handlers.get),
+  };
+};
+
+export const buildRouters = (deps: LearningApiDeps) => ({
+  skill: buildSkillRouter(deps),
+  class: buildClassRouter(deps),
+  quiz: buildQuizRouter(deps),
+});

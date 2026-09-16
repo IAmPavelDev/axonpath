@@ -77,104 +77,59 @@ axon/
 - Backend dev runner: `tsx` with `tsconfig-paths` and `@/*` path aliases.
 - Shared contract package is consumed as a workspace dependency (`@axon/api-contract`).
 
-## 4. Backend (apps/backend)
+## 4. Backend (apps/backend) — DDD modular monolith (2026-09 refactor)
 
-### 4.1 Server bootstrap (`src/main.ts`)
-- Fastify server with a **custom `serverFactory`** so the raw Node server can route:
-  1. **`/rpc`** — oRPC `RPCHandler` serving the contract-first router.
-  2. **`/spec.json`** — generated OpenAPI 3 spec (from `@orpc/openapi` + Zod→JSON-Schema).
-  3. **`/`** — Scalar API-reference docs page (renders `/spec.json`).
-  4. **everything else** — Fastify routes: `/health`, `/ready`, `/info`.
-- Env loading via `@fastify/env` (dotenv). Global error + not-found handlers, graceful shutdown
-  on SIGTERM/SIGINT.
-- **Note:** custom `serverFactory` bypasses normal Fastify routing for `/rpc`, so conventions like
-  `@fastify/cors` do not apply to RPC — CORS is handled by oRPC's `CORSPlugin` instead.
+Layering: `router/` (thin oRPC wiring) → `modules/*/api` (handlers: parse → use case → error
+mapping) → `modules/*/application` (use cases, curried over a deps object = future Effect Layer)
+→ `modules/*/domain` (pure types + functions + tagged errors + repository ports) →
+`modules/*/infrastructure` (Prisma / Qdrant / OpenRouter adapters). `main.ts` is the composition
+root: the only place adapters are constructed.
 
-### 4.2 Contract-first RPC (oRPC)
-```mermaid
-graph LR
-    A["@axon/api-contract\n(oc.route + zod)"] --> B["src/lib/orpc.ts\nrpc = implement(contract)\n.use(authMiddleware)"]
-    B --> C["routers (skill/class/quiz)"]
-    C --> D["controllers"]
-    D --> E["services"]
-    E --> F["prisma (Postgres)"]
-    E --> G["AI service (Gemini)"]
 ```
-- **Contract** lives in `packages/api-contract` (`skill`, `class`, `quiz` sub-routers).
-- **Implementation** wires contract → router → controller via `rpc.<ns>.<op>.handler(handler)`.
-- Every controller receives `{ input, context }`; `context.user` is injected by `authMiddleware`.
-
-### 4.3 Current RPC surface (implemented)
-| Method | Path | Description |
-|---|---|---|
-| `skill.create` | POST `/skill/create` | Create a `Skill` (DRAFT), then **fire-and-forget** AI init |
-| `skill.list` | GET `/skill/list` | List current user's skills |
-| `class.list` | GET `/class/list` | List classes of a skill |
-| `class.get` | GET `/class/:id` | Fetch one class (title + `contentMd`) |
-| `quiz.get` | GET `/quiz/:id` | Fetch questions for a class |
-
-> **Notice the gap:** `quiz.submit` contract exists but **has no router/handler** in
-> `router/quiz.router.ts` (only `get` is wired). The mobile Submit button calls nothing.
-
-### 4.4 Services
-- **skill.service** — `createSkill`, `getSkillsList`. Thin CRUD over Prisma.
-- **class.service** — `createClass`, `getClassesList`, `getClassById`. Thin CRUD.
-- **quiz.service** — `createQuestion`, `getQuestionsByClassId`, `submitAnswers`.
-  - `submitAnswers` is **incomplete**: it loads the questions but never records or scores answers.
-  - `quiz.router.ts` does not expose `submit`, so the whole answer flow is dead.
-- **ai.service** — Gemini wrapper. Implements `generateInitSkill` (builds first class + quiz +
-  context snippets + embeddings) and `generateEmbeddings`. `generateNextClass` is **commented
-  out** — this is the core adaptive loop that is not yet wired.
-- **vector.service** — writes `Vector` metadata rows to Postgres and upserts the embedding to Qdrant
-  (`axon_vectors`); `searchSimilar` runs a matched-vector query filtered by `userId` and returns
-  top-K context snippets. Qdrant client setup lives in `services/vector/qdrant.ts`
-  (`ensureCollection` + `getQdrantClient`).
-- **queue.service** — a RabbitMQ wrapper class; **no producer/consumer integration** (stub).
-
-### 4.5 Auth middleware (`src/middleware/auth.ts`) — **[STUB / insecure]**
-```mermaid
-flowchart LR
-    A[incoming request] --> B[authMiddleware]
-    B --> C{upsert user id=1}
-    C -->|exists| D[reuse user 1 / update lastLogin]
-    C -->|missing| E[create dev user John Doe / ADMIN]
-    D --> F[next context.user = user]
-    E --> F
-```
-- **Hard-coded user.** Every request is treated as user id **1** (`john.doe@example.com`, ADMIN).
-  It upserts that user and injects it into context. There is **no real authentication** — no
-  password validation, no tokens, no per-request identity.
-- Mobile sends `authorization: Bearer token` header, but the server ignores it.
-
-### 4.6 AI flow — skill creation (currently the only "smart" path)
-```mermaid
-sequenceDiagram
-    participant U as Client (mobile)
-    participant C as SkillController
-    participant H as runDetached (setImmediate)
-    participant AI as Gemini
-    participant DB as Postgres
-
-    U->>C: rpc.skill.create(topic)
-    C->>DB: create Skill(DRAFT)
-    C--)H: runDetached(initSkill)
-    H->>AI: generateInitSkill(topic)
-    AI-->>H: { classTitle, classContentMd, questions[], contextSnippets[] }
-    H->>DB: create Class(index 0)
-    H->>DB: create Question[] (per question)
-    H->>AI: generateEmbeddings(contextSnippets)
-    H->>DB: insert Vector[] (source=AI_INITIAL)
-    H-->>C: (background; client got id+status already)
+apps/backend/src/
+├── main.ts                composition root
+├── router/index.ts        buildRouters(container)
+├── modules/
+│   ├── platform/          Result<T,E>, tagged-error helpers, toORPCError,
+│   │                      Clock/JobQueuePort ports, prisma client, set-immediate job queue, config
+│   ├── identity/api/      auth.middleware.ts [STUB: hard-coded user 1]
+│   ├── learning/          Skill / Class / Question domain, queries+commands,
+│   │                      Prisma repos, oRPC handlers
+│   ├── tutoring/          AiPort, pure prompt builders, openrouter client,
+│   │                      generate-initial-skill use case
+│   └── memory/            VectorStorePort (Prisma metadata + Qdrant), retrieval policy
+└── prisma/                schema + migrations + generated client
 ```
 
-Key observations:
-- The client receives the `Skill` (id + status) **immediately**; all AI work happens in a
-  detached `setImmediate` callback via `runDetached`.
-- Status stays `DRAFT` — nothing ever transitions it to `ACTIVE`.
-- The whole init pipeline is **not transactional** and is not observable by the client (no
-  progress/status channel).
-- `Vector` rows are persisted to Postgres; embeddings are upserted to Qdrant and **read back** to
-  personalize subsequent skill generation (`generateInitSkill` queries prior user context).
+Import rules (Effect readiness):
+1. `domain/` has zero infra/framework imports (Prisma enum *values* allowed — domain vocabulary).
+2. Errors are plain tagged objects `{ kind: "SkillNotFound", ... }` — map 1:1 onto Effect
+   `Data.TaggedError`.
+3. Use cases return `Result<T, E>` (platform/result.ts, Either-shaped) and are curried over a
+   deps object — each deps object becomes an Effect Layer at migration time.
+4. Only `infrastructure/` imports prisma/qdrant/openai; only `main.ts` constructs adapters.
+
+### 4.1 RPC surface
+Unchanged: `skill.create/edit/get/list`, `class.list/get`, `quiz.get`. `quiz.submit` contract
+exists but stays unwired (as before). "Skill/Class not found" now maps to oRPC 404 (previously a
+thrown Error → 500).
+
+### 4.2 AI init flow (behavior preserved from the old controller-level runDetached)
+`skill.create` → `makeCreateSkill` persists the DRAFT Skill and `jobs.enqueue("skill-init", ...)`
+(setImmediate adapter = old fire-and-forget). The job runs `makeGenerateInitialSkill`:
+description gen → skill update → embed topic → retrieve prior user context (Qdrant, topK 5) →
+generate class+quiz+snippets → audit `SKILL_CREATED` event → persist class (index 0), questions
+(batched), `AI_INITIAL` vectors. Failures degrade identically: description/retrieval failure
+degrades, generation failure aborts and leaves the skill DRAFT (job logs the error).
+
+### 4.3 What changed structurally
+- Controllers/services layer deleted; orchestration lives in use cases.
+- `AiPort` (prompt-in/JSON-out transport) + `VectorStorePort` + `JobQueuePort` + `SkillRepository`
+  etc. are Promise-based ports; adapters are swappable.
+- `runTaskDetached.ts` replaced by `SetImmediateJobQueue`; RabbitMQ stub + amqplib removed
+  (JobQueuePort is the seam for a broker).
+- Prisma client created in `modules/platform/infrastructure/prisma.ts`; schema/migrations unchanged.
+- Per-question create loop replaced by one `createManyAndReturn` batch (same rows, same points).
 
 ## 5. Data model (Postgres + Qdrant)
 

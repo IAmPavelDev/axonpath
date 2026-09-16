@@ -4,10 +4,24 @@ import { RPCHandler } from '@orpc/server/node';
 import { CORSPlugin } from '@orpc/server/plugins';
 import sensible from '@fastify/sensible';
 import env from '@fastify/env';
-import { router} from '@router/index.ts';
+import { buildRouters } from '@router/index.ts';
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import { experimental_ZodSmartCoercionPlugin as ZodSmartCoercionPlugin } from '@orpc/zod/zod4';
 import { OpenAPIGenerator } from '@orpc/openapi';
+
+// Wiring: container (repositories/use cases/jobs) → oRPC routers → RPC handler.
+import { configureContainer } from './container.ts';
+const container = configureContainer();
+
+const routers = buildRouters(container);
+
+const handler = new RPCHandler(routers, {
+  plugins: [new CORSPlugin(), new ZodSmartCoercionPlugin()],
+});
+
+const openAPIGenerator = new OpenAPIGenerator({
+  schemaConverters: [new ZodToJsonSchemaConverter()],
+});
 
 interface AppConfig {
   PORT: string;
@@ -20,14 +34,6 @@ declare module 'fastify' {
     config: AppConfig;
   }
 }
-
-const handler = new RPCHandler(router, {
-  plugins: [new CORSPlugin(), new ZodSmartCoercionPlugin()],
-});
-
-const openAPIGenerator = new OpenAPIGenerator({
-  schemaConverters: [new ZodToJsonSchemaConverter()],
-});
 
 const app: FastifyInstance = fastify({
   logger: true,
@@ -47,7 +53,7 @@ const app: FastifyInstance = fastify({
         // Handle OpenAPI spec endpoint
         if (req.url === '/spec.json') {
           try {
-            const spec = await openAPIGenerator.generate(router, {
+            const spec = await openAPIGenerator.generate(routers, {
               info: {
                 title: 'My Playground',
                 version: '1.0.0',
@@ -259,4 +265,3 @@ async function startServer() {
 }
 
 startServer();
-
