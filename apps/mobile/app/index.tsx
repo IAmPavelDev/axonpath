@@ -1,17 +1,25 @@
 import { Button } from '@atomics/button';
 import { SkillList, SkillListSkeleton } from '@components/skill/SkillList';
-import { ThemeToggle } from '@components/theme-toggle';
+import { Icon } from '@atomics/icon';
+import { Settings } from 'lucide-react-native';
 import { Text } from '@atomics/text';
 import { Skill } from '@/types/skill';
+import { usePinnedSkills } from '@/lib/pins';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { useEffect } from 'react';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Screen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const hydratePins = usePinnedSkills((s) => s.hydrate);
+
+  useEffect(() => {
+    hydratePins();
+  }, [hydratePins]);
 
   const { data: skills, isLoading, error, refetch, isRefetching } = useQuery<Skill[]>({
     queryKey: ['skillList'],
@@ -37,9 +45,17 @@ export default function Screen() {
     return (
       <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
         <View className="flex-row justify-end px-3 pt-1">
-          <ThemeToggle />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+            onPress={() => router.push('/settings')}
+            className="size-10 items-center justify-center rounded-full active:bg-accent">
+            <Icon as={Settings} size={20} strokeWidth={1.75} />
+          </Pressable>
         </View>
-        <View className="flex-1 items-center justify-center gap-5 px-10" style={{ marginBottom: '25%' }}>
+        <View
+          className="flex-1 items-center justify-center gap-5 px-10"
+          style={{ marginBottom: '25%' }}>
           <Text className="text-center font-serif-medium text-[28px] leading-[34px] tracking-tight">
             What will you learn?
           </Text>
@@ -59,6 +75,7 @@ export default function Screen() {
       <SkillList
         skills={skills}
         onNewSkill={() => router.push('/skill/create')}
+        onOpenSettings={() => router.push('/settings')}
         refreshing={isRefetching}
         onRefresh={refetch}
       />

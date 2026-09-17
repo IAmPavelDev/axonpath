@@ -58,6 +58,10 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
         topic: skill.topic,
         status: skill.status,
         createdAt: skill.createdAt,
+        lessonCount: skill.lessonCount,
+        completedLessons: skill.completedLessons,
+        learnedPoints: skill.learnedPoints,
+        lastActivityAt: skill.lastActivityAt,
       }));
     }) satisfies OrpcHandler<
       unknown,

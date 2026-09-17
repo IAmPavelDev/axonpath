@@ -15,6 +15,11 @@ export type ClassListItem = {
   id: number;
   title: string;
   createdAt: Date;
+  /** Total questions generated for the class. */
+  questionCount: number;
+  /** Distinct questions the user has answered at least once. */
+  learnedPoints: number;
+  lastActivityAt: Date | null;
 };
 
 export type ClassError = { kind: "ClassNotFound"; classId: number };

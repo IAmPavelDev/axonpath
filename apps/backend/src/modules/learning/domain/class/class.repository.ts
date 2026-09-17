@@ -8,6 +8,6 @@ export type ClassRepository = {
     contentMd: string;
     aiModel?: string;
   }): Promise<Pick<Class, "id">>;
-  listBySkill(skillId: number): Promise<ClassListItem[]>;
+  listBySkill(skillId: number, userId: number): Promise<ClassListItem[]>;
   findById(id: number): Promise<Pick<Class, "id" | "title" | "contentMd"> | null>;
 };

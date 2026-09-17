@@ -17,8 +17,8 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
   const getClassById = makeGetClassById(deps);
 
   return {
-    list: (async ({ input }) => {
-      return getClassList(input.skillId);
+    list: (async ({ input, context }) => {
+      return getClassList(input.skillId, context.user.id);
     }) satisfies OrpcHandler<
       z.infer<typeof schema.class.GetClassListInput>,
       z.infer<typeof schema.class.GetClassListOutput>

@@ -2,47 +2,62 @@ import { Icon } from '@atomics/icon';
 import { PulseDot } from '@atomics/pulse-dot';
 import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
-import { ThemeToggle } from '@components/theme-toggle';
+import { Settings, Pin, ChevronRight, Plus } from 'lucide-react-native';
 import { formatRelativeDate } from '@/lib/format';
+import { usePinnedSkills } from '@/lib/pins';
 import { Skill } from '@/types/skill';
 import { Link } from 'expo-router';
-import { ChevronRight, Plus } from 'lucide-react-native';
-import { FC } from 'react';
+import { FC, useMemo } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 /** DRAFT means the AI initialization job is still running. */
 const isPreparing = (skill: Skill) => skill.status === 'DRAFT';
 
-const SkillRow: FC<{ skill: Skill; index: number }> = ({ skill, index }) => {
+const lastStudiedLabel = (skill: Skill): string =>
+  skill.lastActivityAt ? formatRelativeDate(skill.lastActivityAt) : 'not started';
+
+const SkillRow: FC<{ skill: Skill; pinned: boolean; onTogglePin: () => void }> = ({
+  skill,
+  pinned,
+  onTogglePin,
+}) => {
   return (
     <Link asChild href={`/skill/${skill.id}`}>
-      <Pressable className="flex-row items-center gap-4 bg-background px-6 py-4 active:bg-accent">
-        <Text className="w-6 shrink-0 text-right text-[13px] text-muted-foreground tabular-nums">
-          {String(index + 1).padStart(2, '0')}
-        </Text>
+      <Pressable
+        onLongPress={onTogglePin}
+        delayLongPress={350}
+        className="bg-background px-6 py-4 active:bg-accent">
+        <View className="flex-row items-center gap-3">
+          <View className="flex-1 gap-1">
+            <View className="flex-row items-center gap-1.5">
+              {pinned && (
+                <Icon as={Pin} size={13} className="text-muted-foreground" fill="currentColor" />
+              )}
+              <Text
+                numberOfLines={1}
+                className="flex-shrink font-serif-medium text-[19px] leading-[26px] tracking-tight">
+                {skill.topic}
+              </Text>
+              {isPreparing(skill) && <PulseDot />}
+            </View>
 
-        <View className="flex-1 gap-0.5">
-          <Text
-            numberOfLines={1}
-            className="font-serif-medium text-[19px] leading-[26px] tracking-tight">
-            {skill.topic}
-          </Text>
-          <View className="flex-row items-center gap-2">
-            {isPreparing(skill) ? (
-              <>
-                <PulseDot />
-                <Text className="text-[13px] text-muted-foreground">Preparing…</Text>
-              </>
-            ) : skill.status !== 'ACTIVE' ? (
-              <Text className="text-[13px] text-muted-foreground">{skill.status}</Text>
-            ) : null}
-            <Text className="text-[13px] text-muted-foreground tabular-nums">
-              {formatRelativeDate(skill.createdAt)}
+            <Text variant="meta">
+              Started {formatRelativeDate(skill.createdAt)} · Last studied {lastStudiedLabel(skill)}
             </Text>
-          </View>
-        </View>
 
-        <Icon as={ChevronRight} size={16} className="text-muted-foreground" strokeWidth={2} />
+            <View className="flex-row items-center gap-2">
+              {isPreparing(skill) && (
+                <Text className="text-[13px] text-muted-foreground">Preparing…</Text>
+              )}
+              <Text variant="meta">
+                {skill.lessonCount} {skill.lessonCount === 1 ? 'lesson' : 'lessons'} ·{' '}
+                {skill.completedLessons} done · {skill.learnedPoints} learned
+              </Text>
+            </View>
+          </View>
+
+          <Icon as={ChevronRight} size={16} className="text-muted-foreground" strokeWidth={2} />
+        </View>
       </Pressable>
     </Link>
   );
@@ -74,14 +89,33 @@ export const SkillListSkeleton: FC = () => (
 export const SkillList: FC<{
   skills: Skill[];
   onNewSkill: () => void;
+  onOpenSettings: () => void;
   refreshing: boolean;
   onRefresh: () => void;
-}> = ({ skills, onNewSkill, refreshing, onRefresh }) => {
+}> = ({ skills, onNewSkill, onOpenSettings, refreshing, onRefresh }) => {
+  const pinnedIds = usePinnedSkills((s) => s.pinnedIds);
+  const togglePin = usePinnedSkills((s) => s.toggle);
+
+  // Pinned skills surface first, in pin order; the rest keep recency order.
+  const ordered = useMemo(() => {
+    const pinned = pinnedIds
+      .map((id) => skills.find((skill) => skill.id === id))
+      .filter((skill): skill is Skill => skill !== undefined);
+    const rest = skills.filter((skill) => !pinnedIds.includes(skill.id));
+    return [...pinned, ...rest];
+  }, [skills, pinnedIds]);
+
   return (
     <FlatList
-      data={skills}
+      data={ordered}
       style={{ flex: 1 }}
-      renderItem={({ item: skill, index }) => <SkillRow skill={skill} index={index} />}
+      renderItem={({ item: skill }) => (
+        <SkillRow
+          skill={skill}
+          pinned={pinnedIds.includes(skill.id)}
+          onTogglePin={() => togglePin(skill.id)}
+        />
+      )}
       keyExtractor={(skill) => skill.id.toString()}
       ItemSeparatorComponent={ListSeparator}
       refreshControl={
@@ -96,7 +130,13 @@ export const SkillList: FC<{
                 {skills.length} {skills.length === 1 ? 'skill' : 'skills'}
               </Text>
             </View>
-            <ThemeToggle />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+              onPress={onOpenSettings}
+              className="size-10 items-center justify-center rounded-full active:bg-accent">
+              <Icon as={Settings} size={20} strokeWidth={1.75} />
+            </Pressable>
           </View>
           <ListSeparator />
         </View>

@@ -22,6 +22,10 @@ export const GetSkillListOutput = z.array(z.object({
   topic: z.string(),
   status: z.string(),
   createdAt: z.date(),
+  lessonCount: z.number().int(),
+  completedLessons: z.number().int(),
+  learnedPoints: z.number().int(),
+  lastActivityAt: z.date().nullable(),
 }));
 
 export const GetSkillByIdOutput = z.object({

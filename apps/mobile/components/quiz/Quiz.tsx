@@ -136,7 +136,7 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View className="h-0.5 bg-muted">
+      <View className="h-1 bg-muted">
         <Animated.View
           style={[
             {
@@ -249,7 +249,7 @@ const OptionTile: FC<{ label: string; selected: boolean; onPress: () => void }> 
         'flex-row items-center gap-3 rounded-lg px-4 py-3.5',
         selected
           ? 'bg-primary'
-          : 'border-hairline border-foreground/30 bg-background active:bg-accent'
+          : 'border border-foreground/15 bg-background active:bg-accent'
       )}>
       <Text
         className={cn(

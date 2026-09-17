@@ -1,14 +1,15 @@
 import { err, ok, type Result } from "@/modules/platform/result";
 import type { ClassError } from "@/modules/learning/domain/class/class";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
+import type { ClassListItem } from "@/modules/learning/domain/class/class";
 
 export type GetClassListDeps = { classRepo: ClassRepository };
-export type GetClassListOutput = { id: number; title: string; createdAt: Date }[];
+export type GetClassListOutput = ClassListItem[];
 
 export const makeGetClassList =
   ({ classRepo }: GetClassListDeps) =>
-  async (skillId: number): Promise<GetClassListOutput> =>
-    classRepo.listBySkill(skillId);
+  async (skillId: number, userId: number): Promise<GetClassListOutput> =>
+    classRepo.listBySkill(skillId, userId);
 
 export type GetClassByIdDeps = { classRepo: ClassRepository };
 export type GetClassByIdInput = { classId: number };
