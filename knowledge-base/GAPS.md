@@ -1,5 +1,7 @@
 # Axon — Gap Analysis (current → beta)
-
+> **SUPERSEDED for execution:** see `knowledge-base/BETA_PLAN.md` (2026-09-17) for the verified
+> current state and the sequenced plan. Gap priorities below still hold; file references are
+> pre-refactor.
 > Every gap between "today" and "workable beta". Each item is verifiable: an acceptance criterion
 > is given. Priority = how much it blocks the product's core idea. See ROADMAP.md for the
 > sequenced plan.

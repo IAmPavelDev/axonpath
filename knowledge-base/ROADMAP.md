@@ -1,5 +1,7 @@
 # Axon — Roadmap to Beta (3–4 weeks)
-
+> **SUPERSEDED for execution:** follow `knowledge-base/BETA_PLAN.md` (2026-09-17, verified
+> against the post-DDD-refactor code). File paths below cite pre-refactor files that no longer
+> exist. Kept for background rationale only.
 > Goal: a **single-author workable beta** proving the adaptive loop, usable by someone other than
 > the developer. Scope is deliberately tight — the loop is the product; everything else is
 > hardening or deferral. Driven from ARCHITECTURE.md (current state), CONCEPT.md (vision),
