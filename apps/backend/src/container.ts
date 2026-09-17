@@ -7,7 +7,7 @@ import { makeSetImmediateJobQueue } from "@/modules/platform/infrastructure/set-
 import { makeVectorStoreAdapter } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrieve-relevant-context";
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
-import { makeOpenRouterAi } from "@/modules/tutoring/infrastructure/openrouter.client";
+import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import type { LearningApiDeps } from "@/router";
@@ -26,7 +26,7 @@ export const configureContainer = (): Container => {
   const quizRepo = makePrismaQuizRepository();
   const eventRepo = makePrismaEventRepository();
   const vectorStore = makeVectorStoreAdapter();
-  const ai = makeOpenRouterAi();
+  const ai = makeZaiAi();
 
   const retrieveContext = makeRetrieveRelevantContext({ ai, vectorStore });
   const recordVectors = makeRecordVectors({ vectorStore });

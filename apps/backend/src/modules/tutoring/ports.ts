@@ -10,6 +10,12 @@ export type JsonGenerationRequest = {
   schemaName: string;
   responseSchema: Record<string, unknown>;
 };
+export type JsonGenerationInput = {
+  /** Persistent role/persona for the model (system message). */
+  system: string;
+  /** Task-specific content (user message). */
+  prompt: string;
+};
 
 export type JsonGenerationResult = {
   /** Raw model output, post JSON-extraction. */
@@ -26,7 +32,7 @@ export type AiError = {
 
 export type AiPort = {
   generateJson(
-    prompt: string,
+    input: JsonGenerationInput,
     request: JsonGenerationRequest,
   ): Promise<Result<JsonGenerationResult, AiError>>;
   generateEmbeddings(

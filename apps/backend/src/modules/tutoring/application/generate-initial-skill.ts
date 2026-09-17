@@ -7,6 +7,10 @@ import {
   INIT_SKILL_SCHEMA,
   SKILL_DESCRIPTION_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
+import {
+  DESCRIPTION_SYSTEM,
+  TUTOR_SYSTEM,
+} from "@/modules/tutoring/domain/personas";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
@@ -68,6 +72,30 @@ const extractJsonObject = (raw: string): unknown => {
 };
 
 /**
+ * glm-5.3-flash drifts from the JSON schema (renames fields, invents extra
+ * keys, skips required ones). Coerce each returned question to
+ * GeneratedQuestion; drop anything that does not fit instead of failing the
+ * whole quiz insert.
+ */
+const toGeneratedQuestion = (value: unknown): GeneratedQuestion | null => {
+  if (typeof value !== "object" || value === null) return null;
+  const q = value as Record<string, unknown>;
+  if (q.type !== "MULTIPLE_CHOICE" && q.type !== "TRUE_FALSE") return null;
+  // The model tends to emit `question` for the schema's `text` field.
+  const text = q.text ?? q.question;
+  if (typeof text !== "string" || text.length === 0) return null;
+  const rawChoices = Array.isArray(q.choices) ? q.choices : [];
+  const choices: string[] = [];
+  for (const choice of rawChoices) {
+    if (typeof choice !== "string") return null;
+    choices.push(choice);
+  }
+  if (choices.length === 0) return null;
+  if (typeof q.answerKey !== "string" || q.answerKey.length === 0) return null;
+  return { type: q.type, text, choices, answerKey: q.answerKey };
+};
+
+/**
  * The AI initialization pipeline for a freshly created DRAFT skill. Runs in
  * the background ("skill-init" job):
  *   1. Generate + persist the skill description.
@@ -98,19 +126,31 @@ export const makeGenerateInitialSkill =
   ): Promise<Result<void, GenerateInitialSkillError>> => {
     // 1. Description (best-effort: failure yields "" and still updates).
     const descriptionResult = await ai.generateJson(
-      buildSkillDescriptionPrompt(input.topic),
+      {
+        system: DESCRIPTION_SYSTEM,
+        prompt: buildSkillDescriptionPrompt(input.topic),
+      },
       { schemaName: "skill_description", responseSchema: SKILL_DESCRIPTION_SCHEMA },
     );
 
     let description = "";
     if (descriptionResult.ok) {
       try {
-        const parsed = extractJsonObject(descriptionResult.value.raw) as {
-          description?: string;
-        };
-        description = parsed.description ?? "";
+        const parsed: unknown = extractJsonObject(descriptionResult.value.raw);
+        if (typeof parsed === "string") {
+          description = parsed.trim();
+        } else if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "description" in parsed
+        ) {
+          const d = parsed.description;
+          if (typeof d === "string") description = d.trim();
+        }
       } catch {
-        description = "";
+        // glm-5.3-flash sometimes answers prose despite the JSON schema;
+        // the prose itself is the description.
+        description = descriptionResult.value.raw.trim();
       }
     }
     await skillRepo.update(input.skillId, { description });
@@ -130,10 +170,10 @@ export const makeGenerateInitialSkill =
       priorContext,
     });
 
-    const generation = await ai.generateJson(prompt, {
-      schemaName: "init_skill",
-      responseSchema: INIT_SKILL_SCHEMA,
-    });
+    const generation = await ai.generateJson(
+      { system: TUTOR_SYSTEM, prompt },
+      { schemaName: "init_skill", responseSchema: INIT_SKILL_SCHEMA },
+    );
 
     if (!generation.ok) {
       return { ok: false, error: generation.error };
@@ -144,7 +184,9 @@ export const makeGenerateInitialSkill =
       parsed = {
         classTitle: raw.classTitle ?? "Unknown title",
         classContentMd: raw.classContentMd ?? "",
-        questions: raw.questions ?? [],
+        questions: (Array.isArray(raw.questions) ? raw.questions : [])
+          .map(toGeneratedQuestion)
+          .filter((q): q is GeneratedQuestion => q !== null),
         contextSnippets: raw.contextSnippets ?? [],
       };
     } catch (error) {
@@ -157,14 +199,15 @@ export const makeGenerateInitialSkill =
       };
     }
 
-    // 4. Audit SKILL_CREATED (same payload shape as before).
+    // 4. Audit SKILL_CREATED with the full request + response for debugging.
     await eventRepo.record({
       skillId: input.skillId,
       userId: input.userId,
       type: EventType.SKILL_CREATED,
       payload: {
         action: "init_skill",
-        prompt: prompt.substring(0, 2000),
+        prompt,
+        system: TUTOR_SYSTEM,
         model: chatModel,
         response: generation.value.raw,
       },

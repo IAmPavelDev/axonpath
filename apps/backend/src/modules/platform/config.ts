@@ -6,12 +6,15 @@ export const config = {
     ? Number(process.env.LAMBDA_DECAY_DEFAULT)
     : 0.02,
   ai: {
-    OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,
+    ZAI_API_KEY: process.env.ZAI_API_KEY,
+    GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+    chatBaseUrl: 'https://api.z.ai/api/coding/paas/v4',
+    embeddingBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     models: {
-      chat: 'deepseek/deepseek-v4.1-flash',
-      embedding: 'google/gemini-embedding-001'
-    }
-  }
+      chat: 'glm-5.3-flash',
+      embedding: 'gemini-embedding-2',
+    },
+  },
 };
 
 export type AiModelsType = typeof config.ai.models;

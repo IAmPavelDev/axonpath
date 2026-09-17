@@ -1,7 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { config } from "@/modules/platform/config";
 
-/** Gemini embedding-001 output dimensionality (was the former pgvector column width). */
+/** gemini-embedding-2 output dimensionality. */
 export const VECTOR_DIM = 3072;
 export const QDRANT_COLLECTION = "axon_vectors";
 

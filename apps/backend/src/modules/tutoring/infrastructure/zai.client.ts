@@ -13,13 +13,16 @@ import type {
 const CHAT_MODEL = config.ai.models.chat;
 const EMBEDDING_MODEL = config.ai.models.embedding;
 
-const openrouter = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: config.ai.OPENROUTER_API_KEY,
-  defaultHeaders: {
-    "HTTP-Referer": "https://axon.app",
-    "X-Title": "Axon",
-  },
+// Chat runs on Z.ai's OpenAI-compatible endpoint; embeddings run on Gemini's
+// OpenAI-compatible endpoint (Z.ai ships no embedding model). Same OpenAI SDK.
+const zai = new OpenAI({
+  baseURL: config.ai.chatBaseUrl,
+  apiKey: config.ai.ZAI_API_KEY ?? "",
+});
+
+const gemini = new OpenAI({
+  baseURL: config.ai.embeddingBaseUrl,
+  apiKey: config.ai.GEMINI_API_KEY ?? "",
 });
 
 const extractJson = (raw: string): string => {
@@ -37,17 +40,23 @@ const asAiError = (error: unknown): AiError => ({
   detail: error instanceof Error ? error.message : String(error),
 });
 
-export const makeOpenRouterAi = (): AiPort => ({
+export const makeZaiAi = (): AiPort => ({
   generateJson: async (
-    prompt,
+    input,
     request,
   ): Promise<Result<{ raw: string }, AiError>> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        // OpenRouter-only `provider` routing field is not in the openai SDK types yet.
+        // glm-5.3-flash treats json_schema as guidance, not a hard contract;
+        // extractJson strips fences and the parse side tolerates drift.
         const params = {
           model: CHAT_MODEL,
-          messages: [{ role: "user", content: prompt }],
+          messages: [
+            { role: "system", content: input.system },
+            { role: "user", content: input.prompt },
+          ],
+          // Reasoning model: headroom for reasoning_content + the JSON body.
+          max_tokens: 8192,
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -56,12 +65,9 @@ export const makeOpenRouterAi = (): AiPort => ({
               schema: request.responseSchema,
             },
           },
-          provider: {
-            require_parameters: true,
-          },
         } as unknown as ChatCompletionCreateParamsNonStreaming;
 
-        const completion = (await openrouter.chat.completions.create(
+        const completion = (await zai.chat.completions.create(
           params,
         )) as ChatCompletion;
         const choice = completion.choices[0];
@@ -82,7 +88,7 @@ export const makeOpenRouterAi = (): AiPort => ({
 
   generateEmbeddings: async (content) => {
     try {
-      const response = await openrouter.embeddings.create({
+      const response = await gemini.embeddings.create({
         model: EMBEDDING_MODEL,
         input: content,
       });
