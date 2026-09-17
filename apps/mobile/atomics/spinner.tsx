@@ -1,21 +1,23 @@
-import { useDimensions } from '@hooks/useDimensions';
+import { useColorScheme } from 'nativewind';
 import { Loader } from 'lucide-react-native';
 import { StyleSheet, View, Animated, Easing } from 'react-native';
 import { useEffect, useRef } from 'react';
 
 export const Spinner = () => {
-  const { width, height } = useDimensions();
+  const { colorScheme } = useColorScheme();
   const spinValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
+    const animation = Animated.loop(
       Animated.timing(spinValue, {
         toValue: 1,
         duration: 1000,
         easing: Easing.linear,
         useNativeDriver: true,
       })
-    ).start();
+    );
+    animation.start();
+    return () => animation.stop();
   }, [spinValue]);
 
   const spin = spinValue.interpolate({
@@ -24,9 +26,9 @@ export const Spinner = () => {
   });
 
   return (
-    <View style={[styles.container, { width, height }]}>
+    <View style={styles.container}>
       <Animated.View style={{ transform: [{ rotate: spin }] }}>
-        <Loader color="black" size={40} />
+        <Loader color={colorScheme === 'dark' ? 'white' : 'black'} size={28} strokeWidth={1.75} />
       </Animated.View>
     </View>
   );

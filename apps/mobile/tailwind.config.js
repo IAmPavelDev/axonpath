@@ -3,7 +3,7 @@ const { hairlineWidth } = require('nativewind/theme');
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
-  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}',  './atomics/**/*.{ts,tsx}'],
+  content: ['./app/**/*.{ts,tsx}', './components/**/*.{ts,tsx}', './atomics/**/*.{ts,tsx}'],
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
@@ -25,6 +25,10 @@ module.exports = {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
         },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+        },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
           foreground: 'hsl(var(--muted-foreground))',
@@ -42,6 +46,17 @@ module.exports = {
           foreground: 'hsl(var(--card-foreground))',
         },
       },
+      // Static font faces: weight is encoded in the face name, never via
+      // font-weight utilities.
+      fontFamily: {
+        sans: ['Inter_400Regular'],
+        'sans-medium': ['Inter_500Medium'],
+        'sans-semibold': ['Inter_600SemiBold'],
+        'sans-bold': ['Inter_700Bold'],
+        serif: ['Newsreader_400Regular'],
+        'serif-medium': ['Newsreader_500Medium'],
+        'serif-semibold': ['Newsreader_600SemiBold'],
+      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
@@ -50,24 +65,10 @@ module.exports = {
       borderWidth: {
         hairline: hairlineWidth(),
       },
-      keyframes: {
-        'accordion-down': {
-          from: { height: '0' },
-          to: { height: 'var(--radix-accordion-content-height)' },
-        },
-        'accordion-up': {
-          from: { height: 'var(--radix-accordion-content-height)' },
-          to: { height: '0' },
-        },
-      },
-      animation: {
-        'accordion-down': 'accordion-down 0.2s ease-out',
-        'accordion-up': 'accordion-up 0.2s ease-out',
-      },
     },
   },
   future: {
     hoverOnlyWhenSupported: true,
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [],
 };

@@ -1,16 +1,17 @@
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
+import { ScreenHeader } from '@components/screen-header';
 import { Text } from '@atomics/text';
-import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FC, useState } from 'react';
-import { View } from 'react-native';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const EditSkillTopic: FC = () => {
-  const { screenHeight } = useDimensions();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const [topic, setTopic] = useState('');
 
@@ -32,31 +33,36 @@ export const EditSkillTopic: FC = () => {
   };
 
   return (
-    <View
-      style={{
-        height: screenHeight,
-        paddingHorizontal: 16,
-        justifyContent: 'center',
-        gap: 16,
-      }}>
-      <Text variant="h2">Create new skill</Text>
-      <Input
-        value={topic}
-        onChangeText={setTopic}
-        placeholder="Topic you want to learn"
-        editable={!isPending}
-        returnKeyType="done"
-        onSubmitEditing={submit}
-        autoFocus
-      />
-      {error && (
-        <Text variant="muted" className="text-destructive">
-          {error.message}
-        </Text>
-      )}
-      <Button onPress={submit} disabled={isDisabled}>
-        <Text>Create</Text>
-      </Button>
-    </View>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenHeader onBack={() => router.back()} />
+
+      <View className="flex-1 justify-center gap-8 px-6" style={{ marginBottom: '20%' }}>
+        <View className="gap-3">
+          <Text variant="label">Step 1 of 2</Text>
+          <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+            What do you want to learn?
+          </Text>
+        </View>
+        <Input
+          value={topic}
+          onChangeText={setTopic}
+          placeholder="Type a topic…"
+          className="h-14 rounded-lg text-lg"
+          editable={!isPending}
+          returnKeyType="done"
+          onSubmitEditing={submit}
+          autoFocus
+        />
+        {error && <Text variant="muted" className="text-destructive">{error.message}</Text>}
+      </View>
+
+      <View className="px-6 pb-6" style={{ paddingBottom: 24 + insets.bottom }}>
+        <Button size="lg" className="w-full" onPress={submit} disabled={isDisabled}>
+          <Text>{isPending ? 'Creating…' : 'Continue'}</Text>
+        </Button>
+      </View>
+    </KeyboardAvoidingView>
   );
 };

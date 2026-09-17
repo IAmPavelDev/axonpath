@@ -4,9 +4,14 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 import { Platform, Text as RNText, type Role } from 'react-native';
 
+/*
+ * Type system: Inter carries the interface; Newsreader carries content.
+ * Weight lives in the font face (font-sans-semibold etc.), never in
+ * font-weight utilities.
+ */
 const textVariants = cva(
   cn(
-    'text-foreground text-base',
+    'font-sans text-foreground text-base',
     Platform.select({
       web: 'select-text',
     })
@@ -15,25 +20,19 @@ const textVariants = cva(
     variants: {
       variant: {
         default: '',
-        h1: cn(
-          'text-center text-4xl font-extrabold tracking-tight',
-          Platform.select({ web: 'scroll-m-20 text-balance' })
-        ),
-        h2: cn(
-          'border-border border-b pb-2 text-3xl font-semibold tracking-tight',
-          Platform.select({ web: 'scroll-m-20 first:mt-0' })
-        ),
-        h3: cn('text-2xl font-semibold tracking-tight', Platform.select({ web: 'scroll-m-20' })),
-        h4: cn('text-xl font-semibold tracking-tight', Platform.select({ web: 'scroll-m-20' })),
-        p: 'mt-3 leading-7 sm:mt-6',
-        blockquote: 'mt-4 border-l-2 pl-3 italic sm:mt-6 sm:pl-6',
-        code: cn(
-          'bg-muted relative rounded px-[0.3rem] py-[0.2rem] font-mono text-sm font-semibold'
-        ),
-        lead: 'text-muted-foreground text-xl',
-        large: 'text-lg font-semibold',
-        small: 'text-sm font-medium leading-none',
+        /** Page-level serif title. */
+        title: 'font-serif text-[34px] leading-[40px] tracking-tight',
+        /** Section heading inside a page. */
+        heading: 'font-serif text-[22px] leading-[28px] tracking-tight',
+        /** Small all-caps group label (tracking does the work, not color). */
+        label: 'text-muted-foreground text-[11px] font-sans-medium uppercase tracking-[0.08em]',
+        /** Muted single-line support text. */
         muted: 'text-muted-foreground text-sm',
+        /** Serif reading body. */
+        body: 'font-serif text-[17px] leading-[29px]',
+        /** Monospaced/tabular meta figures. */
+        meta: 'text-muted-foreground text-[13px] tabular-nums',
+        code: 'rounded bg-muted px-1.5 py-0.5 font-mono text-sm',
       },
     },
     defaultVariants: {
@@ -47,19 +46,14 @@ type TextVariantProps = VariantProps<typeof textVariants>;
 type TextVariant = NonNullable<TextVariantProps['variant']>;
 
 const ROLE: Partial<Record<TextVariant, Role>> = {
-  h1: 'heading',
-  h2: 'heading',
-  h3: 'heading',
-  h4: 'heading',
-  blockquote: Platform.select({ web: 'blockquote' as Role }),
+  title: 'heading',
+  heading: 'heading',
   code: Platform.select({ web: 'code' as Role }),
 };
 
 const ARIA_LEVEL: Partial<Record<TextVariant, string>> = {
-  h1: '1',
-  h2: '2',
-  h3: '3',
-  h4: '4',
+  title: '1',
+  heading: '2',
 };
 
 const TextClassContext = React.createContext<string | undefined>(undefined);
