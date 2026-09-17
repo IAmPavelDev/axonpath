@@ -27,6 +27,7 @@ export const buildQuizRouter = (deps: QuizApiDeps) => {
   const handlers = makeQuizHandlers(deps);
   return {
     get: rpc.quiz.get.handler(handlers.get),
+    submit: rpc.quiz.submit.handler(handlers.submit),
   };
 };
 

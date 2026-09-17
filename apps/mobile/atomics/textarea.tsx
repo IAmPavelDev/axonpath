@@ -18,11 +18,19 @@ type TextareaProps = TextInputProps & React.RefAttributes<TextInput>;
 
 function Textarea({ className, style, ...props }: TextareaProps) {
   const { screenHeight } = useDimensions();
-  const [contentHeight, setContentHeight] = useState(0);
+  // Native multiline TextInput wraps content automatically; only web's
+  // <textarea> needs JS-driven height.
+  const [webHeight, setWebHeight] = useState(0);
 
-  const maxHeight = Math.round(screenHeight * 0.7);
   const minHeight = MIN_ROWS * LINE_HEIGHT + VERTICAL_PADDING;
-  const height = Math.max(minHeight, Math.min(contentHeight || minHeight, maxHeight));
+  const maxHeight = Math.max(minHeight, Math.round(screenHeight * 0.7));
+
+  const sizingStyle: TextStyle = Platform.select({
+    web: {
+      height: Math.max(minHeight, Math.min(webHeight || minHeight, maxHeight)),
+    },
+    default: { minHeight, maxHeight },
+  }) as TextStyle;
 
   return (
     <TextInput
@@ -48,9 +56,11 @@ function Textarea({ className, style, ...props }: TextareaProps) {
         }),
         className
       )}
-      style={[{ height } as TextStyle, style]}
+      style={[sizingStyle, style]}
       onContentSizeChange={(e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => {
-        setContentHeight(e.nativeEvent.contentSize.height);
+        if (Platform.OS === 'web') {
+          setWebHeight(e.nativeEvent.contentSize.height);
+        }
         props.onContentSizeChange?.(e);
       }}
     />

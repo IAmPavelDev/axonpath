@@ -24,12 +24,37 @@ export type NewQuestion = {
 
 /**
  * A user's recorded attempt at a question. Scoring is a pure domain function
- * (see scoring.ts); persistence of answers is out of scope until quiz.submit
- * is wired.
+ * (see scoring.ts); persistence happens in the submit-quiz use case.
+ * `timeSpentMs` is optional client telemetry — persisted with the attempt,
+ * defaulted to 0 when the client doesn't track it.
  */
 export type SubmittedAnswer = {
   questionId: number;
   answer: string;
+  timeSpentMs?: number;
+};
+
+/**
+ * Server-side view of a question for scoring: carries the answerKey and the
+ * owning skill. Never mapped to the wire — `findByClassId` remains the
+ * client-facing view.
+ */
+export type ScoreableQuestion = {
+  id: number;
+  skillId: number;
+  type: QuestionType;
+  answerKey: unknown;
+};
+
+export type NewAnswer = {
+  questionId: number;
+  userId: number;
+  skillId: number;
+  /** Storage convention for the Answer.content JSON column. */
+  content: { answer: string };
+  score: number;
+  isCorrect: boolean;
+  timeSpentMs: number;
 };
 
 export type QuizError = { kind: "ClassNotFound"; classId: number };

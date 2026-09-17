@@ -1,15 +1,13 @@
 import { Button } from '@atomics/button';
 import { Textarea } from '@atomics/textarea';
 import { Text } from '@atomics/text';
-import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { FC, useState } from 'react';
+import { FC, useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 export const EditSkillDescription: FC = () => {
-  const { screenHeight } = useDimensions();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,7 +20,16 @@ export const EditSkillDescription: FC = () => {
     retry: true,
   })
 
-  const [description, setDescription] = useState(data?.description ?? '');
+  const [description, setDescription] = useState('');
+  const [touched, setTouched] = useState(false);
+
+  // The poll delivers the AI-generated description after mount; adopt it
+  // until the user starts typing, then their text wins.
+  useEffect(() => {
+    if (!touched && data?.description) {
+      setDescription(data.description);
+    }
+  }, [data?.description, touched]);
 
   const { mutate, isPending, error } = useMutation({
     mutationFn: (input: { description: string }) =>
@@ -42,19 +49,25 @@ export const EditSkillDescription: FC = () => {
   return (
     <View
       style={{
-        height: screenHeight,
-        paddingHorizontal: 16,
+        flex: 1,
         justifyContent: 'center',
+        paddingHorizontal: 16,
         gap: 16,
       }}>
       <Text variant="h2">Describe your skill</Text>
       <Textarea
         value={description}
-        onChangeText={setDescription}
+        onChangeText={(value) => {
+          setTouched(true);
+          setDescription(value);
+        }}
         placeholder="Short description (optional)"
         editable={!isPending}
         autoFocus
       />
+      {!touched && !data?.description && (
+        <Text variant="muted">Generating description…</Text>
+      )}
       {error && (
         <Text variant="muted" className="text-destructive">
           {error.message}

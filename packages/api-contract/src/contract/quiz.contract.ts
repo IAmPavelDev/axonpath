@@ -16,7 +16,7 @@ const get = oc
 const submit = oc
   .route({
     method: "POST",
-    path: `${BASE_PATH}/:id/submit`,
+    path: `${BASE_PATH}/:classId/submit`,
     summary: "Submit quiz answers",
     tags: ["Quiz", "Submit"],
   })
@@ -24,7 +24,8 @@ const submit = oc
   .output(schema.SubmitQuizAnswersOutput);
 
 export const quizContract = {
-    get,
+  get,
+  submit,
 }
 
 export type QuizContractType = typeof quizContract;

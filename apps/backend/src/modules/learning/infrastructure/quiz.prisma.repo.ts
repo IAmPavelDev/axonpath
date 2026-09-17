@@ -14,7 +14,7 @@ const toQuestionView = (row: {
   text: string;
   choices: unknown;
 }): QuestionView => {
-  const parsed = schema.quiz.SubmitQuizAnswersOutput.element.parse(row);
+  const parsed = schema.quiz.GetQuizByClassIdOutput.element.parse(row);
   return parsed;
 };
 
@@ -46,5 +46,28 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       select: { id: true, type: true, text: true, choices: true },
     });
     return rows.map(toQuestionView);
+  },
+
+  findScoreableByClassId: async (classId) =>
+    prisma.question.findMany({
+      where: { classId },
+      select: { id: true, skillId: true, type: true, answerKey: true },
+    }),
+
+  createAnswers: async (inputs) => {
+    if (inputs.length === 0) {
+      return;
+    }
+    await prisma.answer.createMany({
+      data: inputs.map((input) => ({
+        questionId: input.questionId,
+        userId: input.userId,
+        skillId: input.skillId,
+        content: input.content,
+        score: input.score,
+        isCorrect: input.isCorrect,
+        timeSpentMs: input.timeSpentMs,
+      })),
+    });
   },
 });

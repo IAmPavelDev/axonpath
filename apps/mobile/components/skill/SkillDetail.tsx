@@ -4,14 +4,12 @@ import { Textarea } from '@atomics/textarea';
 import { Spinner } from '@atomics/spinner';
 import { Text } from '@atomics/text';
 import { ClassListItem } from '@components/class/ClassList';
-import { useDimensions } from '@hooks/useDimensions';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FC, useEffect, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
 export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
-  const { screenHeight } = useDimensions();
   const queryClient = useQueryClient();
   const [topic, setTopic] = useState('');
   const [description, setDescription] = useState('');
@@ -79,7 +77,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const isSaving = topicPending || descriptionPending;
 
   return (
-    <View style={{ gap: 12, padding: 16 }}>
+    <View style={{ flex: 1, gap: 12, padding: 16 }}>
       {error && (
         <Text variant="muted" className="text-destructive">
           {error.message}
@@ -126,11 +124,8 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
       <Text variant="h4">Lessons</Text>
       <FlatList
         data={classes ?? []}
-        style={{
-          flex: 1,
-          paddingHorizontal: 16,
-          marginBottom: screenHeight / 4,
-        }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ gap: 8 }}
         keyExtractor={(classData) => classData.id.toString()}
         renderItem={({ item: classData }) => <ClassListItem classData={classData} />}
         ListEmptyComponent={<Text variant="muted">No lessons yet</Text>}

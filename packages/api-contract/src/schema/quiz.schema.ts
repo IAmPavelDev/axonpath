@@ -16,8 +16,26 @@ export type Question = z.infer<typeof Question>;
 
 export const GetQuizByClassIdOutput = z.array(Question);
 
-export const SubmitQuizAnswersInput = z.object({
-  answers: z.array(z.object({ questionId: z.number(), answer: z.string() })),
+export const SubmittedAnswer = z.object({
+  questionId: z.number(),
+  answer: z.string(),
+  timeSpentMs: z.number().optional(),
 });
 
-export const SubmitQuizAnswersOutput = z.array(Question);
+export const SubmitQuizAnswersInput = z.object({
+  classId: z.number(),
+  answers: z.array(SubmittedAnswer),
+});
+
+export const QuestionResult = z.object({
+  questionId: z.number(),
+  isCorrect: z.boolean(),
+  /** Null when the stored answerKey is not a plain string (legacy/JSON keys). */
+  correctAnswer: z.string().nullable(),
+});
+
+export const SubmitQuizAnswersOutput = z.object({
+  score: z.number(),
+  total: z.number(),
+  perQuestion: z.array(QuestionResult),
+});

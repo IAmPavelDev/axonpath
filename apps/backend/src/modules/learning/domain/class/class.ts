@@ -14,6 +14,7 @@ export type Class = {
 export type ClassListItem = {
   id: number;
   title: string;
+  createdAt: Date;
 };
 
 export type ClassError = { kind: "ClassNotFound"; classId: number };

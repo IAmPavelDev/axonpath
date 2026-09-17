@@ -7,6 +7,7 @@ export const GetClassListInput = z.object({
 export const GetClassListOutput = z.array(z.object({
   id: z.number(),
   title: z.string(),
+  createdAt: z.date(),
 }));
 
 export const GetClassByIdInput = z.object({

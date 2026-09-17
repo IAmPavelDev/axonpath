@@ -1,10 +1,14 @@
+import { Platform } from 'react-native'
 import { createORPCClient, onError } from '@orpc/client'
-import { RPCLink } from '@orpc/client/fetch'
 import type { AppContract } from '@axon/api-contract'
 import { ContractRouterClient } from '@orpc/contract'
+import { RPCLink } from '@orpc/client/fetch'
 
 const link = new RPCLink({
-  url: 'http://10.0.2.2:3001/rpc',
+  url: Platform.select({
+    web: 'http://localhost:3001/rpc',
+    default: 'http://10.0.2.2:3001/rpc',
+  }),
   headers: () => ({
     authorization: 'Bearer token',
   }),

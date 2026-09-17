@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { skillContract, type SkillContractType } from "./contract/skill.contract.js"
 import { classContract, type ClassContractType } from "./contract/class.contract.js"
 import * as skillSchema from "./schema/skill.schema.js";
@@ -19,6 +20,9 @@ export const schema = {
 }
 
 export type { Question };
+
+/** Named result contract for quiz submission — owned here, consumed by clients. */
+export type SubmitQuizAnswersOutput = z.infer<typeof quizSchema.SubmitQuizAnswersOutput>;
 
 export type AppContract = {
   skill: SkillContractType;

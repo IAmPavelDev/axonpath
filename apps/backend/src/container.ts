@@ -44,5 +44,5 @@ export const configureContainer = (): Container => {
 
   const jobs = makeSetImmediateJobQueue(makeJobHandlers({ generateInitialSkill }));
 
-  return { skillRepo, classRepo, quizRepo, jobs };
+  return { skillRepo, classRepo, quizRepo, eventRepo, jobs };
 };

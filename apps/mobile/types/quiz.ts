@@ -1,4 +1,5 @@
-import rpc from "@/utils/rpc";
+import type { SubmitQuizAnswersOutput } from '@axon/api-contract';
+import rpc from '@/utils/rpc';
 
 export enum QuestionType {
   MULTIPLE_CHOICE = 'MULTIPLE_CHOICE',
@@ -7,3 +8,5 @@ export enum QuestionType {
 }
 
 export type Question = Awaited<ReturnType<typeof rpc.quiz.get>>[0];
+
+export type QuizSubmitResult = SubmitQuizAnswersOutput;

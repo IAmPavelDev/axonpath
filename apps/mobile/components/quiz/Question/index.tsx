@@ -15,7 +15,7 @@ export const Question: FC<{
       {question.type === QuestionType.MULTIPLE_CHOICE && (
         <MultipleChoiceQuestion options={question.choices} questionId={question.id} />
       )}
-      {question.type === QuestionType.TRUE_FALSE && <TrueFalseQuestion />}
+      {question.type === QuestionType.TRUE_FALSE && <TrueFalseQuestion questionId={question.id} />}
       {question.type === QuestionType.OPEN_ENDED && <OpenEndedQuestion />}
     </View>
   );

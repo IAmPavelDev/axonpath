@@ -1,16 +1,25 @@
 import { Link } from 'expo-router';
 import { FC } from 'react';
-import { buttonTextVariants, buttonVariants } from '@atomics/button';
+import { Button, buttonTextVariants } from '@atomics/button';
 import { Text } from '@atomics/text';
 import { Class } from '@/types/class';
 
+const formatDate = (date: Date) =>
+  date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+
 export const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {
   return (
-    <Link
-      style={{ marginVertical: 5 }}
-      href={`/class/${classData.id}`}
-      className={buttonVariants({ variant: 'outline' })}>
-      <Text className={buttonTextVariants({ variant: 'outline' })}>{classData.title}</Text>
+    <Link asChild href={`/class/${classData.id}`}>
+      <Button variant="outline" className="h-auto sm:h-auto flex-col items-start justify-start gap-1">
+        <Text className={buttonTextVariants({ variant: 'outline' })}>{classData.title}</Text>
+        <Text className="text-muted-foreground text-xs font-normal">
+          {formatDate(classData.createdAt)}
+        </Text>
+      </Button>
     </Link>
   );
 };

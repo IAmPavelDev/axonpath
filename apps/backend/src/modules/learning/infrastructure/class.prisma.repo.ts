@@ -20,7 +20,8 @@ export const makePrismaClassRepository = (): ClassRepository => ({
   listBySkill: async (skillId): Promise<ClassListItem[]> =>
     prisma.class.findMany({
       where: { skillId },
-      select: { id: true, title: true },
+      select: { id: true, title: true, createdAt: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     }),
 
   findById: async (id) =>

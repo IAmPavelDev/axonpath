@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs, useLocalSearchParams } from 'expo-router';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
@@ -21,8 +22,9 @@ export function useClassData(): ClassContextValue {
 }
 
 function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.tabBarContainer}>
+    <View style={[styles.tabBarContainer, { paddingBottom: 10 + insets.bottom }]}>
       {state.routes.map((route, index) => {
         const { options } = descriptors[route.key];
         const label =
@@ -139,11 +141,10 @@ const styles = StyleSheet.create({
   },
   tabBarContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
     backgroundColor: '#fff',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
   },
   tabButton: {
     paddingHorizontal: 20,

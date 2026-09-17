@@ -3,7 +3,7 @@ import type { ClassError } from "@/modules/learning/domain/class/class";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 
 export type GetClassListDeps = { classRepo: ClassRepository };
-export type GetClassListOutput = { id: number; title: string }[];
+export type GetClassListOutput = { id: number; title: string; createdAt: Date }[];
 
 export const makeGetClassList =
   ({ classRepo }: GetClassListDeps) =>
