@@ -48,6 +48,8 @@
 ---
 
 ## Phase 1 — System prompts with roles (all AI requests) 🔴 small, do first
+> Detailed execution plan: `knowledge-base/PHASE1_SYSTEM_PROMPTS.md` (exact edits, personas,
+> verification queries).
 
 **Files:** `tutoring/ports.ts`, `tutoring/infrastructure/openrouter.client.ts`,
 `tutoring/domain/prompts.ts` (extend), new `tutoring/domain/personas.ts`.
