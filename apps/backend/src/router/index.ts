@@ -2,6 +2,7 @@ import { rpc } from "@/lib/orpc";
 import { makeSkillHandlers, type SkillApiDeps } from "@/modules/learning/api/skill.handlers";
 import { makeClassHandlers, type ClassApiDeps } from "@/modules/learning/api/class.handlers";
 import { makeQuizHandlers, type QuizApiDeps } from "@/modules/learning/api/quiz.handlers";
+import { makeAuthHandlers } from "@/modules/identity/api/auth.handlers";
 
 export type LearningApiDeps = SkillApiDeps & ClassApiDeps & QuizApiDeps;
 
@@ -31,8 +32,16 @@ export const buildQuizRouter = (deps: QuizApiDeps) => {
   };
 };
 
+export const buildAuthRouter = () => {
+  const handlers = makeAuthHandlers();
+  return {
+    me: rpc.auth.me.handler(handlers.me),
+  };
+};
+
 export const buildRouters = (deps: LearningApiDeps) => ({
   skill: buildSkillRouter(deps),
   class: buildClassRouter(deps),
   quiz: buildQuizRouter(deps),
+  auth: buildAuthRouter(),
 });

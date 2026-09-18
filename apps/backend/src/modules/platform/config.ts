@@ -1,4 +1,8 @@
 export const config = {
+  auth: {
+    // Firebase project used to verify mobile ID tokens (audience + issuer).
+    firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? '',
+  },
   qdrant: {
     url: process.env.QDRANT_URL || 'http://localhost:6333',
   },

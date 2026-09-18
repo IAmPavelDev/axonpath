@@ -1,4 +1,4 @@
-import { DarkTheme, DefaultTheme, type Theme } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, type Theme } from "expo-router/react-navigation";
 
 /**
  * Loaded font faces (see app/_layout.tsx). RN resolves weight through the

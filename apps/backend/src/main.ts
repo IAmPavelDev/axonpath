@@ -42,7 +42,7 @@ const app: FastifyInstance = fastify({
       try {
         // Handle RPC routes first
         const { matched: rpcMatched } = await handler.handle(req, res, {
-          context: {},
+          context: { headers: req.headers },
           prefix: '/rpc',
         });
 

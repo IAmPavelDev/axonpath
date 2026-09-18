@@ -1,7 +1,9 @@
 import { SegmentedControl } from '@atomics/segmented-control';
 import { ScreenHeader } from '@components/screen-header';
+import { Button } from '@atomics/button';
 import { Text } from '@atomics/text';
 import { useThemeMode, type ThemeMode } from '@/lib/theme-mode';
+import { useAuthStore } from '@/store/auth.store';
 import { useColorScheme } from 'nativewind';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -19,6 +21,8 @@ export default function SettingsScreen() {
   const { colorScheme } = useColorScheme();
   const mode = useThemeMode((s) => s.mode);
   const setMode = useThemeMode((s) => s.setMode);
+  const authUser = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
 
   // 'system' follows the OS until the user picks a side; the switch shows
   // the side currently in effect.
@@ -27,6 +31,18 @@ export default function SettingsScreen() {
   return (
     <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
       <ScreenHeader title="Settings" onBack={() => router.back()} />
+
+      <Text variant="label" className="px-6 pb-2 pt-4">
+        Account
+      </Text>
+      <View className="gap-3 px-4">
+        <Text variant="muted" className="px-2" numberOfLines={1}>
+          {authUser?.email ?? 'Signed in'}
+        </Text>
+        <Button variant="outline" onPress={() => void signOut()}>
+          <Text>Sign out</Text>
+        </Button>
+      </View>
 
       <Text variant="label" className="px-6 pb-2 pt-4">
         Appearance

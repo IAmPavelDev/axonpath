@@ -24,9 +24,11 @@ import {
   NativeSyntheticEvent,
   Platform,
   Pressable,
+  ScrollView,
   View,
+  type ScrollViewProps,
 } from 'react-native';
-import { FC, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { FC, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useQuizStore } from '@/store/quiz.store';
 import { QuizResult } from './QuizResult';
 
@@ -49,6 +51,20 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList<QuestionDataType>>(null);
   const advanceTimer = useRef(0);
+  // RN 0.86 + React 19: VirtualizedList attaches its ScrollView ref via
+  // cloneElement, whose reserved `ref` never reaches the function-component
+  // ScrollViewWrapper — so the list's internal ref stays null and every
+  // programmatic scroll (scrollToIndex/scrollToOffset) silently no-ops.
+  // Capture the instance ourselves through the scrollViewRef prop instead.
+  const scrollRef = useRef<ScrollView | null>(null);
+  // RN's generated d.ts narrows RefSetter to RefObject; the runtime accepts a
+  // nullable-current ref object, hence the cast.
+  const renderScrollComponent = useCallback(
+    (props: ScrollViewProps) => (
+      <ScrollView {...props} scrollViewRef={scrollRef as RefObject<ScrollView>} />
+    ),
+    []
+  );
 
   useLayoutEffect(() => {
     setQuestions(props.classId, props.questions);
@@ -81,11 +97,22 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
   const unanswered = answers.filter((a) => a.answer === null).length;
   const isLast = index >= total - 1;
 
-  const goTo = useCallback((page: number) => {
-    const target = Math.max(0, page);
-    listRef.current?.scrollToIndex({ index: target, animated: true });
-    setIndex(target);
-  }, []);
+  const goTo = useCallback(
+    (page: number) => {
+      const target = Math.min(Math.max(0, page), Math.max(0, total - 1));
+      if (scrollRef.current) {
+        // Native: the list's internal scrollToIndex/scrollToOffset early-return
+        // on its lost ref, so scroll the ScrollView instance directly. Each
+        // page is exactly `width` wide (getItemLayout), so this is exact.
+        scrollRef.current.scrollTo({ x: target * width, y: 0, animated: true });
+      } else {
+        // Web (react-native-web): the list's own ref works there.
+        listRef.current?.scrollToOffset({ offset: target * width, animated: true });
+      }
+      setIndex(target);
+    },
+    [total, width]
+  );
 
   const scheduleAdvance = useCallback(() => {
     clearTimeout(advanceTimer.current);
@@ -144,7 +171,6 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
               backgroundColor: THEME[colorScheme ?? 'light'].foreground,
               transformOrigin: 'left',
             },
-            barStyle,
           ]}
         />
       </View>
@@ -156,6 +182,9 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
       <FlatList
         ref={listRef}
         data={classQuestionsList}
+        renderScrollComponent={
+          Platform.OS === 'web' ? undefined : renderScrollComponent
+        }
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
