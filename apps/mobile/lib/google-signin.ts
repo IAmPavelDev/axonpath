@@ -1,9 +1,8 @@
 import type { GoogleSignin } from '@react-native-google-signin/google-signin';
-
+import { TurboModuleRegistry } from 'react-native';
 // Firebase console → Authentication → Google → "Web client ID"
 // (.env: EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID, see FIREBASE_SETUP.md).
-const FIREBASE_WEB_CLIENT_ID =
-  process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID ?? '';
+const FIREBASE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID ?? '';
 
 /**
  * Google sign-in needs its native module, which Expo Go cannot host. The
@@ -13,16 +12,24 @@ const FIREBASE_WEB_CLIENT_ID =
 
 let configured = false;
 
-export const googleSignInConfigured = (): boolean =>
-  FIREBASE_WEB_CLIENT_ID.length > 0;
+export const googleSignInConfigured = (): boolean => FIREBASE_WEB_CLIENT_ID.length > 0;
 
-/** Native GoogleSignin handle, or null when the native module is absent. */
+/**
+ * Native GoogleSignin handle, or null when the native module is absent.
+ *
+ * Probing matters: in bridgeless RN the missing-TurboModule error thrown by
+ * getEnforcing() (inside the library) escapes JS try/catch as a fatal redbox,
+ * so a bare require()+catch is NOT a reliable guard. get() returns null for
+ * unregistered modules without touching the throwing path — it covers both
+ * Expo Go and a dev binary built before the module was added.
+ */
 export const getGoogleSignin = (): typeof GoogleSignin | null => {
+  if (TurboModuleRegistry.get('RNGoogleSignin') == null) return null;
   try {
     // require() is untyped; the cast is the typing seam for a lazy native module.
-    const GoogleSigninModule = require(
-      '@react-native-google-signin/google-signin',
-    ) as { GoogleSignin: typeof GoogleSignin };
+    const GoogleSigninModule = require('@react-native-google-signin/google-signin') as {
+      GoogleSignin: typeof GoogleSignin;
+    };
     if (!configured && FIREBASE_WEB_CLIENT_ID.length > 0) {
       GoogleSigninModule.GoogleSignin.configure({
         webClientId: FIREBASE_WEB_CLIENT_ID,
@@ -32,7 +39,7 @@ export const getGoogleSignin = (): typeof GoogleSignin | null => {
     }
     return GoogleSigninModule.GoogleSignin;
   } catch {
-    // Native module missing (Expo Go) — caller shows a setup hint.
+    // Module registered but load failed — caller shows a setup hint.
     return null;
   }
 };

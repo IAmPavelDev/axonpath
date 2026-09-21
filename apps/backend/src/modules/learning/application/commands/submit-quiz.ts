@@ -4,15 +4,16 @@ import {
   SKILL_NEXT_CLASS_JOB,
   type SkillNextClassJobPayload,
 } from "@/modules/tutoring/application/generate-next-class";
+import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { QuizError, SubmittedAnswer } from "@/modules/learning/domain/quiz/question";
 import { scoreAnswer } from "@/modules/learning/domain/quiz/scoring";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
-
 export type SubmitQuizDeps = {
   quizRepo: QuizRepository;
   eventRepo: EventRepository;
   jobs: JobQueuePort;
+  nextClassJobs: NextClassJobRepository;
 };
 export type SubmitQuizInput = {
   classId: number;
@@ -36,12 +37,14 @@ export type SubmitQuizOutput = {
  * scored and must not persist. A class with no questions is ClassNotFound:
  * nothing to score and no skill attribution.
  *
- * A scored attempt is the learning signal: it enqueues skill-next-class so
- * the next, personalized lesson starts generating immediately (clients just
- * observe class.list). No dedup in beta — a retake regenerates a variant.
+ * A scored attempt is the learning signal: it marks the skill due for its
+ * next lesson (durable row: survives restarts, unique per skill so retakes
+ * re-arm instead of stacking) and fires the instant in-process job so
+ * generation usually starts immediately. If that job is lost, the minute
+ * sweeper picks the row up. Clients just observe class.list.
  */
 export const makeSubmitQuiz =
-  ({ quizRepo, eventRepo, jobs }: SubmitQuizDeps) =>
+  ({ quizRepo, eventRepo, jobs, nextClassJobs }: SubmitQuizDeps) =>
   async (input: SubmitQuizInput): Promise<Result<SubmitQuizOutput, QuizError>> => {
     const questions = await quizRepo.findScoreableByClassId(input.classId);
     if (questions.length === 0) {
@@ -86,8 +89,12 @@ export const makeSubmitQuiz =
     });
 
     if (scored.length > 0) {
+      const skillId = scored[0].question.skillId;
+      // Durable row first: if the process dies before the in-memory job
+      // runs, the minute sweeper still picks the skill up.
+      await nextClassJobs.enqueue({ skillId, userId: input.userId });
       jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
-        skillId: scored[0].question.skillId,
+        skillId,
         userId: input.userId,
       } satisfies SkillNextClassJobPayload);
     }

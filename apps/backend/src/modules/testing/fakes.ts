@@ -1,5 +1,9 @@
 import { ok, type Result } from "@/modules/platform/result";
-import { SkillStatus, type QuestionType } from "@/prisma/generated";
+import {
+  NextClassJobStatus,
+  SkillStatus,
+  type QuestionType,
+} from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type {
@@ -22,6 +26,11 @@ import type { NewVector, VectorStoreError } from "@/modules/memory/ports";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
+import type {
+  NextClassJobClaim,
+  NextClassJobRepository,
+} from "@/modules/jobs/next-class-job.repository";
+import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 
 /**
  * Deterministic in-memory backend for the composed loop integration test:
@@ -71,6 +80,7 @@ export type LoopHarness = {
     chatModel: string;
   };
   jobs: JobQueuePort;
+  nextClassJobs: NextClassJobRepository;
   /** Drain the first enqueued job of the given name through its real handler. */
   runJob: (jobName: string) => Promise<unknown>;
 };
@@ -326,15 +336,96 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     chatModel: "glm-5.3-flash",
   };
 
+  const nextClassJobRows = new Map<
+    number,
+    {
+      skillId: number;
+      userId: number;
+      status: NextClassJobStatus;
+      attempts: number;
+      claimedAt: Date | null;
+    }
+  >();
+  const tryClaim = (
+    row: { status: NextClassJobStatus; attempts: number; claimedAt: Date | null; skillId: number; userId: number },
+    leaseMinutes: number,
+  ): NextClassJobClaim | null => {
+    const now = new Date();
+    const leaseExpired =
+      row.claimedAt !== null &&
+      now.getTime() - row.claimedAt.getTime() > leaseMinutes * 60_000;
+    if (row.status === "PENDING" || (row.status === "PROCESSING" && leaseExpired)) {
+      row.status = "PROCESSING";
+      row.claimedAt = now;
+      row.attempts += 1;
+      return {
+        skillId: row.skillId,
+        userId: row.userId,
+        attempts: row.attempts,
+        claimedAt: row.claimedAt,
+      };
+    }
+    return null;
+  };
+  const nextClassJobs: NextClassJobRepository = {
+    enqueue: async ({ skillId, userId }) => {
+      const existing = nextClassJobRows.get(skillId);
+      if (existing) {
+        existing.userId = userId;
+        existing.status = "PENDING";
+        existing.attempts = 0;
+        existing.claimedAt = null;
+        return;
+      }
+      nextClassJobRows.set(skillId, {
+        skillId,
+        userId,
+        status: "PENDING",
+        attempts: 0,
+        claimedAt: null,
+      });
+    },
+    claim: async ({ limit, leaseMinutes }) => {
+      const claims: NextClassJobClaim[] = [];
+      for (const row of nextClassJobRows.values()) {
+        if (claims.length >= limit) break;
+        const claim = tryClaim(row, leaseMinutes);
+        if (claim) claims.push(claim);
+      }
+      return claims;
+    },
+    claimOne: async ({ skillId, leaseMinutes }) => {
+      const row = nextClassJobRows.get(skillId);
+      return row ? tryClaim(row, leaseMinutes) : null;
+    },
+    release: async ({ skillId, claimedAt }) => {
+      const row = nextClassJobRows.get(skillId);
+      if (row && row.claimedAt?.getTime() === claimedAt.getTime()) {
+        nextClassJobRows.delete(skillId);
+      }
+    },
+    requeue: async ({ skillId, claimedAt }) => {
+      const row = nextClassJobRows.get(skillId);
+      if (row && row.claimedAt?.getTime() === claimedAt.getTime()) {
+        row.status = "PENDING";
+      }
+    },
+  };
+
   const jobs: JobQueuePort = {
     enqueue: (jobName, payload) => {
       state.enqueued.push({ jobName, payload });
     },
   };
 
+  const nextClassWorker = makeNextClassWorker({
+    nextClassJobs,
+    generateNextClass: makeGenerateNextClass(deps),
+  });
+
   const handlers = makeJobHandlers({
     generateInitialSkill: makeGenerateInitialSkill(deps),
-    generateNextClass: makeGenerateNextClass(deps),
+    nextClassWorker,
   });
 
   const runJob = async (jobName: string) => {
@@ -346,7 +437,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     return handlers[jobName]?.(job.payload as never);
   };
 
-  return { state, deps, jobs, runJob };
+  return { state, deps, jobs, nextClassJobs, runJob };
 };
 
 export const firstQuestionOfType = (

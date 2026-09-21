@@ -59,6 +59,7 @@ describe("adaptive loop integration", () => {
       quizRepo: h.deps.quizRepo,
       eventRepo: h.deps.eventRepo,
       jobs: h.jobs,
+      nextClassJobs: h.nextClassJobs,
     });
     const trueFalse = firstQuestionOfType(h, class0[0]?.id ?? 0, "TRUE_FALSE");
     expect(trueFalse).toBeDefined();

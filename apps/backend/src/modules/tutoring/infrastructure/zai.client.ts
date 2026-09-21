@@ -55,8 +55,11 @@ export const makeZaiAi = (): AiPort => ({
             { role: "system", content: input.system },
             { role: "user", content: input.prompt },
           ],
-          // Reasoning model: headroom for reasoning_content + the JSON body.
-          max_tokens: 8192,
+          // No client-side cap: this is the API's maximum (GLM-5.3 supports
+          // 128k output, and reasoning_content shares it — reasoning once ate
+          // 7.4k of an 8k budget and truncated the JSON). Desired length is a
+          // soft limit enforced by the prompts (TUTOR_SYSTEM), not here.
+          max_tokens: 131072,
           response_format: {
             type: "json_schema",
             json_schema: {
@@ -71,7 +74,10 @@ export const makeZaiAi = (): AiPort => ({
           params,
         )) as ChatCompletion;
         const choice = completion.choices[0];
-        if (!choice?.message?.content) continue;
+        // "length" means the budget cut the output mid-JSON; parsing it would
+        // only die later with a confusing "Unterminated string" error. Retry.
+        if (!choice?.message?.content || choice.finish_reason === "length")
+          continue;
 
         return ok({ raw: extractJson(choice.message.content) });
       } catch (error) {

@@ -11,6 +11,12 @@ import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeJobHandlers } from "@/modules/jobs/registry";
+import { makePrismaNextClassJobRepository } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
+import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
+import {
+  makeNextClassSweeper,
+  type NextClassSweeper,
+} from "@/modules/jobs/next-class-sweeper";
 import type { LearningApiDeps } from "@/router";
 
 /**
@@ -19,7 +25,10 @@ import type { LearningApiDeps } from "@/router";
  * wiring lives in modules/jobs/registry.ts. main.ts consumes this and stays
  * HTTP-only (Fastify bootstrap).
  */
-export type Container = LearningApiDeps;
+export type Container = LearningApiDeps & {
+  /** Started by main.ts after listen; stopped on shutdown. */
+  nextClassSweeper: NextClassSweeper;
+};
 
 export const configureContainer = (): Container => {
   const skillRepo = makePrismaSkillRepository();
@@ -54,9 +63,28 @@ export const configureContainer = (): Container => {
     chatModel: config.ai.models.chat,
   });
 
+  const nextClassJobs = makePrismaNextClassJobRepository();
+  const nextClassWorker = makeNextClassWorker({
+    nextClassJobs,
+    generateNextClass,
+  });
+
   const jobs = makeSetImmediateJobQueue(
-    makeJobHandlers({ generateInitialSkill, generateNextClass }),
+    makeJobHandlers({ generateInitialSkill, nextClassWorker }),
   );
 
-  return { skillRepo, classRepo, quizRepo, eventRepo, jobs };
+  const nextClassSweeper = makeNextClassSweeper({
+    nextClassJobs,
+    run: nextClassWorker.run,
+  });
+
+  return {
+    skillRepo,
+    classRepo,
+    quizRepo,
+    eventRepo,
+    jobs,
+    nextClassJobs,
+    nextClassSweeper,
+  };
 };

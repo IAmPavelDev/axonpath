@@ -5,6 +5,7 @@ import type { ScoreableQuestion } from "@/modules/learning/domain/quiz/question"
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { EventRepository, DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
+import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import { ok } from "@/modules/platform/result";
 
 const QUESTIONS: ScoreableQuestion[] = [
@@ -18,11 +19,25 @@ const makeFakeRepos = (questions: ScoreableQuestion[]) => {
   const answerRows: unknown[] = [];
   const events: DomainEvent[] = [];
   const enqueued: { jobName: string; payload: unknown }[] = [];
+  const nextClassEnqueued: { skillId: number; userId: number }[] = [];
 
   const jobs: JobQueuePort = {
     enqueue: (jobName, payload) => {
       enqueued.push({ jobName, payload });
     },
+  };
+
+  // Durable marker fake: upsert semantics, one row per skill.
+  const nextClassJobs: NextClassJobRepository = {
+    enqueue: async ({ skillId, userId }) => {
+      nextClassEnqueued.push({ skillId, userId });
+    },
+    claim: async () => {
+      throw new Error("not used in submit tests");
+    },
+    claimOne: async () => null,
+    release: async () => {},
+    requeue: async () => {},
   };
 
   const quizRepo: QuizRepository = {
@@ -50,13 +65,22 @@ const makeFakeRepos = (questions: ScoreableQuestion[]) => {
     },
   };
 
-  return { quizRepo, eventRepo, jobs, answerRows, events, enqueued };
+  return {
+    quizRepo,
+    eventRepo,
+    jobs,
+    nextClassJobs,
+    answerRows,
+    events,
+    enqueued,
+    nextClassEnqueued,
+  };
 };
 
 describe("makeSubmitQuiz", () => {
   it("scores an MC/TF mix and returns per-question results", async () => {
-    const { quizRepo, eventRepo, jobs } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     const result = await submitQuiz({
       classId: 100,
@@ -80,8 +104,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("skips submitted ids that are not questions of the class", async () => {
-    const { quizRepo, eventRepo, jobs, answerRows } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, answerRows } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     const result = await submitQuiz({
       classId: 100,
@@ -98,8 +122,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("fails ClassNotFound for a class with no questions and persists nothing", async () => {
-    const { quizRepo, eventRepo, jobs, answerRows, events } = makeFakeRepos([]);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, answerRows, events } = makeFakeRepos([]);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     const result = await submitQuiz({
       classId: 404,
@@ -113,8 +137,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("persists Answer rows with the { answer } content convention and default timeSpentMs", async () => {
-    const { quizRepo, eventRepo, jobs, answerRows } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, answerRows } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     await submitQuiz({
       classId: 100,
@@ -148,8 +172,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("open-ended questions are persisted with score 0 and a null correctAnswer", async () => {
-    const { quizRepo, eventRepo, jobs, answerRows } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, answerRows } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     const result = await submitQuiz({
       classId: 100,
@@ -166,8 +190,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("records an ANSWER_SUBMITTED event with class score/total and the class skillId", async () => {
-    const { quizRepo, eventRepo, jobs, events } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, events } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     await submitQuiz({
       classId: 100,
@@ -189,8 +213,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("enqueues skill-next-class once with the class skillId after a scored submit", async () => {
-    const { quizRepo, eventRepo, jobs, enqueued } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, enqueued, nextClassEnqueued } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     await submitQuiz({
       classId: 100,
@@ -204,14 +228,18 @@ describe("makeSubmitQuiz", () => {
     expect(enqueued).toEqual([
       { jobName: SKILL_NEXT_CLASS_JOB, payload: { skillId: 10, userId: 1 } },
     ]);
+    // The durable marker is what survives a restart; the in-memory job only
+    // makes pickup instant.
+    expect(nextClassEnqueued).toEqual([{ skillId: 10, userId: 1 }]);
   });
 
   it("does not enqueue next-class generation when nothing valid was scored", async () => {
-    const { quizRepo, eventRepo, jobs, enqueued } = makeFakeRepos(QUESTIONS);
-    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs });
+    const { quizRepo, eventRepo, jobs, nextClassJobs, enqueued, nextClassEnqueued } = makeFakeRepos(QUESTIONS);
+    const submitQuiz = makeSubmitQuiz({ quizRepo, eventRepo, jobs, nextClassJobs });
 
     await submitQuiz({ classId: 100, userId: 1, answers: [] });
 
     expect(enqueued).toEqual([]);
+    expect(nextClassEnqueued).toEqual([]);
   });
 });

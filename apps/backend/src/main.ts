@@ -236,6 +236,7 @@ async function startServer() {
       app.log.info(`Received ${signal}, shutting down gracefully`);
 
       try {
+        container.nextClassSweeper.stop();
         await app.close();
         app.log.info('Server closed successfully');
         process.exit(0);
@@ -253,6 +254,10 @@ async function startServer() {
       port: parseInt(app.config.PORT, 10),
       host: app.config.HOST,
     });
+
+    // Background processing starts only after the server is listening; the
+    // boot tick recovers next-class jobs orphaned by a previous restart.
+    container.nextClassSweeper.start();
 
     app.log.info(`Server running in ${app.config.NODE_ENV} mode`);
     app.log.info(`Server listening at ${address}`);

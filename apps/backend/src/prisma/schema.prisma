@@ -219,3 +219,26 @@ model Vector {
   @@index([classIndex])
   @@index([source])
 }
+
+// ----- Background Processing Models -----
+
+enum NextClassJobStatus {
+  PENDING
+  PROCESSING
+}
+
+/**
+ * Durable marker that a skill is due for its next lesson. submit-quiz writes
+ * it; the minute sweeper or the instant in-process job claims it. Deliberately
+ * FK-free: infrastructure bookkeeping, not domain data (skills are never
+ * deleted), and the marker must outlive nothing but a generation attempt.
+ */
+model NextClassJob {
+  id        Int                @id @default(autoincrement())
+  skillId   Int                @unique
+  userId    Int
+  status    NextClassJobStatus @default(PENDING)
+  attempts  Int                @default(0)
+  claimedAt DateTime?
+  createdAt DateTime           @default(now())
+}
