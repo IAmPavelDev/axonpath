@@ -5,7 +5,6 @@
  * 3. Prints the provisioned DB row, then deletes the account + row.
  */
 const API_KEY = process.env.EXPO_PUBLIC_FIREBASE_API_KEY!;
-const PROJECT_ID = 'axon-9e88e';
 const BACKEND = 'http://127.0.0.1:3001';
 
 const email = `smoke-${Date.now()}@axon-dev.test`;

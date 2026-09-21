@@ -39,7 +39,7 @@ const postJson = async (url: string, body: Json, headers: Json = {}) => {
 
 /** oRPC RPC protocol: POST /rpc/<procedure> with the input as JSON body;
  * fall back to GET with search params for GET-contract procedures. */
-const rpc = async (procedure: string, input: Json, token: string): Promise<Json> => {
+const rpc = async (procedure: string, input: Json, token: string): Promise<unknown> => {
   const post = await postJson(`${BACKEND}/rpc/${procedure}`, input, {
     authorization: `Bearer ${token}`,
   });
@@ -58,7 +58,7 @@ const rpc = async (procedure: string, input: Json, token: string): Promise<Json>
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const poll = async <T>(
+const poll = async <T,>(
   label: string,
   timeoutMs: number,
   step: () => Promise<T | null>,

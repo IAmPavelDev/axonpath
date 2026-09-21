@@ -20,7 +20,7 @@ export type AuthMiddlewareDeps = {
 
 // Input context is optional: the root oRPC context type is `{}` and `.use()`
 // widens the middleware input to that union. main.ts always supplies headers.
-type AuthMiddleware = Middleware<
+export type AuthMiddleware = Middleware<
   { headers?: IncomingHttpHeaders },
   ContextType,
   unknown,

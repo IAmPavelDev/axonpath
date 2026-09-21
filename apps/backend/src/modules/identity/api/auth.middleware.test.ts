@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { ORPCError } from "@orpc/server";
+import type { Context } from "@orpc/server";
+import type { IncomingHttpHeaders } from "node:http";
 import { makeAuthMiddleware } from "./auth.middleware";
+import type { AuthMiddleware } from "./auth.middleware";
 import type { FirebaseIdentity } from "@/modules/identity/ports/token-verifier";
 import type { User } from "@/prisma/generated";
 
@@ -25,34 +28,54 @@ const makeDeps = (
   authenticate: overrides.authenticate ?? (async () => user),
 });
 
-const run = async (headers: Record<string, string | string[] | undefined>) => {
-  const middleware = makeAuthMiddleware(makeDeps());
-  return middleware({
-    context: { headers },
-    next: async ({ context }) => context,
-  });
+type MiddlewareOptions = Parameters<AuthMiddleware>[0];
+
+// oRPC middlewares have the signature (options, input, outputFn); the auth
+// middleware only uses `context` and `next`, so stub the rest and echo the
+// context back from `next` for assertions.
+const makeOptions = (headers: IncomingHttpHeaders): MiddlewareOptions => ({
+  context: { headers },
+  path: [],
+  procedure: {} as MiddlewareOptions["procedure"],
+  lastEventId: undefined,
+  errors: {},
+  next: async ({ context }: { context?: Context } = {}) => ({ output: undefined, context: context! }),
+});
+
+const call = (middleware: AuthMiddleware, headers: IncomingHttpHeaders) =>
+  middleware(makeOptions(headers), undefined, (output) => ({ output, context: {} }));
+
+const run = (headers: IncomingHttpHeaders) => call(makeAuthMiddleware(makeDeps()), headers);
+
+/** Awaits a promise that should reject; resolves to the caught error. */
+const errorOf = async (outcome: unknown) => {
+  try {
+    return await outcome;
+  } catch (err) {
+    return err;
+  }
 };
+
+const asORPCError = (err: unknown) => (err instanceof ORPCError ? err : undefined);
 
 describe("authMiddleware", () => {
   it("passes the resolved user into the context on success", async () => {
-    const context = (await run({ authorization: "Bearer token-1" })) as {
-      user: User;
-    };
+    const result = await run({ authorization: "Bearer token-1" });
 
-    expect(context.user.id).toBe(7);
+    expect(result.context.user.id).toBe(7);
   });
 
   it("rejects requests without an authorization header", async () => {
-    const err = await run({}).catch((e) => e);
+    const err = await errorOf(run({}));
 
     expect(err).toBeInstanceOf(ORPCError);
-    expect((err as ORPCError).code).toBe("UNAUTHORIZED");
+    expect(asORPCError(err)?.code).toBe("UNAUTHORIZED");
   });
 
   it("rejects non-bearer authorization schemes", async () => {
-    const err = await run({ authorization: "Basic abc" }).catch((e) => e);
+    const err = await errorOf(run({ authorization: "Basic abc" }));
 
-    expect((err as ORPCError).code).toBe("UNAUTHORIZED");
+    expect(asORPCError(err)?.code).toBe("UNAUTHORIZED");
   });
 
   it("maps token verification failures to UNAUTHORIZED with the verifier detail", async () => {
@@ -64,13 +87,10 @@ describe("authMiddleware", () => {
       }),
     );
 
-    const err = await middleware({
-      context: { headers: { authorization: "Bearer bad" } },
-      next: async () => null,
-    }).catch((e) => e);
+    const err = await errorOf(call(middleware, { authorization: "Bearer bad" }));
 
-    expect((err as ORPCError).code).toBe("UNAUTHORIZED");
-    expect((err as ORPCError).message).toBe("token expired");
+    expect(asORPCError(err)?.code).toBe("UNAUTHORIZED");
+    expect(asORPCError(err)?.message).toBe("token expired");
   });
 
   it("maps provisioning failures to INTERNAL instead of leaking", async () => {
@@ -78,11 +98,8 @@ describe("authMiddleware", () => {
       makeDeps({ authenticate: async () => { throw new Error("db down"); } }),
     );
 
-    const err = await middleware({
-      context: { headers: { authorization: "Bearer token-1" } },
-      next: async () => null,
-    }).catch((e) => e);
+    const err = await errorOf(call(middleware, { authorization: "Bearer token-1" }));
 
-    expect((err as ORPCError).code).toBe("INTERNAL");
+    expect(asORPCError(err)?.code).toBe("INTERNAL");
   });
 });

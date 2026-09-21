@@ -1,3 +1,5 @@
+/// <reference lib="dom" />
+
 import { describe, expect, it } from "vitest";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { makeFirebaseTokenVerifier } from "./firebase-token-verifier";
