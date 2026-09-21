@@ -8,21 +8,16 @@
 >
 > ---
 >
-## Status update (2026-09-21, after Phase 3+4)
-- **Phases 1, 2, 5 and Auth — DONE** (see the 2026-09-21 morning notes below; unchanged).
-  One nit carried into Phase 6: `EXPO_PUBLIC_API_URL` is still unused (`utils/rpc.ts`
-  hard-codes localhost / 10.0.2.2).
-- **Phases 3 + 4 — DONE, code-verified 2026-09-21.** Evidence: `generate-next-class.ts`
-  use case (+10 unit tests), `skill-next-class` job registered (`modules/jobs/registry.ts`),
-  `submit-quiz` enqueues after ≥1 scored answer, `lessonSummary` → `AI_NEXT` vectors (init
-  writes classIndex 0 in one embedding call), `GENERATING → ACTIVE | FAILED` lifecycle
-  (migrations `20260921*_skill_status_*`; create-skill passes GENERATING, init flips
-  ACTIVE/FAILED + `ERROR_OCCURRED`), `canTransition` state machine in
-  `learning/domain/skill/skill.ts`, mobile quiz → result → generating phase with `class.list`
-  poll + auto-navigate, `GetClassByIdOutput.skillId` shipped. Backend suite: 50/50 passing.
-- **Next execution step: Phase 6 (beta hardening) → `knowledge-base/PHASE6_HARDENING.md`.**
-  Remaining beta scope: FAILED surfacing + `skill.retry`, init retry-safety, retake dedup,
-  loop integration test, `EXPO_PUBLIC_API_URL`, prod image/compose fix, docs final pass.
+## Status update (2026-09-21, after Phase 6)
+- **Phases 1–5 + Auth + Phase 6 — ALL DONE.** Beta hardening landed 2026-09-21 per
+  `knowledge-base/PHASE6_HARDENING.md`: init retry guard (skip-if-class-exists), `skill.retry`
+  (NotOwned → 404, `InvalidSkillTransition` → 409, re-enqueues `skill-init`), retake dedup
+  (`findHighestAnsweredClassIndex` skip in `generate-next-class`), composed loop integration
+  test, `EXPO_PUBLIC_API_URL`, mobile FAILED chip/banner + retry, and a real production image
+  (backend emits `dist/`; Dockerfile `production` stage; compose fixed — container boots
+  `/health` with migrations applied). Backend suite: 64/64 passing; mobile `tsc --noEmit`
+  clean. Docs synced (ARCHITECTURE, GAPS).
+- Remaining work is the post-beta backlog only (ARCHITECTURE.md §9).
 
 ## 0. Verified current state (what is actually done)
 
@@ -164,15 +159,16 @@ persisted.
 **Acceptance:** visual check on emulator — a lesson with headings/code/lists renders styled in
 light and dark; navigation between lessons works.
 
-## Phase 6 — Beta hardening (final pass) — ⏳ NEXT, see `knowledge-base/PHASE6_HARDENING.md`
+## Phase 6 — Beta hardening (final pass) — ✅ DONE (2026-09-21) via `knowledge-base/PHASE6_HARDENING.md`
 
-- **Error surfacing**: skill list shows `FAILED` badge + retry (re-enqueue `skill-init`); make
-  init retry-safe (guard: if class 0 exists for the skill, replace-or-skip before regenerating).
-- **Smoke test**: one integration test for the loop — create → `ACTIVE` → submit with a wrong
-  answer → class count 2 → `AI_NEXT` vector exists. Cheap, CI-able; follow existing
-  `*.test.ts` conventions (`scoring.test.ts`, `skill.test.ts`).
-- **Docs**: update ARCHITECTURE/GAPS to match final code; delete this file's superseded notes or
-  mark phases done.
+- **Error surfacing**: `skill.retry` command + route; mobile FAILED chip in the skill list,
+  retry affordance, and a detail-screen banner with retry.
+- **Retry safety**: init skips generation when any class already exists (heals to ACTIVE).
+- **Retake dedup**: next-class generation skips while the learner's answered index trails the
+  newest class.
+- **Smoke test**: `modules/loop.integration.test.ts` — real use cases + in-memory fakes:
+  create → ACTIVE → wrong answer → class 2 → retake dedup → FAILED/retry heal (both shapes).
+- **Docs**: ARCHITECTURE/GAPS synced; `EXPO_PUBLIC_API_URL` wired; prod image + compose fixed.
 - Post-beta backlog (explicitly deferred): light email auth, `ANSWER_DERIVED` vectors mined from
   answers, AI grading for open-ended, `lambda` decay tuning, RabbitMQ.
 
@@ -189,5 +185,5 @@ flowchart LR
     P5 --> P6
 ```
 
-P1 and P2 are independent — parallelizable. P5 depends only on P2's navigation hook but can land
-any time. Beta is done when P4's acceptance passes and P6's smoke test is green.
+P1 and P2 were independent — parallelized. P5 depended only on P2's navigation hook. **Beta is
+done**: P4's acceptance passed and P6's smoke/integration test is green (2026-09-21).

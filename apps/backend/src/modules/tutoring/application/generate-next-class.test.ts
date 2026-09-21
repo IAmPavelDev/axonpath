@@ -27,7 +27,7 @@ const LESSON_JSON = JSON.stringify({
   ],
 });
 
-const SKILL = { id: 10, topic: "SQL joins", description: "", status: "ACTIVE" };
+const SKILL = { id: 10, userId: 7, topic: "SQL joins", description: "", status: "ACTIVE" };
 
 type NextClassState = {
   prompts: string[];
@@ -46,6 +46,7 @@ const makeDeps = (
     history?: { textSnippet: string; source: string; classIndex: number | null }[];
     initRaw?: string;
     initError?: AiError;
+    answeredIndex?: number | null;
   } = {},
 ) => {
   const state: NextClassState = {
@@ -116,6 +117,18 @@ const makeDeps = (
         throw new Error("not used in next-class tests");
       },
       findAnswersByClassAndUser: async () => overrides.answers ?? [],
+      findHighestAnsweredClassIndex: async () => {
+        if (overrides.answeredIndex !== undefined) {
+          return overrides.answeredIndex;
+        }
+        // Default: the learner has answered through the newest class, so the
+        // dedup guard never fires unless a test asks for it.
+        const last =
+          overrides.last === undefined
+            ? { id: 5, index: 2, title: "Previous lesson" }
+            : overrides.last;
+        return last?.index ?? null;
+      },
     },
     eventRepo: {
       record: async (event) => {
@@ -337,5 +350,55 @@ describe("makeGenerateNextClass", () => {
     });
     expect(state.createdClasses).toHaveLength(0);
     expect(state.vectors).toHaveLength(0);
+  });
+
+  it("skips generation on a consecutive retake of the newest class", async () => {
+    // The learner answered through class 2 and class 3 exists unanswered:
+    // a retake of class 2 must not spawn a variant of class 3.
+    const { deps, state } = makeDeps({
+      last: { id: 5, index: 3, title: "Newest lesson" },
+      answeredIndex: 2,
+      answers: [
+        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+      ],
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(state.prompts).toHaveLength(0);
+    expect(state.createdClasses).toHaveLength(0);
+    expect(state.questionInputs).toHaveLength(0);
+    expect(state.vectors).toHaveLength(0);
+    expect(state.events).toHaveLength(0);
+  });
+
+  it("generates when the learner has answered through the newest class", async () => {
+    // Fresh submit of class 2 while class 2 is the newest: k+1 must appear.
+    const { deps, state } = makeDeps({
+      answeredIndex: 2,
+      answers: [
+        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+      ],
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(state.prompts).toHaveLength(1);
+    expect(state.createdClasses[0]).toMatchObject({ index: 3 });
+    expect(state.events[0]).toMatchObject({ type: "CLASS_GENERATED" });
+  });
+
+  it("generates when no answers exist at all (null answered index)", async () => {
+    // Without recorded attempts there is no evidence the learner is behind;
+    // generation is the safe default (matches pre-dedup behavior).
+    const { deps, state } = makeDeps({ answeredIndex: null });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(state.prompts).toHaveLength(1);
+    expect(state.createdClasses[0]).toMatchObject({ index: 3 });
   });
 });

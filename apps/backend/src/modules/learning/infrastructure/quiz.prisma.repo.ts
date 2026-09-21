@@ -110,4 +110,21 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       };
     });
   },
+  findHighestAnsweredClassIndex: async (skillId, userId) => {
+    const rows = await prisma.answer.findMany({
+      where: { userId, question: { class: { skillId } } },
+      distinct: ["questionId"],
+      select: { question: { select: { class: { select: { index: true } } } } },
+    });
+    let highest: number | null = null;
+    for (const row of rows) {
+      // The where clause excludes class-less questions; the optional
+      // relation is still nullable in the selected type.
+      const index = row.question.class?.index;
+      if (index !== null && index !== undefined && (highest === null || index > highest)) {
+        highest = index;
+      }
+    }
+    return highest;
+  },
 });

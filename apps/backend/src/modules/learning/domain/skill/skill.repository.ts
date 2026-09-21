@@ -29,6 +29,7 @@ export type SkillRepository = {
     topic: string;
     description: string;
     status: string;
+    userId: number;
   } | null>;
   listByUser(userId: number): Promise<SkillListItem[]>;
 };

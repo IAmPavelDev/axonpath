@@ -4,13 +4,13 @@ import { RPCHandler } from '@orpc/server/node';
 import { CORSPlugin } from '@orpc/server/plugins';
 import sensible from '@fastify/sensible';
 import env from '@fastify/env';
-import { buildRouters } from '@router/index.ts';
+import { buildRouters } from '@router/index';
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import { experimental_ZodSmartCoercionPlugin as ZodSmartCoercionPlugin } from '@orpc/zod/zod4';
 import { OpenAPIGenerator } from '@orpc/openapi';
 
 // Wiring: container (repositories/use cases/jobs) → oRPC routers → RPC handler.
-import { configureContainer } from './container.ts';
+import { configureContainer } from './container';
 const container = configureContainer();
 
 const routers = buildRouters(container);

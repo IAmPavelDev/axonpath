@@ -1,9 +1,10 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-21** (rewritten from a verified code audit after the Phase 3+4
-> adaptive loop landed). Authoritative plan docs: `knowledge-base/BETA_PLAN.md` (sequencing),
-> `knowledge-base/PHASE6_HARDENING.md` (remaining beta work). Background: `CONCEPT.md` (vision),
-> `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md` (how the loop was built).
+> Status: **CURRENT as of 2026-09-21** (rewritten after the Phase 3+4 adaptive loop; updated
+> when Phase 6 beta hardening landed). Authoritative plan docs: `knowledge-base/BETA_PLAN.md`
+> (sequencing), `knowledge-base/PHASE6_HARDENING.md` (beta hardening, now DONE). Background:
+> `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md` (how the loop was
+> built).
 
 ## 1. One-paragraph summary
 
@@ -117,22 +118,27 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `skill.create` | persist skill with status `GENERATING` + enqueue `skill-init` |
 | `skill.edit` | edit topic/description (status transitions deliberately excluded — own command later) |
 | `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt |
+| `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
 | `quiz.get` | questions for a class (answerKey stripped) |
 | `quiz.submit` | score answers vs `answerKey`, persist `Answer` rows, `ANSWER_SUBMITTED` event, enqueue `skill-next-class` |
 
-Not-found maps to oRPC 404 via `toORPCError`.
+Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hides behind 404
+so skill existence is not leaked); `InvalidSkillTransition` → 409; anything else → 500.
 
 ### 4.2 The adaptive loop (the product)
 
-1. **Create**: `skill.create` → skill `GENERATING`, `skill-init` job enqueued.
-2. **Init** (`generate-initial-skill`): description (best-effort) → prior-context retrieval
-   (Qdrant, filtered by userId, excludes own skill, degrades to []) → one JSON generation
-   (class 0 + MC/TF questions + `lessonSummary` + context snippets) → `SKILL_CREATED` audit
-   event (full prompt+response) → persist class/questions → embed summary+snippets in one call →
-   vectors: summary `AI_NEXT`, snippets `AI_INITIAL`, `classIndex 0` → status `ACTIVE`.
-   Any failure → status `FAILED` + `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled
-   by `extractJsonObject` + per-field re-validation (`tutoring/domain/parse.ts`).
+2. **Init** (`generate-initial-skill`): **retry guard first — if any class already exists
+   (`findTopBySkill`), skip generation entirely and let the success path flip ACTIVE** (a rerun
+   can never violate `UNIQUE(skillId, index)`; a partially-persisted failure heals to ACTIVE
+   with retrieval degrading to `[]` for its missing vectors — accepted beta cost). Otherwise:
+   description (best-effort) → prior-context retrieval (Qdrant, filtered by userId, excludes
+   own skill, degrades to []) → one JSON generation (class 0 + MC/TF questions + `lessonSummary`
+   + context snippets) → `SKILL_CREATED` audit event (full prompt+response) → persist
+   class/questions → embed summary+snippets in one call → vectors: summary `AI_NEXT`, snippets
+   `AI_INITIAL`, `classIndex 0` → status `ACTIVE`. Any failure → status `FAILED` +
+   `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled by `extractJsonObject` +
+   per-field re-validation (`tutoring/domain/parse.ts`).
 3. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
    open-ended scores 0 — generation is restricted to MC/TF) → `Answer` rows → enqueue
    `skill-next-class`.
@@ -142,8 +148,11 @@ Not-found maps to oRPC 404 via `toORPCError`.
    mistake block (or "all correct — raise difficulty") + history blocks ("Already covered —
    build on it") → JSON generation (init shape + `lessonSummary`) → `CLASS_GENERATED` event →
    persist class at `index + 1` + questions → embed summary (`AI_NEXT`) + snippets
-   (`AI_INITIAL`) at the new classIndex. Status stays `ACTIVE`; no dedup yet (retakes regenerate
-   variants — Phase 6 adds the guard).
+   (`AI_INITIAL`) at the new classIndex. Status stays `ACTIVE`. **Retake dedup**: the use case
+   skips (returns ok, no event, no AI call) when the learner's highest answered class index
+   (`QuizRepository.findHighestAnsweredClassIndex`) is behind the newest class — a consecutive
+   retake of the newest lesson no longer spawns variants. With no recorded answers the use case
+   generates (safe default); retaking an older class still regenerates from the latest one.
 5. **Observe**: mobile polls `class.list`; the class screen auto-navigates into the new lesson.
 
 ### 4.3 Skill status lifecycle
@@ -192,14 +201,15 @@ Gemini OpenAI-compatible endpoint; chat: `glm-5.3-flash` via `https://api.z.ai/a
 ## 6. Mobile (apps/mobile)
 
 Flow: Firebase auth → skill list (home; `GENERATING` rows show a preparing state, pull-to-
-refresh, pinning) → create-skill (topic input) → description/skill detail (polls) → class list
-(newest first) → class screen (themed Markdown conspect + quiz tabs) → quiz (MC/TF/Open) →
-result → **generating phase**: pulse + copy, polls `class.list` every 2.5 s (90 s timeout), auto-
-navigates into the new lesson.
+refresh, pinning; `FAILED` rows show a "Failed to prepare" chip with a retry affordance) →
+create-skill (topic input) → description/skill detail (FAILED shows error copy + retry button)
+→ class list (newest first) → class screen (themed Markdown conspect + quiz tabs) → quiz
+(MC/TF/Open) → result → **generating phase**: pulse + copy, polls `class.list` every 2.5 s
+(90 s timeout), auto-navigates into the new lesson.
 
 - **RPC client** (`utils/rpc.ts`): typed oRPC client; bearer Firebase ID token attached per call
-  (transparent refresh). ⚠️ Base URL still hard-codes `localhost` / `10.0.2.2` —
-  `EXPO_PUBLIC_API_URL` unwired (Phase 6).
+  (transparent refresh). `EXPO_PUBLIC_API_URL` overrides the base URL; defaults stay
+  `localhost` (web) / `10.0.2.2` (emulator).
 - **State**: TanStack Query for server data; Zustand (`quiz.store`) for in-screen answers.
 - **Theme**: atomics kit + light/dark monochrome system (`lib/theme.ts`); markdown theme for
   lessons (`components/class/`).
@@ -222,22 +232,15 @@ navigates into the new lesson.
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` (10 files / 50 tests, all green 2026-09-21): scoring, skill state
-machine, Result, authenticate + Firebase verifier + auth middleware, create-skill, generate-
-initial-skill, generate-next-class (10 cases incl. mistake emphasis / allCorrect / latest-
-attempt / retrieval-degradation / parse-failure), submit-quiz (8 cases incl. enqueue trigger).
-No integration/E2E test yet — Phase 6 adds a composed loop test.
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (12 files / 64 tests, all
+green 2026-09-21): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, generate-initial-skill (incl. retry-guard cases),
+generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
+and the composed loop integration test (real use cases + in-memory fakes over
+`modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup → FAILED/retry
+heal, both failure shapes).
 
-## 9. Known gaps → Phase 6 (`knowledge-base/PHASE6_HARDENING.md`)
+## 9. Known gaps → post-beta backlog
 
-1. `FAILED` is invisible on mobile; no `skill.retry` route (state machine already allows
-   `FAILED → GENERATING`).
-2. Init is not retry-safe: rerunning `skill-init` on a skill that already has class 0 would
-   violate `UNIQUE(skillId, index)`.
-3. Retake dedup: every scored submit regenerates a next-class variant.
-4. No composed integration test of create → init → submit → next-class.
-5. `EXPO_PUBLIC_API_URL` unwired in `utils/rpc.ts`.
-6. Prod deploy: Dockerfile has no `production` stage (only base/build/development);
-   `docker-compose-prod.yaml` line 16 `DATABASE_URL=${DATABASE_HOST}` is a wiring bug.
-7. RabbitMQ container still declared in dev compose though unused.
-8. `SkillProgress`, `ANSWER_DERIVED` vectors, open-ended AI grading, lambda decay — post-beta.
+1. RabbitMQ container still declared in dev compose though unused.
+2. `SkillProgress`, `ANSWER_DERIVED` vectors, open-ended AI grading, lambda decay — post-beta.

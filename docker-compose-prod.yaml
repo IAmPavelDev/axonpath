@@ -1,27 +1,25 @@
- services:
+services:
   backend:
-    volumes:
-      - .:/app
-      - /app/node_modules
-    build: 
+    container_name: axon-backend-prod
+    build:
       context: .
       dockerfile: Dockerfile
-    depends_on:
-      db:
-        condition: service_started
+      target: production
     environment:
-      - NODE_ENV=${NODE_ENV}
-      - APP_PORT=${APP_PORT}
-      - APP_HOST=${APP_HOST}
-      - DATABASE_URL=${DATABASE_HOST}
-      - QDRANT_URL=${QDRANT_URL}
-
-    ports: 
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${APP_PORT:-3001}
+      - HOST=${APP_HOST:-0.0.0.0}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL required}
+      - QDRANT_URL=${QDRANT_URL:?QDRANT_URL required}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
+      - ZAI_API_KEY=${ZAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    ports:
       - "3001:3001"
-    command: >
-      sh -c "pnpm run prisma:migrate:deploy && pnpm run build && node dist/main.js"
-
     networks:
       - axon-network
-
     restart: always
+
+networks:
+  axon-network:
+    driver: bridge

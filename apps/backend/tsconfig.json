@@ -1,7 +1,6 @@
 {
     "extends": "fastify-tsconfig",
     "compilerOptions": {
-        "noEmit": true,
         "outDir": "dist",
         "rootDir": ".",
         "target": "ES2021",
@@ -10,8 +9,8 @@
         ],
         "declaration": false,
         "sourceMap": true,
-        "module": "preserve",
-        "moduleResolution": "bundler",
+        "module": "nodenext",
+        "moduleResolution": "nodenext",
         "baseUrl": ".",
         "forceConsistentCasingInFileNames": true,
         "esModuleInterop": true,
@@ -19,7 +18,6 @@
         "resolveJsonModule": true,
         "strict": true,
         "skipLibCheck": true,
-        "allowImportingTsExtensions": true,
         "paths": {
             "@/*": [
                 "src/*"
@@ -34,11 +32,11 @@
     },
     "include": [
         "src/**/*.ts",
-        "@types/**/*.d.ts",
-        "e2e-*.mts",
         "vitest.config.ts"
     ],
     "exclude": [
-        "node_modules"
+        "node_modules",
+        "dist",
+        "e2e-*.mts"
     ]
 }

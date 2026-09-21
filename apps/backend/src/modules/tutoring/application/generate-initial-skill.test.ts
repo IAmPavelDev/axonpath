@@ -26,17 +26,25 @@ const INIT_JSON = JSON.stringify({
 const DESCRIPTION_RAW = JSON.stringify({ description: "Learn SQL joins by doing." });
 
 /** Test seam: deterministic AI adapter + in-memory persistence. */
-const makeDeps = (overrides: { initRaw?: string; initError?: AiError } = {}) => {
+const makeDeps = (
+  overrides: {
+    initRaw?: string;
+    initError?: AiError;
+    existingClass?: { id: number; index: number; title: string } | null;
+  } = {},
+) => {
   const state = {
     skillUpdates: [] as { id: number; patch: Record<string, unknown> }[],
     createdClasses: [] as { skillId: number; index: number }[],
     vectors: [] as NewVector[],
     events: [] as DomainEvent[],
+    aiCalls: [] as { schemaName: string; prompt: string }[],
   };
 
   const deps: GenerateInitialSkillDeps = {
     ai: {
       generateJson: async (_input, request) => {
+        state.aiCalls.push({ schemaName: request.schemaName, prompt: _input.prompt });
         if (request.schemaName === "skill_description") {
           return ok({ raw: DESCRIPTION_RAW });
         }
@@ -71,9 +79,7 @@ const makeDeps = (overrides: { initRaw?: string; initError?: AiError } = {}) => 
       listBySkill: async () => {
         throw new Error("not used in init tests");
       },
-      findTopBySkill: async () => {
-        throw new Error("not used in init tests");
-      },
+      findTopBySkill: async () => overrides.existingClass ?? null,
       findById: async () => {
         throw new Error("not used in init tests");
       },
@@ -87,6 +93,9 @@ const makeDeps = (overrides: { initRaw?: string; initError?: AiError } = {}) => 
         throw new Error("not used in init tests");
       },
       createAnswers: async () => {
+        throw new Error("not used in init tests");
+      },
+      findHighestAnsweredClassIndex: async () => {
         throw new Error("not used in init tests");
       },
       findAnswersByClassAndUser: async () => {
@@ -173,11 +182,44 @@ describe("makeGenerateInitialSkill", () => {
     const { deps, state } = makeDeps({ initRaw: "Sure — here is your lesson, no JSON though!" });
 
     const result = await makeGenerateInitialSkill(deps)(input);
-
-    expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("AiResponseInvalid");
     expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: "FAILED" });
     expect(state.createdClasses).toHaveLength(0);
     expect(state.events[0]?.type).toBe("ERROR_OCCURRED");
+  });
+
+  it("retry after a partial persist skips generation and heals to ACTIVE", async () => {
+    // A prior attempt failed after class 0 was persisted (e.g. embeddings
+    // errored): regenerating would violate UNIQUE(skillId, index). The guard
+    // short-circuits — no AI calls at all — and the wrapper flips ACTIVE.
+    const { deps, state } = makeDeps({
+      initError: { kind: "AiGenerationFailed" },
+      existingClass: { id: 11, index: 0, title: "Already-persisted lesson" },
+    });
+
+    const result = await makeGenerateInitialSkill(deps)(input);
+
+    expect(result.ok).toBe(true);
+    expect(state.aiCalls).toHaveLength(0);
+    expect(state.createdClasses).toHaveLength(0);
+    expect(state.vectors).toHaveLength(0);
+    expect(state.events).toHaveLength(0);
+    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
+  });
+
+  it("retry after a pre-persist failure regenerates from scratch", async () => {
+    // Nothing was persisted, so the guard passes through and the full
+    // pipeline runs again (description + init generation).
+    const { deps, state } = makeDeps();
+
+    const result = await makeGenerateInitialSkill(deps)(input);
+
+    expect(result.ok).toBe(true);
+    expect(state.aiCalls.map((call) => call.schemaName)).toEqual([
+      "skill_description",
+      "init_skill",
+    ]);
+    expect(state.createdClasses[0]).toMatchObject({ index: 0 });
+    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
   });
 });

@@ -92,6 +92,15 @@ export const makeGenerateInitialSkill =
     const attempt = async (
       input: GenerateInitialSkillInput,
     ): Promise<Result<void, GenerateInitialSkillError>> => {
+      // Retry guard: a previous attempt may have persisted classes before
+      // failing. Regenerating would violate UNIQUE(skillId, index) and leave
+      // the skill stuck GENERATING. If any class exists, skip generation and
+      // let the success path heal the skill to ACTIVE.
+      const existing = await classRepo.findTopBySkill(input.skillId);
+      if (existing !== null) {
+        return { ok: true, value: undefined };
+      }
+
       // 1. Description (best-effort: failure yields "" and still updates).
       const descriptionResult = await ai.generateJson(
         {

@@ -64,6 +64,14 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     onSuccess: invalidate,
   });
 
+  const {
+    mutate: retryGeneration,
+    isPending: retryPending,
+  } = useMutation({
+    mutationFn: () => rpc.skill.retry({ id: skillId }),
+    onSuccess: invalidate,
+  });
+
   // Newest first, oldest last.
   const sortedClasses = useMemo(
     () =>
@@ -215,6 +223,16 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 <Text variant="meta">
                   {sortedClasses.length} {sortedClasses.length === 1 ? 'lesson' : 'lessons'}
                 </Text>
+                {skill.status === 'FAILED' && (
+                  <View className="gap-2 pt-1">
+                    <Text variant="body" className="text-destructive">
+                      The first lesson failed to generate. Retrying usually fixes it.
+                    </Text>
+                    <Button size="sm" onPress={() => retryGeneration()} disabled={retryPending}>
+                      <Text>{retryPending ? 'Retrying…' : 'Try again'}</Text>
+                    </Button>
+                  </View>
+                )}
               </View>
             )}
             <View className="border-hairline border-border px-6 pb-2 pt-1">

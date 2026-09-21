@@ -1,9 +1,9 @@
 # Axon — Gap Ledger
 
-> **Status 2026-09-21.** This file was the 2026-09 gap analysis (pre-refactor file references).
-> Execution authority is `knowledge-base/BETA_PLAN.md`; current-state detail is
-> `knowledge-base/ARCHITECTURE.md`. The original gap list is preserved below with per-gap
-> status; open items feed `knowledge-base/PHASE6_HARDENING.md` or the post-beta backlog.
+> **Status 2026-09-21 (post-Phase-6).** This file was the 2026-09 gap analysis (pre-refactor
+> file references). Execution authority is `knowledge-base/BETA_PLAN.md`; current-state detail
+> is `knowledge-base/ARCHITECTURE.md`. The original gap list is preserved below with per-gap
+> status; open items live in the post-beta backlog (ARCHITECTURE.md §9).
 
 ## Status summary
 
@@ -19,11 +19,11 @@
 | 8 | 🟡 No progress tracking | 🕓 OPEN (post-beta) — list query already computes lessonCount/completedLessons/learnedPoints; no dedicated progress UI/aggregation |
 | 9 | 🟡 Answer flow incomplete | ✅ CLOSED for beta — scoring + persistence done; `ANSWER_DERIVED` vectors → post-beta |
 | 10 | 🟡 Dead config | 🔶 PARTIAL — amqplib/queue code removed; unused `rabbitmq` container still declared in dev compose; `lambda` unused |
-| 11 | 🟡 Errors not surfaced | 🔶 PARTIAL — typed tagged errors → oRPC 404; `FAILED` status persisted. Remaining: `FAILED` badge + retry UX in mobile (Phase 6) |
-| 12 | 🟡 No tests | 🔶 PARTIAL — 50 unit tests green; composed loop integration test missing (Phase 6) |
-| 13 | 🟢 Non-transactional pipeline | 🔶 PARTIAL — failures now flip status + audit event (observable), pipeline still non-transactional; retry-safety guard pending (Phase 6) |
-| 14 | 🟢 Mobile polish | 🔶 PARTIAL — themed markdown, generating flow, empty states done. `EXPO_PUBLIC_API_URL` unwired (Phase 6) |
-| 15 | 🟢 Build/dev reproducibility | 🔶 PARTIAL — `.env.example` exists; api-contract build order documented. Prod image/compose still broken (Phase 6) |
+| 11 | 🟡 Errors not surfaced | ✅ CLOSED — `skill.retry` route (NotOwned 404 / InvalidTransition 409) + mobile FAILED chip, retry affordance, and detail banner |
+| 12 | 🟡 No tests | ✅ CLOSED — 12 files / 64 tests green, incl. the composed loop integration test (real use cases + in-memory fakes) |
+| 13 | 🟢 Non-transactional pipeline | 🔶 PARTIAL — init retry guard shipped (skip-if-class-exists; retries can never corrupt a skill); pipeline itself still non-transactional → post-beta |
+| 14 | 🟢 Mobile polish | ✅ CLOSED — `EXPO_PUBLIC_API_URL` overrides the RPC base URL (platform defaults preserved) |
+| 15 | 🟢 Build/dev reproducibility | ✅ CLOSED — backend emits `dist/` (tsc + module-alias, nodenext), Dockerfile `production` stage, compose fixed; image boots `/health` with migrations applied |
 
 ---
 
@@ -55,12 +55,13 @@ Qdrant `axon_vectors` (3072, Cosine); Postgres keeps relational metadata only. R
 
 ## 🟡 10. Hard-coded / dead config — partial (rabbitmq container, lambda)
 
-## 🟡 11. Errors are not surfaced to the client — partial (FAILED UX = Phase 6)
+## 🟡 11. Errors are not surfaced to the client → closed (Phase 6: FAILED UX + retry)
 
-## 🟡 12. No tests — partial (integration test = Phase 6)
+## 🟡 12. No tests → closed (Phase 6: loop integration test; 64 green)
 
-## 🟢 13. Non-transactional background pipeline — partial (retry-safety = Phase 6)
+## 🟢 13. Non-transactional background pipeline → partial (retry-safety done; transactionality post-beta)
 
-## 🟢 14. Mobile polish & config — partial (EXPO_PUBLIC_API_URL = Phase 6)
+## 🟢 14. Mobile polish & config → closed (Phase 6: EXPO_PUBLIC_API_URL)
 
-## 🟢 15. Build/dev reproducibility — partial (prod image/compose = Phase 6)
+## 🟢 15. Build/dev reproducibility → closed (Phase 6: prod image + compose)
+

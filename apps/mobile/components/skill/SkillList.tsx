@@ -2,9 +2,11 @@ import { Icon } from '@atomics/icon';
 import { PulseDot } from '@atomics/pulse-dot';
 import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
-import { Settings, Pin, ChevronRight, Plus } from 'lucide-react-native';
+import { Settings, Pin, ChevronRight, Plus, RotateCcw } from 'lucide-react-native';
 import { formatRelativeDate } from '@/lib/format';
 import { usePinnedSkills } from '@/lib/pins';
+import rpc from '@/utils/rpc';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Skill } from '@/types/skill';
 import { Link } from 'expo-router';
 import { FC, useMemo } from 'react';
@@ -13,14 +15,19 @@ import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 /** GENERATING means the AI initialization job is still running. */
 const isPreparing = (skill: Skill) => skill.status === 'GENERATING';
 
+/** FAILED means the AI initialization errored; the row offers a retry. */
+const isFailed = (skill: Skill) => skill.status === 'FAILED';
+
 const lastStudiedLabel = (skill: Skill): string =>
   skill.lastActivityAt ? formatRelativeDate(skill.lastActivityAt) : 'not started';
 
-const SkillRow: FC<{ skill: Skill; pinned: boolean; onTogglePin: () => void }> = ({
-  skill,
-  pinned,
-  onTogglePin,
-}) => {
+const SkillRow: FC<{
+  skill: Skill;
+  pinned: boolean;
+  onTogglePin: () => void;
+  onRetry: () => void;
+  retryPending: boolean;
+}> = ({ skill, pinned, onTogglePin, onRetry, retryPending }) => {
   return (
     <Link asChild href={`/skill/${skill.id}`}>
       <Pressable
@@ -48,6 +55,22 @@ const SkillRow: FC<{ skill: Skill; pinned: boolean; onTogglePin: () => void }> =
             <View className="flex-row items-center gap-2">
               {isPreparing(skill) && (
                 <Text className="text-[13px] text-muted-foreground">Preparing…</Text>
+              )}
+              {isFailed(skill) && (
+                <>
+                  <Text className="text-[13px] text-destructive">Failed to prepare</Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Retry preparing ${skill.topic}`}
+                    onPress={onRetry}
+                    disabled={retryPending}
+                    className="flex-row items-center gap-1 rounded-full px-1 active:opacity-60">
+                    <Icon as={RotateCcw} size={12} className="text-muted-foreground" />
+                    <Text className="text-[13px] text-muted-foreground">
+                      {retryPending ? 'Retrying…' : 'Retry'}
+                    </Text>
+                  </Pressable>
+                </>
               )}
               <Text variant="meta">
                 {skill.lessonCount} {skill.lessonCount === 1 ? 'lesson' : 'lessons'} ·{' '}
@@ -95,6 +118,12 @@ export const SkillList: FC<{
 }> = ({ skills, onNewSkill, onOpenSettings, refreshing, onRefresh }) => {
   const pinnedIds = usePinnedSkills((s) => s.pinnedIds);
   const togglePin = usePinnedSkills((s) => s.toggle);
+  const queryClient = useQueryClient();
+
+  const retryMutation = useMutation({
+    mutationFn: (id: number) => rpc.skill.retry({ id }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['skillList'] }),
+  });
 
   // Pinned skills surface first, in pin order; the rest keep recency order.
   const ordered = useMemo(() => {
@@ -114,6 +143,8 @@ export const SkillList: FC<{
           skill={skill}
           pinned={pinnedIds.includes(skill.id)}
           onTogglePin={() => togglePin(skill.id)}
+          onRetry={() => retryMutation.mutate(skill.id)}
+          retryPending={retryMutation.isPending && retryMutation.variables === skill.id}
         />
       )}
       keyExtractor={(skill) => skill.id.toString()}

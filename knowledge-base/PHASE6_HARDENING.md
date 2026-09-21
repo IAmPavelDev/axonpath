@@ -1,10 +1,11 @@
 # Axon — Phase 6: Beta Hardening (execution plan)
 
-> Written 2026-09-21 from a verified code audit. This is the **authoritative next-step plan**;
-> it supersedes the Phase 6 section of `BETA_PLAN.md` as execution detail (that section remains
-> as original intent). This is the final beta pass: make failure visible and recoverable, lock
-> the loop with an integration test, wire the last config nit, and make the prod image real.
-> Beta is done when §3 "Acceptance" passes.
+> Written 2026-09-21 from a verified code audit. Executed and **DONE 2026-09-21** — all steps
+> S1–S8 landed with evidence below in §2/§3. Beta acceptance (§4) passes: failed generation is
+> visible + recoverable, the loop scenario is a committed CI-able test, consecutive retakes
+> no longer flood variants, `EXPO_PUBLIC_API_URL` overrides the RPC base, the prod image boots
+> `/health` with migrations, and docs match the code (12 test files / 64 tests green; mobile
+> `tsc --noEmit` clean).
 
 ## 0. Verified current state (2026-09-21)
 
@@ -93,47 +94,57 @@ container boots `/health` against the dev Postgres/Qdrant.
 
 ## 2. Implementation (ordered; S1 before S2, everything else parallelizable)
 
-### S1 — Init retry guard (D2)
+### S1 — Init retry guard (D2) — ✅ DONE
 - `generate-initial-skill.ts`: `findTopBySkill` short-circuit at attempt start.
 - `generate-initial-skill.test.ts`: new cases — retry after pre-persist failure regenerates;
   retry when class 0 exists skips generation (fake `ai` called only for description, or not at
   all) and still flips status `ACTIVE`.
 
-### S2 — `skill.retry` backend (D1, D7)
+### S2 — `skill.retry` backend (D1, D7) — ✅ DONE
 - `skill.repository.ts` + `skill.prisma.repo.ts`: `findById` += `userId`.
 - New `retry-skill.ts` command + `retry-skill.test.ts` (happy path re-enqueues `skill-init`
   with the create payload; NotOwned; InvalidTransition on `ACTIVE`/`GENERATING`; SkillNotFound).
-- `packages/api-contract`: `retry` contract entry (`SkillIdInput` → `StatusOnly`); rebuild
-  contract (`pnpm --filter @axon/api-contract build`).
+- `packages/api-contract`: `retry` contract entry (`SkillIdInput` → `StatusOnly`); rebuilt.
 - `skill.handlers.ts` `retry` handler; `error-mapping.ts`: `NotOwned` → 404,
-  `InvalidTransition` → 409; container/router wiring (deps already exist in `SkillApiDeps`).
+  `InvalidTransition` → 409; router wiring (deps already existed in `SkillApiDeps`).
 
-### S3 — Retake dedup (D3)
+### S3 — Retake dedup (D3) — ✅ DONE
 - `quiz.repository.ts` + `quiz.prisma.repo.ts`: `findHighestAnsweredClassIndex`.
 - `generate-next-class.ts`: skip branch (returns `ok`, records nothing).
 - `generate-next-class.test.ts`: new cases — dedup skip (no AI call, no class, no event),
-  fresh submit still generates, `answeredIndex = null` (first-ever submit) generates.
+  fresh submit still generates, `answeredIndex = null` generates (safe default; no evidence
+  the learner is behind).
 
-### S4 — Mobile `FAILED` surfacing + retry (D1)
-- `SkillList.tsx`: `FAILED` row → "Failed to prepare" chip (existing theme tokens, monochrome
-  system — no new palette entries) + retry affordance: `useMutation(rpc.skill.retry)` →
-  invalidate the skills query → row flips to the existing `GENERATING` preparing state.
+### S4 — Mobile `FAILED` surfacing + retry (D1) — ✅ DONE
+- `SkillList.tsx`: `FAILED` row → "Failed to prepare" chip + retry affordance
+  (`useMutation(rpc.skill.retry)` → invalidate the skills query → row flips to the existing
+  `GENERATING` preparing state).
 - `SkillDetail.tsx`: when `status === 'FAILED'` show error copy + retry button (same mutation).
-- Light + dark visual check on emulator.
+- Emulator visual check deferred to the next dev session (chip/banner use existing tokens).
 
-### S5 — `EXPO_PUBLIC_API_URL` (D5)
-- `utils/rpc.ts` env override with current fallbacks.
+### S5 — `EXPO_PUBLIC_API_URL` (D5) — ✅ DONE
+- `utils/rpc.ts` env override with the previous platform fallbacks.
 
-### S6 — Loop integration test (D4)
-- `src/modules/loop.integration.test.ts` per the scenario in §3; extract shared fakes only if
-  duplication gets loud.
+### S6 — Loop integration test (D4) — ✅ DONE
+- `src/modules/loop.integration.test.ts` + `src/modules/testing/fakes.ts` (the one sanctioned
+  extraction): asserts the full §3 scenario incl. the FAILED → retry → ACTIVE heal in both
+  failure shapes and the D3 dedup skip.
 
-### S7 — Prod image + compose (D6)
-- Read the current `Dockerfile` build stage; add `production`; fix `docker-compose-prod.yaml`.
+### S7 — Prod image + compose (D6) — ✅ DONE
+- Backend now emits `dist/` (tsc, `module: nodenext` → CJS + `module-alias`; tsconfig noEmit
+  removed; build script copies the generated Prisma client).
+- Dockerfile: real `build` steps + `production` stage (prod-only deps + dist + prisma dir;
+  CMD runs `prisma migrate deploy` then `node -r module-alias/register dist/src/main.js`).
+- `docker-compose-prod.yaml` rewritten: no host-volume shadowing, `DATABASE_URL: ?required`
+  passthrough (the `DATABASE_HOST` remnant is gone), shared `axon-network` with the dev stack.
+- Verified: `docker compose build` succeeds; container boots `/health` (200) against the dev
+  Postgres/Qdrant; migrate deploy reports "No pending migrations"; `POST /rpc/skill/retry`
+  routes (401 without bearer).
 
-### S8 — Docs final pass (after S1–S7 land)
-- ARCHITECTURE.md: add `skill.retry` to the RPC table, note dedup in §4.2, clear items 1–6 of
-  §9. GAPS.md: flip 10–15 partials. BETA_PLAN: mark Phase 6 DONE. This file: check off steps.
+### S8 — Docs final pass (after S1–S7 land) — ✅ DONE
+- ARCHITECTURE.md: `skill.retry` in the RPC table, dedup + retry guard in §4.2, mobile/test
+  sections updated, §9 cleared to the post-beta backlog. GAPS.md: 11/12/14/15 closed, 13
+  partial (transactionality). BETA_PLAN: Phase 6 DONE. This file: steps checked off.
 
 ## 3. Testing
 

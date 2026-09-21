@@ -39,6 +39,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[]) => {
     findAnswersByClassAndUser: async () => {
       throw new Error("not used in submit tests");
     },
+    findHighestAnsweredClassIndex: async () => {
+      throw new Error("not used in submit tests");
+    },
   };
 
   const eventRepo: EventRepository = {

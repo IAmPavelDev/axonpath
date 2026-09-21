@@ -33,7 +33,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
   findById: async (id) => {
     const skill = await prisma.skill.findFirst({
       where: { id },
-      select: { id: true, topic: true, description: true, status: true },
+      select: { id: true, topic: true, description: true, status: true, userId: true },
     });
     return skill;
   },

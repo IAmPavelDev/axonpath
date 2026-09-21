@@ -5,11 +5,17 @@ import { ContractRouterClient } from '@orpc/contract'
 import { RPCLink } from '@orpc/client/fetch'
 import { firebaseAuth } from '@/lib/firebase'
 
+// EXPO_PUBLIC_API_URL overrides the RPC origin (e.g. a LAN device hitting a
+// dev machine); the platform defaults keep emulator/web behavior unchanged.
+const baseUrl =
+  process.env.EXPO_PUBLIC_API_URL ??
+  Platform.select({
+    web: 'http://localhost:3001',
+    default: 'http://10.0.2.2:3001',
+  })
+
 const link = new RPCLink({
-  url: Platform.select({
-    web: 'http://localhost:3001/rpc',
-    default: 'http://10.0.2.2:3001/rpc',
-  }),
+  url: `${baseUrl}/rpc`,
   // getIdToken() transparently refreshes an expired token before every call;
   // the backend verifies it against Google's public keys.
   headers: async () => {

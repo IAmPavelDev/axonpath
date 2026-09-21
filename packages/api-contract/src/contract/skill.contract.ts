@@ -33,6 +33,16 @@ const get = oc
   .input(schema.SkillIdInput)
   .output(schema.GetSkillByIdOutput);
 
+const retry = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/retry`,
+    summary: "Retry AI generation for a failed skill",
+    tags: ["Skill", "Retry"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.StatusOnly);
+
 const list = oc
   .route({
     method: "GET",
@@ -46,7 +56,8 @@ export const skillContract = {
   create,
   edit,
   get,
-  list
+  list,
+  retry
 }
 
 export type SkillContractType = typeof skillContract;

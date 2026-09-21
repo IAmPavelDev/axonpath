@@ -5,6 +5,7 @@ import { toORPCError } from "@/modules/platform/api/error-mapping";
 import { isErr } from "@/modules/platform/result";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import { type CreateSkillDeps, makeCreateSkill } from "@/modules/learning/application/commands/create-skill";
+import { makeRetrySkill, type RetrySkillDeps } from "@/modules/learning/application/commands/retry-skill";
 import { makeEditSkill, type EditSkillDeps } from "@/modules/learning/application/commands/edit-skill";
 import { makeGetSkillById, type GetSkillByIdDeps } from "@/modules/learning/application/queries/get-skill-by-id";
 import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/application/queries/get-skills-list";
@@ -12,13 +13,15 @@ import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/ap
 export type SkillApiDeps = CreateSkillDeps &
   EditSkillDeps &
   GetSkillByIdDeps &
-  GetSkillsListDeps;
+  GetSkillsListDeps &
+  RetrySkillDeps;
 
 export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const createSkill = makeCreateSkill(deps);
   const editSkill = makeEditSkill(deps);
   const getSkillById = makeGetSkillById(deps);
   const getSkillsList = makeGetSkillsList(deps);
+  const retrySkill = makeRetrySkill(deps);
 
   return {
     create: (async ({ input, context }) => {
@@ -66,6 +69,17 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
     }) satisfies OrpcHandler<
       unknown,
       z.infer<typeof schema.skill.GetSkillListOutput>
+    >,
+
+    retry: (async ({ input, context }) => {
+      const result = await retrySkill({
+        skillId: input.id,
+        userId: context.user.id,
+      });
+      return unwrapOrThrow(result, toORPCError);
+    }) satisfies OrpcHandler<
+      z.infer<typeof schema.skill.SkillIdInput>,
+      z.infer<typeof schema.skill.StatusOnly>
     >,
   };
 };

@@ -119,6 +119,20 @@ export const makeGenerateNextClass =
       return err({ kind: "NoClassesYet", skillId: input.skillId });
     }
 
+    // Retake dedup: submit-quiz enqueues on every scored submit, so a
+    // consecutive retake of the newest class must not spawn another variant.
+    // Generate only when the learner has answered through the newest class;
+    // with no recorded answers (anomalous job replay) generation is the safe
+    // default. A retake of an older class still signals learning and
+    // regenerates from the latest one.
+    const answeredIndex = await quizRepo.findHighestAnsweredClassIndex(
+      input.skillId,
+      input.userId,
+    );
+    if (answeredIndex !== null && last.index > answeredIndex) {
+      return ok(undefined);
+    }
+
     // Latest attempt per question wins: answers arrive id-asc, so a Map keyed
     // by questionId keeps the newest row per question.
     const latestByQuestion = new Map<number, AnswerReview>();

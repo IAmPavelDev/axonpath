@@ -13,6 +13,7 @@ export const buildSkillRouter = (deps: SkillApiDeps) => {
     edit: rpc.skill.edit.handler(handlers.edit),
     get: rpc.skill.get.handler(handlers.get),
     list: rpc.skill.list.handler(handlers.list),
+    retry: rpc.skill.retry.handler(handlers.retry),
   };
 };
 
