@@ -31,6 +31,7 @@ import {
 import { FC, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useQuizStore } from '@/store/quiz.store';
 import { QuizResult } from './QuizResult';
+import { Timeout } from '@/types/global';
 
 const AUTO_ADVANCE_MS = 340;
 
@@ -50,7 +51,7 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
   const [result, setResult] = useState<QuizSubmitResult | null>(null);
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList<QuestionDataType>>(null);
-  const advanceTimer = useRef(0);
+  const advanceTimer = useRef<Timeout>(0);
   // RN 0.86 + React 19: VirtualizedList attaches its ScrollView ref via
   // cloneElement, whose reserved `ref` never reaches the function-component
   // ScrollViewWrapper — so the list's internal ref stays null and every

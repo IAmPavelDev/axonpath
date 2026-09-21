@@ -1,8 +1,12 @@
 # Axon — System Architecture
 
-> Status: **DRAFT / pre-beta**. Monorepo last touched 2025-09-20 (~11 months before this doc).
-> This document is a faithful snapshot of the code as written. Where a piece is aspirational,
-> stubbed, or unwired, it is marked **[PLANNED]**, **[STUB]**, or **[UNWIRED]**.
+> Status: **STALE SNAPSHOT (kept for background).** Written against the pre-refactor monorepo
+> (Gemini, `controllers/`, OpenRouter). Since then: DDD module refactor (`modules/{identity,
+> learning,tutoring,memory,jobs,platform}`), oRPC contract-first handlers replaced controllers,
+> the AI adapter is `zai.client.ts` (Z.ai `glm-5.3-flash`) and Firebase auth is live.
+> Authoritative current-state docs: `knowledge-base/BETA_PLAN.md` (status block) and
+> `knowledge-base/PHASE3_4_ADAPTIVE_LOOP.md`. The [PLANNED]/[STUB]/[UNWIRED] markers below are
+> retained but unverified against the current tree — re-check before citing.
 
 ## 1. One-paragraph summary
 

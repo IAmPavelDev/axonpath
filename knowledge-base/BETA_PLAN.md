@@ -5,6 +5,24 @@
 > the 2026-09 refactor (they cite deleted `controllers/`, `middleware/auth.ts`, `ai.service.ts`)
 > and are kept only as background. Goal: **working beta of the adaptive loop** — no
 > over-engineering, every phase shippable on its own.
+>
+> ---
+>
+> ## Status update (2026-09-21)
+> - **Phase 1 — DONE.** Personas shipped (`tutoring/domain/personas.ts`); every `ai.generateJson`
+>   call sends `{ system, prompt }`. Note: the AI adapter is now `zai.client.ts` (Z.ai
+>   `glm-5.3-flash`), not the OpenRouter client this plan cites.
+> - **Phase 2 — DONE.** `submit` exported, scored, persisted (`learning/application/commands/
+>   submit-quiz.ts` + unit tests), router wired; mobile submits and renders `QuizResult`.
+> - **Phase 5 — DONE** via the 2026-09-17 mobile UI/UX overhaul: `ClassConspect` has a full
+>   light/dark markdown theme, atomics/theme system rebuilt. Remaining nit: `EXPO_PUBLIC_API_URL`
+>   is still unused (`utils/rpc.ts` hard-codes localhost / 10.0.2.2).
+> - **Auth — pulled forward from post-beta, DONE.** Firebase email/password + Google Sign-In;
+>   identity module verifies Firebase tokens per request; mobile sends bearer id tokens.
+>   The "no auth in beta" constraint above is superseded.
+> - **Skill status never leaves `DRAFT`** — init success never sets `ACTIVE`; mobile reads DRAFT
+>   as "preparing" forever. Fixed by the status lifecycle in the Phase 3+4 step.
+> - **Next execution step: Phases 3 + 4 together → `knowledge-base/PHASE3_4_ADAPTIVE_LOOP.md`.**
 
 ## 0. Verified current state (what is actually done)
 
@@ -47,7 +65,7 @@
 
 ---
 
-## Phase 1 — System prompts with roles (all AI requests) 🔴 small, do first
+## Phase 1 — System prompts with roles (all AI requests) — ✅ DONE (2026-09-18)
 > Detailed execution plan: `knowledge-base/PHASE1_SYSTEM_PROMPTS.md` (exact edits, personas,
 > verification queries).
 
@@ -70,7 +88,7 @@
 **Acceptance:** every `ai.generateJson` call passes a persona; description + init generation
 still succeed end-to-end against the running stack (create a skill, class 0 lands).
 
-## Phase 2 — Wire `quiz.submit`: score + persist + mobile submit 🔴 prerequisite of the loop
+## Phase 2 — Wire `quiz.submit`: score + persist + mobile submit — ✅ DONE (2026-09-18)
 
 1. **Contract** (`packages/api-contract`): export `submit` from `quizContract`. Fix schemas:
    - input: `{ classId: number, answers: [{ questionId, answer, timeSpentMs? }] }`
@@ -88,7 +106,7 @@ still succeed end-to-end against the running stack (create a skill, class 0 land
 **Acceptance:** submitting a quiz persists `Answer` rows with `score`/`isCorrect`; mobile shows a
 real result, not a console log.
 
-## Phase 3 — History RAG into Qdrant 🔴 the lesson memory
+## Phase 3 — History RAG into Qdrant 🔴 the lesson memory — ⏳ NEXT, see `PHASE3_4_ADAPTIVE_LOOP.md`
 
 **Design:** one collection (`axon_vectors`), one new memory kind. Embed a compact per-lesson
 summary, not raw markdown — it is what retrieval should match on. No schema migration:
@@ -109,7 +127,7 @@ summary, not raw markdown — it is what retrieval should match on. No schema mi
 **Acceptance:** creating a skill stores ≥1 `AI_NEXT` summary vector; a follow-up generation's
 prompt (visible via the `Event` payload audit) contains retrieved summaries.
 
-## Phase 4 — The adaptive loop: `generateNextClass` 🔴 the product
+## Phase 4 — The adaptive loop: `generateNextClass` 🔴 the product — ⏳ NEXT, see `PHASE3_4_ADAPTIVE_LOOP.md`
 
 1. **Use case** `tutoring/application/generate-next-class.ts`, curried deps
    `{ ai, retrieveContext, skillRepo, classRepo, quizRepo, eventRepo, recordVectors }`,
@@ -131,7 +149,7 @@ prompt (visible via the `Event` payload audit) contains retrieved summaries.
 whose content addresses the miss; `Answer`, `CLASS_GENERATED` event, and `AI_NEXT` vectors all
 persisted.
 
-## Phase 5 — Lesson rendering on mobile 🟠 the reading experience
+## Phase 5 — Lesson rendering on mobile — ✅ DONE via UI/UX overhaul (2026-09-17)
 
 1. **Markdown theme** `components/class/markdown-theme.ts`: heading scale, code blocks (bg +
    mono), lists, blockquote, hr, links, tables if supported; light + dark. `ClassConspect`
@@ -146,7 +164,7 @@ persisted.
 **Acceptance:** visual check on emulator — a lesson with headings/code/lists renders styled in
 light and dark; navigation between lessons works.
 
-## Phase 6 — Beta hardening (final pass) 🟡
+## Phase 6 — Beta hardening (final pass) — ⏳ after Phase 3+4
 
 - **Error surfacing**: skill list shows `FAILED` badge + retry (re-enqueue `skill-init`); make
   init retry-safe (guard: if class 0 exists for the skill, replace-or-skip before regenerating).
