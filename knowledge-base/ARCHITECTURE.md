@@ -1,22 +1,18 @@
 # Axon — System Architecture
 
-> Status: **STALE SNAPSHOT (kept for background).** Written against the pre-refactor monorepo
-> (Gemini, `controllers/`, OpenRouter). Since then: DDD module refactor (`modules/{identity,
-> learning,tutoring,memory,jobs,platform}`), oRPC contract-first handlers replaced controllers,
-> the AI adapter is `zai.client.ts` (Z.ai `glm-5.3-flash`) and Firebase auth is live.
-> Authoritative current-state docs: `knowledge-base/BETA_PLAN.md` (status block) and
-> `knowledge-base/PHASE3_4_ADAPTIVE_LOOP.md`. The [PLANNED]/[STUB]/[UNWIRED] markers below are
-> retained but unverified against the current tree — re-check before citing.
+> Status: **CURRENT as of 2026-09-21** (rewritten from a verified code audit after the Phase 3+4
+> adaptive loop landed). Authoritative plan docs: `knowledge-base/BETA_PLAN.md` (sequencing),
+> `knowledge-base/PHASE6_HARDENING.md` (remaining beta work). Background: `CONCEPT.md` (vision),
+> `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md` (how the loop was built).
 
 ## 1. One-paragraph summary
 
-Axon is an **adaptive, AI-generated learning app**. A user enters a *topic*; the backend uses
-Google Gemini to expand it into an interactive *skill* (Markdown lesson + quiz + retrievable
-context snippets). The lesson is delivered as a sequence of focused *classes*; the user reads a
-class and answers a quiz; the answers and a personalized context store feed back into the model to
-generate the *next* class, so the curriculum adapts to what the user actually gets wrong. The
-intended long-term differentiator is a **per-user vector knowledge base** (Postgres `pgvector`)
-that the AI retrieves from to keep each follow-up lesson personalized.
+Axon is an **adaptive, AI-generated learning app**. A user enters a *topic*; the backend expands
+it into a *skill* (Markdown lesson + quiz + retrievable context snippets) and delivers the lesson
+as a sequence of *classes*. The user reads a class, answers its quiz; the scored answers plus a
+per-user vector memory feed back into the model to generate the *next* class, so the curriculum
+adapts to what the user actually gets wrong. Memory lives in **Qdrant** (`axon_vectors`); Postgres
+is relational truth.
 
 ## 2. High-level architecture
 
@@ -26,116 +22,138 @@ flowchart LR
         M[expo-router screens]
         Q[TanStack Query + Zustand]
         RPC[oRPC typed client]
+        FBM[Firebase Auth]
     end
 
-    subgraph Backend["🖥 apps/backend (Fastify + oRPC)"]
+    subgraph Backend["🖥 apps/backend (Fastify + oRPC, DDD modules)"]
         API["/rpc handler — contract-first"]
-        C["controllers"]
-        S["services"]
-        AI["AI service (Gemini)"]
-        V["Vector service (Qdrant)"]
-        EV["Event log (audit)"]
+        AUTH["identity — Firebase token verification"]
+        UC["use cases (learning / tutoring / memory)"]
+        JOBS["jobs registry (setImmediate queue)"]
     end
 
     subgraph Shared["📦 packages/api-contract"]
-        CONTRACTS["contracts + zod schemas"]
+        CONTRACTS["oRPC contracts + zod schemas"]
     end
 
     subgraph Infra["Infrastructure"]
         DB[("PostgreSQL 18")]
         QD[("Qdrant v1.19.1 (vectors)")]
-        MQ["RabbitMQ [STUB]"]
+        ZAI["Z.ai glm-5.3-flash (chat)"]
+        GEM["Gemini embeddings"]
     end
 
+    M --> FBM
     M --> RPC --> API
     CONTRACTS --> API
-    API --> C --> S
-    S --> AI
-    S --> V
-    S --> EV
-    S --> DB
-    V --> QD
-    S -.->|planned| MQ
+    API --> AUTH --> UC
+    API --> UC
+    UC --> JOBS --> UC
+    UC --> DB
+    UC --> QD
+    UC --> ZAI
+    UC --> GEM
 ```
 
-> Note: `apps/backend/docker-compose-dev.yaml` declares backend, Postgres (plain `postgres:18`, vectors no longer stored here), Qdrant (`qdrant/qdrant:v1.19.1`) and RabbitMQ
-> (still a stub). Vector embeddings live in the Qdrant collection `axon_vectors`; Postgres `Vector`
-> rows keep only relational metadata. OpenSearch/AWS config and deps were removed.
+Dev stack (`docker-compose-dev.yaml`): backend, `postgres:18` (5432), `qdrant/qdrant:v1.19.1`
+(6333 REST / 6334 gRPC), `rabbitmq:3.12-management` — **the RabbitMQ container is declared but
+unused** (no amqplib dependency or code; `JobQueuePort` is the seam for a broker later).
 
 ## 3. Repo layout (pnpm monorepo)
 
 ```
 axon/
 ├── apps/
-│   ├── backend/          ← Fastify + oRPC API server (TypeScript, tsx dev runner)
-│   └── mobile/           ← Expo / React Native app (expo-router, NativeWind)
+│   ├── backend/          ← Fastify + oRPC API (TypeScript, tsx dev runner, vitest)
+│   └── mobile/           ← Expo / React Native (expo-router, NativeWind, react-native-reusables)
 ├── packages/
 │   └── api-contract/     ← Shared oRPC contracts + zod schemas (tsup build → dist/)
-├── docker-compose-dev.yaml   ← backend + postgres(pgvector) + rabbitmq
-├── docker-compose-prod.yaml  ← production backend (build + migrate + node dist)
-├── Dockerfile             ← multi-stage (base / build / development)
-└── pnpm-workspace.yaml    ← apps/*, packages/*
+├── docker-compose-dev.yaml / docker-compose-prod.yaml / Dockerfile
+├── .env.example          ← env documentation (root .env is gitignored)
+└── pnpm-workspace.yaml   ← apps/*, packages/*  (packageManager: pnpm@10.14.0)
 ```
 
-- Dependency manager: **pnpm** (`packageManager: pnpm@10.14.0`).
-- Backend dev runner: `tsx` with `tsconfig-paths` and `@/*` path aliases.
-- Shared contract package is consumed as a workspace dependency (`@axon/api-contract`).
+Build order matters: `pnpm --filter @axon/api-contract build` before the backend resolves
+`@axon/api-contract` from `dist/`.
 
-## 4. Backend (apps/backend) — DDD modular monolith (2026-09 refactor)
+## 4. Backend — DDD modular monolith
 
 Layering: `router/` (thin oRPC wiring) → `modules/*/api` (handlers: parse → use case → error
 mapping) → `modules/*/application` (use cases, curried over a deps object = future Effect Layer)
 → `modules/*/domain` (pure types + functions + tagged errors + repository ports) →
-`modules/*/infrastructure` (Prisma / Qdrant / OpenRouter adapters). `main.ts` is the composition
-root: the only place adapters are constructed.
+`modules/*/infrastructure` (Prisma / Qdrant / Z.ai / Firebase adapters). `main.ts` bootstraps
+Fastify; `container.ts` is the composition root — the only place adapters are constructed.
 
 ```
 apps/backend/src/
-├── main.ts                composition root
+├── main.ts                Fastify bootstrap
+├── container.ts           composition root (adapters → use cases → routers/job handlers)
 ├── router/index.ts        buildRouters(container)
 ├── modules/
-│   ├── platform/          Result<T,E>, tagged-error helpers, toORPCError,
-│   │                      Clock/JobQueuePort ports, prisma client, set-immediate job queue, config
-│   ├── identity/api/      auth.middleware.ts [STUB: hard-coded user 1]
-│   ├── learning/          Skill / Class / Question domain, queries+commands,
-│   │                      Prisma repos, oRPC handlers
-│   ├── tutoring/          AiPort, pure prompt builders, openrouter client,
-│   │                      generate-initial-skill use case
-│   └── memory/            VectorStorePort (Prisma metadata + Qdrant), retrieval policy
-└── prisma/                schema + migrations + generated client
+│   ├── platform/          Result<T,E>, tagged errors, toORPCError, ports (Clock/JobQueue),
+│   │                      config.ts, prisma client, set-immediate job queue
+│   ├── identity/          Firebase email/password + Google; per-request ID-token verification
+│   │                      → context.user; authenticate use case + middleware (unit-tested)
+│   ├── learning/          Skill/Class/Question/Event domain, queries+commands
+│   │                      (create-skill, edit-skill, submit-quiz, get-skill-*), Prisma repos,
+│   │                      oRPC handlers, skill status state machine (canTransition)
+│   ├── tutoring/          AiPort, personas (TUTOR_SYSTEM/DESCRIPTION_SYSTEM), prompt builders,
+│   │                      defensive JSON parsing, zai.client adapter (chat + embeddings),
+│   │                      generate-initial-skill + generate-next-class use cases
+│   ├── memory/            VectorStorePort (Prisma metadata + Qdrant points),
+│   │                      retrieve-relevant-context policy (degrades to [] on failure)
+│   └── jobs/              registry: "skill-init", "skill-next-class" → handlers
+└── src/prisma/            schema + migrations + generated client
 ```
 
-Import rules (Effect readiness):
-1. `domain/` has zero infra/framework imports (Prisma enum *values* allowed — domain vocabulary).
-2. Errors are plain tagged objects `{ kind: "SkillNotFound", ... }` — map 1:1 onto Effect
-   `Data.TaggedError`.
-3. Use cases return `Result<T, E>` (platform/result.ts, Either-shaped) and are curried over a
-   deps object — each deps object becomes an Effect Layer at migration time.
-4. Only `infrastructure/` imports prisma/qdrant/openai; only `main.ts` constructs adapters.
+Import rules (Effect readiness): `domain/` has zero infra imports; errors are plain tagged
+objects (`{ kind: "SkillNotFound" }`); use cases return `Result<T, E>` curried over deps;
+only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constructs adapters.
 
-### 4.1 RPC surface
-Unchanged: `skill.create/edit/get/list`, `class.list/get`, `quiz.get`. `quiz.submit` contract
-exists but stays unwired (as before). "Skill/Class not found" now maps to oRPC 404 (previously a
-thrown Error → 500).
+### 4.1 RPC surface (all routes under `/rpc`, Firebase bearer token required)
 
-### 4.2 AI init flow (behavior preserved from the old controller-level runDetached)
-`skill.create` → `makeCreateSkill` persists the DRAFT Skill and `jobs.enqueue("skill-init", ...)`
-(setImmediate adapter = old fire-and-forget). The job runs `makeGenerateInitialSkill`:
-description gen → skill update → embed topic → retrieve prior user context (Qdrant, topK 5) →
-generate class+quiz+snippets → audit `SKILL_CREATED` event → persist class (index 0), questions
-(batched), `AI_INITIAL` vectors. Failures degrade identically: description/retrieval failure
-degrades, generation failure aborts and leaves the skill DRAFT (job logs the error).
+| Route | Purpose |
+|---|---|
+| `skill.create` | persist skill with status `GENERATING` + enqueue `skill-init` |
+| `skill.edit` | edit topic/description (status transitions deliberately excluded — own command later) |
+| `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt |
+| `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
+| `quiz.get` | questions for a class (answerKey stripped) |
+| `quiz.submit` | score answers vs `answerKey`, persist `Answer` rows, `ANSWER_SUBMITTED` event, enqueue `skill-next-class` |
 
-### 4.3 What changed structurally
-- Controllers/services layer deleted; orchestration lives in use cases.
-- `AiPort` (prompt-in/JSON-out transport) + `VectorStorePort` + `JobQueuePort` + `SkillRepository`
-  etc. are Promise-based ports; adapters are swappable.
-- `runTaskDetached.ts` replaced by `SetImmediateJobQueue`; RabbitMQ stub + amqplib removed
-  (JobQueuePort is the seam for a broker).
-- Prisma client created in `modules/platform/infrastructure/prisma.ts`; schema/migrations unchanged.
-- Per-question create loop replaced by one `createManyAndReturn` batch (same rows, same points).
+Not-found maps to oRPC 404 via `toORPCError`.
 
-## 5. Data model (Postgres + Qdrant)
+### 4.2 The adaptive loop (the product)
+
+1. **Create**: `skill.create` → skill `GENERATING`, `skill-init` job enqueued.
+2. **Init** (`generate-initial-skill`): description (best-effort) → prior-context retrieval
+   (Qdrant, filtered by userId, excludes own skill, degrades to []) → one JSON generation
+   (class 0 + MC/TF questions + `lessonSummary` + context snippets) → `SKILL_CREATED` audit
+   event (full prompt+response) → persist class/questions → embed summary+snippets in one call →
+   vectors: summary `AI_NEXT`, snippets `AI_INITIAL`, `classIndex 0` → status `ACTIVE`.
+   Any failure → status `FAILED` + `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled
+   by `extractJsonObject` + per-field re-validation (`tutoring/domain/parse.ts`).
+3. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
+   open-ended scores 0 — generation is restricted to MC/TF) → `Answer` rows → enqueue
+   `skill-next-class`.
+4. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
+   user's answers (latest attempt per question) → retrieval **without** `excludeSkillId`
+   (own history wanted; topK 12) → prompt = TUTOR_SYSTEM + topic + last title/summary +
+   mistake block (or "all correct — raise difficulty") + history blocks ("Already covered —
+   build on it") → JSON generation (init shape + `lessonSummary`) → `CLASS_GENERATED` event →
+   persist class at `index + 1` + questions → embed summary (`AI_NEXT`) + snippets
+   (`AI_INITIAL`) at the new classIndex. Status stays `ACTIVE`; no dedup yet (retakes regenerate
+   variants — Phase 6 adds the guard).
+5. **Observe**: mobile polls `class.list`; the class screen auto-navigates into the new lesson.
+
+### 4.3 Skill status lifecycle
+
+`GENERATING → ACTIVE | FAILED`, `FAILED → GENERATING` (retry), `ACTIVE ↔ PAUSED`,
+`→ COMPLETED → ARCHIVED` — enforced by pure `canTransition` (`learning/domain/skill/skill.ts`).
+Migrations `20260921*_skill_status_*` added `GENERATING`/`FAILED` and backfilled legacy `DRAFT`
+rows (≥1 class → `ACTIVE`, else `FAILED`).
+
+## 5. Data model
 
 ```mermaid
 erDiagram
@@ -153,113 +171,73 @@ erDiagram
     Class ||--o{ Question : contains
     Question ||--o{ Answer : receives
     Answer ||--o{ Vector : derives
-
-    User { int id PK; string email UK; string password; string firstName; string lastName; enum role; enum status; bool emailVerified; string verificationToken; datetime lastLogin }
-    Skill { int id PK; int userId FK; string topic; enum status; float lambda; int requestId UK }
-    Class { int id PK; int skillId FK; int index; string title; text contentMd; string aiModel; UNIQUE(skillId,index) }
-    Question { int id PK; int skillId FK; int classId FK; enum type; text text; json choices; json answerKey; string aiModel }
-    Answer { int id PK; int questionId FK; int userId FK; int skillId FK; json content; float score; bool isCorrect; int timeSpentMs; string device }
-    SkillProgress { int id PK; int skillId FK; json snapshot }
-    Event { int id PK; int skillId FK; int userId FK; enum type; json payload }
-    Vector { int id PK; int skillId FK; int classId FK; int answerId FK; enum source; text textSnippet; int classIndex; int tokenCount }
 ```
 
-> The agent's embedding (`vector(3072)` in the old model) is now stored only in the Qdrant
-> collection `axon_vectors` (C-continuation `Cosine`, point id = `Vector.id`). `Vector` retains
-> the relational metadata (`skillId`/`classId`/`answerId`/`source`/`textSnippet`/...).
+Key tables: `Skill` (topic, description, status, lambda, requestId UK), `Class`
+(UNIQUE(skillId, index), contentMd, aiModel), `Question` (type, text, choices, answerKey
+server-side only), `Answer` (content json, score, isCorrect, timeSpentMs), `Event` (audit:
+SKILL_CREATED, CLASS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED, ERROR_OCCURRED,
+VECTOR_UPSERTED — payloads include the full AI prompt+response for debugging), `Vector`
+(relational metadata only: skillId/classId/answerId/source/textSnippet/classIndex/tokenCount),
+`SkillProgress` (snapshot json — **unused**).
 
-### Key enums
-- **UserRole**: `USER | ADMIN | MODERATOR`
-- **UserStatus**: `ACTIVE | SUSPENDED | PENDING_VERIFICATION`
-- **SkillStatus**: `DRAFT | ACTIVE | PAUSED | COMPLETED | ARCHIVED`
-- **QuestionType**: `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED`
-- **VectorSource**: `AI_INITIAL | AI_NEXT | ANSWER_DERIVED`
-- **EventType**: `SKILL_CREATED | CLASS_GENERATED | ANSWER_SUBMITTED | CONTEXT_SELECTED | ERROR_OCCURRED | VECTOR_UPSERTED`
+Enums: **SkillStatus** `DRAFT(legacy) | GENERATING | ACTIVE | FAILED | PAUSED | COMPLETED |
+ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (beta generates MC/TF
+only) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED(unused)`.
 
-### Notes / tensions
-- `Skill.lambda` (default 0.02) suggests a decay/half-life for contextual memory — **unused**.
-- `Vector` is `vector(3072)` = Gemini embedding-001 dimensionality.
-- `Event` table is a lightweight audit log — currently written only on `SKILL_CREATED` and
-  (in commented code) `CLASS_GENERATED`.
-- Scaling tokens: `id Int` autoincrement (not UUID). Good enough for beta; revisit for multi-tenant
-  scale.
+Embeddings live only in Qdrant (`axon_vectors`, 3072-dim Cosine, payload indexes userId/skillId,
+point id = `Vector.id`); Postgres keeps metadata. Embedding model: `gemini-embedding-2` via the
+Gemini OpenAI-compatible endpoint; chat: `glm-5.3-flash` via `https://api.z.ai/api/coding/paas/v4`.
 
 ## 6. Mobile (apps/mobile)
 
-```mermaid
-flowchart TD
-    ROOT["app/_layout.tsx\nQueryClient + Theme + Stack"] --> HOME["app/index.tsx\nskill list"]
-    HOME --> SKILL["app/skill/[skillId].tsx\nclass list"]
-    SKILL --> CLASS["app/class/[classId]/_layout.tsx\nTabs(conspect/quiz) + ClassProvider"]
-    CLASS --> CIDX["index.tsx\nClassConspect (Markdown)"]
-    CLASS --> QUIZ["quiz.tsx\nQuiz component"]
-    QUIZ --> QUESTION["Question/*\nMC / T-F / Open-ended"]
-    QUIZ --> SUBMIT["Submit button\nconsole.log('submit') — DEAD END"]
-```
+Flow: Firebase auth → skill list (home; `GENERATING` rows show a preparing state, pull-to-
+refresh, pinning) → create-skill (topic input) → description/skill detail (polls) → class list
+(newest first) → class screen (themed Markdown conspect + quiz tabs) → quiz (MC/TF/Open) →
+result → **generating phase**: pulse + copy, polls `class.list` every 2.5 s (90 s timeout), auto-
+navigates into the new lesson.
 
-- **RPC client** (`utils/rpc.ts`): typed oRPC client over fetch; URL hard-coded to
-  `http://10.0.2.2:3001/rpc` (Android emulator loopback) with a dummy Bearer header.
-- **State**: TanStack Query for server data; **Zustand** (`quiz.store`) for in-screen quiz answers.
-- **Screens present**: skill list, class list, class conspect (Markdown), quiz (3 question types).
-- **Dead ends / gaps**:
-  - **No "create skill" UI** anywhere (the API supports it, the app can't reach it).
-  - **Submit button `console.log('submit')`** — no submission, no `rpc.quiz.submit` call.
-  - Answers are held in Zustand but never sent to the backend.
-  - No progress, no "next class", no adaptive follow-up in the UI.
-  - `ClassQuiz.tsx` is an empty stub (`return <></>`).
-- UI kit (button/input/textarea/checkbox/spinner/text/separator/icon) from react-native-reusables.
+- **RPC client** (`utils/rpc.ts`): typed oRPC client; bearer Firebase ID token attached per call
+  (transparent refresh). ⚠️ Base URL still hard-codes `localhost` / `10.0.2.2` —
+  `EXPO_PUBLIC_API_URL` unwired (Phase 6).
+- **State**: TanStack Query for server data; Zustand (`quiz.store`) for in-screen answers.
+- **Theme**: atomics kit + light/dark monochrome system (`lib/theme.ts`); markdown theme for
+  lessons (`components/class/`).
 
 ## 7. Environment & config
 
-`.env` (root) declares:
+`.env.example` documents the root `.env`:
+
 | Key | Used for |
 |---|---|
 | `DATABASE_URL` | Prisma → Postgres |
-| `QDRANT_URL` | Qdrant vector store (REST 6333) |
-| `NODE_ENV` | Runtime mode |
-| `APP_PORT` (default 3000) | HTTP port; compose maps **3001:3001** |
-| `APP_HOST` (default 0.0.0.0) | Bind host |
-| `GEMINI_API_KEY` | Google Gemini auth |
+| `QDRANT_URL` | Qdrant (default `http://localhost:6333`) |
+| `ZAI_API_KEY` | Z.ai chat (glm-5.3-flash) |
+| `GEMINI_API_KEY` | Gemini embeddings |
+| `FIREBASE_PROJECT_ID` | ID-token audience/issuer verification |
+| `LAMBDA_DECAY_DEFAULT` | unused decay default (0.02) |
+| `APP_PORT` / `APP_HOST` / `NODE_ENV` | HTTP bind (compose maps 3001:3001) |
 
-`src/config.ts` (backend) defaults — each is a `process.env` override, not a literal
-(`QDRANT_URL`, `LAMBDA_DECAY_DEFAULT`):
-```
-qdrant.url        = http://localhost:6333   (docker-compose: http://qdrant:6333)
-ai.models.weak    = gemini-2.0-flash-lite
-ai.models.pro     = gemini-2.5-pro
-ai.models.embedding = gemini-embedding-001
-lambda default    = 0.02
-```
+`modules/platform/config.ts` is the single config module (env-over-default).
 
-> RabbitMQ URL is a **literal** in `queue.service.ts` (`amqp://user:password@localhost`) — not from
-> env.
+## 8. Tests
 
-## 8. Infrastructure (docker-compose)
+Vitest, colocated `*.test.ts` (10 files / 50 tests, all green 2026-09-21): scoring, skill state
+machine, Result, authenticate + Firebase verifier + auth middleware, create-skill, generate-
+initial-skill, generate-next-class (10 cases incl. mistake emphasis / allCorrect / latest-
+attempt / retrieval-degradation / parse-failure), submit-quiz (8 cases incl. enqueue trigger).
+No integration/E2E test yet — Phase 6 adds a composed loop test.
 
-**dev** (`docker-compose-dev.yaml`): backend (volume mounts source),
-`postgres:18` (Postgres 18, on 5432), `qdrant/qdrant:v1.19.1` (6333 REST /
-6334 gRPC), `rabbitmq:3.12-management` (5672/15672). Backend auto-runs `prisma migrate deploy` +
-`prisma generate` + `dev:watch`.
+## 9. Known gaps → Phase 6 (`knowledge-base/PHASE6_HARDENING.md`)
 
-**prod** (`docker-compose-prod.yaml`): mounts repo, runs `prisma migrate deploy` + `tsc build` +
-`node dist/main.js`; maps 3001:3001.
-
-> ⚠️ Verified gaps: the Dockerfile has **no `production` stage**, so the prod compose build falls
-> through to the last stage (`development`) — prod runs on the dev image. And
-> `DATABASE_URL=${DATABASE_HOST}` in `docker-compose-prod.yaml` is a real wiring bug (see ROADMAP W4).
-
-## 9. What this codebase is today
-
-**Working, end-to-end happy path (single-user, dev-only):**
-Mobile → skill list → class list → class conspect → quiz rendering works against a running
-backend.
-
-**What is missing to call it a product (all [PLANNED]):**
-1. Real auth (currently one hard-coded user).
-2. Create-skill entry point in the UI.
-3. Answer submission + scoring (`quiz.submit` not wired; `submitAnswers` is a stub).
-4. The **adaptive next-class loop** (`generateNextClass` commented out) — the core idea.
-5. ~~Vector retrieval (vectors written, never read)~~ — live: `searchSimilar` (Qdrant, filtered by
-   `userId`) feeds prior user context into `generateInitSkill`. Next-class retrieval still pending.
-6. Progress tracking (`SkillProgress` table unused).
-7. Adult lifecycle: status transitions, error surfacing to client, observability.
+1. `FAILED` is invisible on mobile; no `skill.retry` route (state machine already allows
+   `FAILED → GENERATING`).
+2. Init is not retry-safe: rerunning `skill-init` on a skill that already has class 0 would
+   violate `UNIQUE(skillId, index)`.
+3. Retake dedup: every scored submit regenerates a next-class variant.
+4. No composed integration test of create → init → submit → next-class.
+5. `EXPO_PUBLIC_API_URL` unwired in `utils/rpc.ts`.
+6. Prod deploy: Dockerfile has no `production` stage (only base/build/development);
+   `docker-compose-prod.yaml` line 16 `DATABASE_URL=${DATABASE_HOST}` is a wiring bug.
+7. RabbitMQ container still declared in dev compose though unused.
+8. `SkillProgress`, `ANSWER_DERIVED` vectors, open-ended AI grading, lambda decay — post-beta.

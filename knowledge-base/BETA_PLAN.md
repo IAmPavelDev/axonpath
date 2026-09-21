@@ -8,21 +8,21 @@
 >
 > ---
 >
-> ## Status update (2026-09-21)
-> - **Phase 1 — DONE.** Personas shipped (`tutoring/domain/personas.ts`); every `ai.generateJson`
->   call sends `{ system, prompt }`. Note: the AI adapter is now `zai.client.ts` (Z.ai
->   `glm-5.3-flash`), not the OpenRouter client this plan cites.
-> - **Phase 2 — DONE.** `submit` exported, scored, persisted (`learning/application/commands/
->   submit-quiz.ts` + unit tests), router wired; mobile submits and renders `QuizResult`.
-> - **Phase 5 — DONE** via the 2026-09-17 mobile UI/UX overhaul: `ClassConspect` has a full
->   light/dark markdown theme, atomics/theme system rebuilt. Remaining nit: `EXPO_PUBLIC_API_URL`
->   is still unused (`utils/rpc.ts` hard-codes localhost / 10.0.2.2).
-> - **Auth — pulled forward from post-beta, DONE.** Firebase email/password + Google Sign-In;
->   identity module verifies Firebase tokens per request; mobile sends bearer id tokens.
->   The "no auth in beta" constraint above is superseded.
-> - **Skill status never leaves `DRAFT`** — init success never sets `ACTIVE`; mobile reads DRAFT
->   as "preparing" forever. Fixed by the status lifecycle in the Phase 3+4 step.
-> - **Next execution step: Phases 3 + 4 together → `knowledge-base/PHASE3_4_ADAPTIVE_LOOP.md`.**
+## Status update (2026-09-21, after Phase 3+4)
+- **Phases 1, 2, 5 and Auth — DONE** (see the 2026-09-21 morning notes below; unchanged).
+  One nit carried into Phase 6: `EXPO_PUBLIC_API_URL` is still unused (`utils/rpc.ts`
+  hard-codes localhost / 10.0.2.2).
+- **Phases 3 + 4 — DONE, code-verified 2026-09-21.** Evidence: `generate-next-class.ts`
+  use case (+10 unit tests), `skill-next-class` job registered (`modules/jobs/registry.ts`),
+  `submit-quiz` enqueues after ≥1 scored answer, `lessonSummary` → `AI_NEXT` vectors (init
+  writes classIndex 0 in one embedding call), `GENERATING → ACTIVE | FAILED` lifecycle
+  (migrations `20260921*_skill_status_*`; create-skill passes GENERATING, init flips
+  ACTIVE/FAILED + `ERROR_OCCURRED`), `canTransition` state machine in
+  `learning/domain/skill/skill.ts`, mobile quiz → result → generating phase with `class.list`
+  poll + auto-navigate, `GetClassByIdOutput.skillId` shipped. Backend suite: 50/50 passing.
+- **Next execution step: Phase 6 (beta hardening) → `knowledge-base/PHASE6_HARDENING.md`.**
+  Remaining beta scope: FAILED surfacing + `skill.retry`, init retry-safety, retake dedup,
+  loop integration test, `EXPO_PUBLIC_API_URL`, prod image/compose fix, docs final pass.
 
 ## 0. Verified current state (what is actually done)
 
@@ -106,7 +106,7 @@ still succeed end-to-end against the running stack (create a skill, class 0 land
 **Acceptance:** submitting a quiz persists `Answer` rows with `score`/`isCorrect`; mobile shows a
 real result, not a console log.
 
-## Phase 3 — History RAG into Qdrant 🔴 the lesson memory — ⏳ NEXT, see `PHASE3_4_ADAPTIVE_LOOP.md`
+## Phase 3 — History RAG into Qdrant 🔴 the lesson memory — ✅ DONE (2026-09-21) via `PHASE3_4_ADAPTIVE_LOOP.md`
 
 **Design:** one collection (`axon_vectors`), one new memory kind. Embed a compact per-lesson
 summary, not raw markdown — it is what retrieval should match on. No schema migration:
@@ -127,7 +127,7 @@ summary, not raw markdown — it is what retrieval should match on. No schema mi
 **Acceptance:** creating a skill stores ≥1 `AI_NEXT` summary vector; a follow-up generation's
 prompt (visible via the `Event` payload audit) contains retrieved summaries.
 
-## Phase 4 — The adaptive loop: `generateNextClass` 🔴 the product — ⏳ NEXT, see `PHASE3_4_ADAPTIVE_LOOP.md`
+## Phase 4 — The adaptive loop: `generateNextClass` 🔴 the product — ✅ DONE (2026-09-21) via `PHASE3_4_ADAPTIVE_LOOP.md`
 
 1. **Use case** `tutoring/application/generate-next-class.ts`, curried deps
    `{ ai, retrieveContext, skillRepo, classRepo, quizRepo, eventRepo, recordVectors }`,
@@ -164,7 +164,7 @@ persisted.
 **Acceptance:** visual check on emulator — a lesson with headings/code/lists renders styled in
 light and dark; navigation between lessons works.
 
-## Phase 6 — Beta hardening (final pass) — ⏳ after Phase 3+4
+## Phase 6 — Beta hardening (final pass) — ⏳ NEXT, see `knowledge-base/PHASE6_HARDENING.md`
 
 - **Error surfacing**: skill list shows `FAILED` badge + retry (re-enqueue `skill-init`); make
   init retry-safe (guard: if class 0 exists for the skill, replace-or-skip before regenerating).
@@ -185,7 +185,6 @@ flowchart LR
     P1["P1 system prompts"] --> P3["P3 history RAG (write)"]
     P2["P2 quiz.submit"] --> P4["P4 generateNextClass"]
     P3 --> P4
-    P4 --> P5["P5 mobile rendering polish"]
     P4 --> P6["P6 hardening"]
     P5 --> P6
 ```
