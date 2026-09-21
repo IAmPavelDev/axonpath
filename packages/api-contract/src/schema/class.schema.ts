@@ -19,6 +19,7 @@ export const GetClassByIdInput = z.object({
 
 export const GetClassByIdOutput = z.object({
   id: z.number(),
+  skillId: z.number(),
   title: z.string(),
   contentMd: z.string(),
 });

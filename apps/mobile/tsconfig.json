@@ -5,6 +5,7 @@
     // Metro resolves package exports with the "react-native" condition
     // (e.g. firebase/auth's RN persistence types); keep tsc in sync.
     "customConditions": ["react-native"],
+    "types": ["node"],
     "paths": {
       "@/*": ["./*"],
       "@components/*": ["./components/*"],

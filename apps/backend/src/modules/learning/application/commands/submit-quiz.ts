@@ -1,10 +1,19 @@
 import { err, ok, type Result } from "@/modules/platform/result";
+import type { JobQueuePort } from "@/modules/platform/ports/jobs";
+import {
+  SKILL_NEXT_CLASS_JOB,
+  type SkillNextClassJobPayload,
+} from "@/modules/tutoring/application/generate-next-class";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { QuizError, SubmittedAnswer } from "@/modules/learning/domain/quiz/question";
 import { scoreAnswer } from "@/modules/learning/domain/quiz/scoring";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 
-export type SubmitQuizDeps = { quizRepo: QuizRepository; eventRepo: EventRepository };
+export type SubmitQuizDeps = {
+  quizRepo: QuizRepository;
+  eventRepo: EventRepository;
+  jobs: JobQueuePort;
+};
 export type SubmitQuizInput = {
   classId: number;
   userId: number;
@@ -26,9 +35,13 @@ export type SubmitQuizOutput = {
  * don't belong to this class are skipped, not rejected — they cannot be
  * scored and must not persist. A class with no questions is ClassNotFound:
  * nothing to score and no skill attribution.
+ *
+ * A scored attempt is the learning signal: it enqueues skill-next-class so
+ * the next, personalized lesson starts generating immediately (clients just
+ * observe class.list). No dedup in beta — a retake regenerates a variant.
  */
 export const makeSubmitQuiz =
-  ({ quizRepo, eventRepo }: SubmitQuizDeps) =>
+  ({ quizRepo, eventRepo, jobs }: SubmitQuizDeps) =>
   async (input: SubmitQuizInput): Promise<Result<SubmitQuizOutput, QuizError>> => {
     const questions = await quizRepo.findScoreableByClassId(input.classId);
     if (questions.length === 0) {
@@ -71,6 +84,13 @@ export const makeSubmitQuiz =
       type: "ANSWER_SUBMITTED",
       payload: { classId: input.classId, score, total: scored.length },
     });
+
+    if (scored.length > 0) {
+      jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
+        skillId: scored[0].question.skillId,
+        userId: input.userId,
+      } satisfies SkillNextClassJobPayload);
+    }
 
     return ok({ score, total: scored.length, perQuestion });
   };

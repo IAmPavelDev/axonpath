@@ -70,4 +70,44 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       })),
     });
   },
+  findAnswersByClassAndUser: async (classId, userId) => {
+    const rows = await prisma.answer.findMany({
+      where: { userId, question: { classId } },
+      orderBy: { id: "asc" },
+      select: {
+        questionId: true,
+        content: true,
+        isCorrect: true,
+        question: { select: { text: true, answerKey: true } },
+      },
+    });
+    return rows.map((row) => {
+      // content follows the { answer: string } storage convention; answerKey
+      // is a plain string for gradable types, an object only for open-ended.
+      const content: unknown = row.content;
+      const answerKey: unknown = row.question.answerKey;
+      let userAnswer = String(content ?? "");
+      if (
+        typeof content === "object" &&
+        content !== null &&
+        !Array.isArray(content) &&
+        "answer" in content &&
+        typeof content.answer === "string"
+      ) {
+        userAnswer = content.answer;
+      }
+      return {
+        questionId: row.questionId,
+        questionText: row.question.text,
+        userAnswer,
+        correctAnswer:
+          answerKey == null
+            ? ""
+            : typeof answerKey === "string"
+              ? answerKey
+              : JSON.stringify(answerKey),
+        isCorrect: row.isCorrect,
+      };
+    });
+  },
 });

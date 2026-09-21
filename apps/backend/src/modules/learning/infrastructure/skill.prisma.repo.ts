@@ -8,15 +8,20 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       data: {
         topic: input.topic,
         userId: input.userId,
-        status: SkillStatus.DRAFT,
+        status: input.status,
       },
       select: { id: true, status: true },
     }),
 
   update: async (id, patch) => {
-    const data: { topic?: string; description?: string } = {};
+    const data: {
+      topic?: string;
+      description?: string;
+      status?: SkillStatus;
+    } = {};
     if (patch.topic !== undefined) data.topic = patch.topic;
     if (patch.description !== undefined) data.description = patch.description;
+    if (patch.status !== undefined) data.status = patch.status;
 
     return prisma.skill.update({
       where: { id },

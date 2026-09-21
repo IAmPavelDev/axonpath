@@ -70,9 +70,16 @@ export const makePrismaClassRepository = (): ClassRepository => ({
     }));
   },
 
+  findTopBySkill: async (skillId) =>
+    prisma.class.findFirst({
+      where: { skillId },
+      orderBy: { index: "desc" },
+      select: { id: true, index: true, title: true },
+    }),
+
   findById: async (id) =>
     prisma.class.findUnique({
       where: { id },
-      select: { id: true, title: true, contentMd: true },
+      select: { id: true, skillId: true, title: true, contentMd: true },
     }),
 });

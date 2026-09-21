@@ -10,8 +10,8 @@ import { Link } from 'expo-router';
 import { FC, useMemo } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
-/** DRAFT means the AI initialization job is still running. */
-const isPreparing = (skill: Skill) => skill.status === 'DRAFT';
+/** GENERATING means the AI initialization job is still running. */
+const isPreparing = (skill: Skill) => skill.status === 'GENERATING';
 
 const lastStudiedLabel = (skill: Skill): string =>
   skill.lastActivityAt ? formatRelativeDate(skill.lastActivityAt) : 'not started';

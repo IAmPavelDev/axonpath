@@ -9,5 +9,7 @@ export type ClassRepository = {
     aiModel?: string;
   }): Promise<Pick<Class, "id">>;
   listBySkill(skillId: number, userId: number): Promise<ClassListItem[]>;
-  findById(id: number): Promise<Pick<Class, "id" | "title" | "contentMd"> | null>;
+  /** Latest lesson by (skillId, index); null before init has created class 0. */
+  findTopBySkill(skillId: number): Promise<{ id: number; index: number; title: string } | null>;
+  findById(id: number): Promise<Pick<Class, "id" | "skillId" | "title" | "contentMd"> | null>;
 };

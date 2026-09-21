@@ -1,4 +1,5 @@
 import { ok, type Result } from "@/modules/platform/result";
+import { SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 
@@ -24,9 +25,10 @@ export type CreateSkillOutput = {
 };
 
 /**
- * Create the Skill shell (DRAFT) and hand the expensive AI initialization to
- * the job queue. Returns immediately with the shell so the client gets an id
- * and can poll — identical behavior to the old controller-level runDetached.
+ * Create the Skill shell (GENERATING — the AI initialization is in flight)
+ * and hand the expensive work to the job queue. Returns immediately with the
+ * shell so the client gets an id and can poll. Init success flips the skill
+ * ACTIVE; failure flips it FAILED.
  */
 export const makeCreateSkill =
   ({ skillRepo, jobs }: CreateSkillDeps) =>
@@ -36,6 +38,7 @@ export const makeCreateSkill =
     const skill = await skillRepo.create({
       userId: input.userId,
       topic: input.topic,
+      status: SkillStatus.GENERATING,
     });
 
     jobs.enqueue(SKILL_INIT_JOB, {

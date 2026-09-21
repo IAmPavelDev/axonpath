@@ -9,6 +9,7 @@ import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrie
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
 import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
+import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import type { LearningApiDeps } from "@/router";
 
@@ -42,7 +43,20 @@ export const configureContainer = (): Container => {
     chatModel: config.ai.models.chat,
   });
 
-  const jobs = makeSetImmediateJobQueue(makeJobHandlers({ generateInitialSkill }));
+  const generateNextClass = makeGenerateNextClass({
+    ai,
+    retrieveContext,
+    skillRepo,
+    classRepo,
+    quizRepo,
+    eventRepo,
+    recordVectors,
+    chatModel: config.ai.models.chat,
+  });
+
+  const jobs = makeSetImmediateJobQueue(
+    makeJobHandlers({ generateInitialSkill, generateNextClass }),
+  );
 
   return { skillRepo, classRepo, quizRepo, eventRepo, jobs };
 };

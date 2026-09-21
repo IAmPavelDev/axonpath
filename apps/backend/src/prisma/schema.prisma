@@ -74,6 +74,8 @@ enum SkillStatus {
   PAUSED
   COMPLETED
   ARCHIVED
+  GENERATING
+  FAILED
 }
 
 enum QuestionType {

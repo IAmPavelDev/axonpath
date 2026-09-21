@@ -1,3 +1,4 @@
+import type { SkillStatus } from "@/prisma/generated";
 export type SkillListItem = {
     id: number;
     topic: string;
@@ -15,13 +16,13 @@ export type SkillListItem = {
   };
 
 export type SkillRepository = {
-  create(input: { userId: number; topic: string }): Promise<{
+  create(input: { userId: number; topic: string; status: SkillStatus }): Promise<{
     id: number;
     status: string;
   }>;
   update(
     id: number,
-    patch: { topic?: string; description?: string },
+    patch: { topic?: string; description?: string; status?: SkillStatus },
   ): Promise<{ id: number; topic: string; description: string; status: string }>;
   findById(id: number): Promise<{
     id: number;

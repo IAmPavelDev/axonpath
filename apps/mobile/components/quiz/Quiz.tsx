@@ -16,7 +16,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useRouter } from 'expo-router';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -41,8 +40,14 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   OPEN_ENDED: 'Open answer',
 };
 
-export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (props) => {
-  const router = useRouter();
+export const Quiz: FC<{
+  questions: QuestionDataType[];
+  classId: number;
+  /** Continue after the result screen — owned by the parent screen. */
+  onContinue: () => void;
+  /** Fired when the submit result arrives (quiz → result transition). */
+  onCompleted?: () => void;
+}> = (props) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colorScheme } = useColorScheme();
@@ -91,7 +96,10 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
         .map(({ questionId, answer }) => ({ questionId, answer }));
       return rpc.quiz.submit({ classId: props.classId, answers: submitted });
     },
-    onSuccess: setResult,
+    onSuccess: (result) => {
+      setResult(result);
+      props.onCompleted?.();
+    },
   });
 
   const total = classQuestionsList.length;
@@ -144,7 +152,7 @@ export const Quiz: FC<{ questions: QuestionDataType[]; classId: number }> = (pro
       <QuizResult
         result={result}
         questions={classQuestionsList}
-        onContinue={() => router.back()}
+        onContinue={props.onContinue}
       />
     );
   }

@@ -9,7 +9,7 @@ export const getGenerateInitialSkillJobHandler = (
     if (!result.ok) {
       console.error(
         { skillId: payload.skillId, error: result.error },
-        "Skill init failed; skill stays DRAFT",
+        "Skill init failed; skill marked FAILED",
       );
     }
   };
