@@ -1,10 +1,11 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-21** (rewritten after the Phase 3+4 adaptive loop; updated
-> when Phase 6 beta hardening landed). Authoritative plan docs: `knowledge-base/BETA_PLAN.md`
-> (sequencing), `knowledge-base/PHASE6_HARDENING.md` (beta hardening, now DONE). Background:
-> `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md` (how the loop was
-> built).
+> Status: **CURRENT as of 2026-09-22** (beta complete at `8122f6d`; verified against the
+> working tree including the uncommitted TS 7.0.2 upgrade). Execution authority for what is
+> next: `knowledge-base/PHASE7_POST_BETA.md` (post-beta, PLANNED). Beta history:
+> `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
+> Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
+> (how the loop was built).
 
 ## 1. One-paragraph summary
 
@@ -242,5 +243,14 @@ heal, both failure shapes).
 
 ## 9. Known gaps → post-beta backlog
 
-1. RabbitMQ container still declared in dev compose though unused.
-2. `SkillProgress`, `ANSWER_DERIVED` vectors, open-ended AI grading, lambda decay — post-beta.
+**Planned as Phase 7** — execution authority: `knowledge-base/PHASE7_POST_BETA.md`
+(written 2026-09-22 from a verified audit). What fed it:
+
+1. Unused `rabbitmq` container in dev compose → Phase 7 S6 (delete; broker stays a
+   `JobQueuePort` seam).
+2. No per-skill progress breakdown → S1; `SkillProgress` table stays unused by design (D1).
+3. PAUSED/COMPLETED/ARCHIVED unreachable → S2 (status lifecycle UX).
+4. `ANSWER_DERIVED` vectors / `Vector.answerId` unused → S3 (answer memory).
+5. Open-ended ungeneratable and ungradable → S4 (background AI grading) + S5 (generation unlock).
+6. Non-transactional class+question persist → S6 (`createWithQuestions` `$transaction`).
+7. Dead `Skill.lambda` / `LAMBDA_DECAY_DEFAULT` → S7 (delete, not tune).

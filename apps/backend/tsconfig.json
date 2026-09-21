@@ -11,7 +11,6 @@
         "sourceMap": true,
         "module": "nodenext",
         "moduleResolution": "nodenext",
-        "baseUrl": ".",
         "forceConsistentCasingInFileNames": true,
         "esModuleInterop": true,
         "allowSyntheticDefaultImports": true,
@@ -20,13 +19,13 @@
         "skipLibCheck": true,
         "paths": {
             "@/*": [
-                "src/*"
+                "./src/*"
             ],
             "@router/*": [
-                "src/router/*"
+                "./src/router/*"
             ],
             "@prisma/*": [
-                "src/prisma/*"
+                "./src/prisma/*"
             ]
         }
     },

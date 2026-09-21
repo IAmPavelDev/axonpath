@@ -12,3 +12,20 @@
   disabling the exit node. If `docker build`/`pull` fails this way: stop,
   report the blocker, and let the user decide (e.g. they pause the exit node
   themselves, or you fall back to cached/base images).
+
+## Project state (actualized 2026-09-22)
+- Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
+  `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth;
+  backend 64/64 tests and mobile `tsc --noEmit` verified green 2026-09-22 at `8122f6d`.
+- Current phase: **Phase 7 (post-beta)** — execution authority
+  `knowledge-base/PHASE7_POST_BETA.md`. Current-state detail: `knowledge-base/ARCHITECTURE.md`;
+  plan history: `knowledge-base/BETA_PLAN.md`; gap ledger: `knowledge-base/GAPS.md`.
+- Commands: build `@axon/api-contract` FIRST (backend resolves `dist/`);
+  `pnpm --filter @axon/backend test`; `pnpm --filter @axon/mobile exec tsc --noEmit`
+  (package name is `@axon/mobile`, not `axon-mobile`); dev stack
+  `docker compose -f docker-compose-dev.yaml up -d`.
+- Working tree carries an **uncommitted TypeScript 5.9→7.0.2 workspace upgrade**
+  (ts-node dropped; api-contract build also emits `.d.ts`). Green under TS 7; commit it
+  before starting Phase 7 work.
+- Docs rule: landing a phase includes syncing ARCHITECTURE/GAPS/BETA_PLAN status lines
+  and ticking the phase file's steps in the same change.

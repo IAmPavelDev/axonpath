@@ -1,9 +1,9 @@
 # Axon — Gap Ledger
 
-> **Status 2026-09-21 (post-Phase-6).** This file was the 2026-09 gap analysis (pre-refactor
-> file references). Execution authority is `knowledge-base/BETA_PLAN.md`; current-state detail
-> is `knowledge-base/ARCHITECTURE.md`. The original gap list is preserved below with per-gap
-> status; open items live in the post-beta backlog (ARCHITECTURE.md §9).
+> **Status 2026-09-22.** This file was the 2026-09 gap analysis (pre-refactor file
+> references). All beta gaps are closed; the open/partial items (8, 10, 13) are planned as
+> **Phase 7** — execution authority `knowledge-base/PHASE7_POST_BETA.md`. Current-state
+> detail: `knowledge-base/ARCHITECTURE.md`; beta history: `knowledge-base/BETA_PLAN.md`.
 
 ## Status summary
 

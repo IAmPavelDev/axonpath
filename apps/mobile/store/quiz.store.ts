@@ -11,8 +11,8 @@ type QuizStoreType = {
   setAnswer: (questionId: Question['id'], answer: string | null) => void;
 };
 
-export const useQuizStore = create<QuizStoreType>((set, get) => ({
-  questions: [],
+export const useQuizStore = create<QuizStoreType>((set) => ({
+  questions: {},
   answers: [],
   setQuestions: (classId: number, questions: Question[]) => {
     set((state) => ({

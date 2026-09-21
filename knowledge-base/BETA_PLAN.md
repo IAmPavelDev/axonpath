@@ -1,13 +1,20 @@
 # Axon — Beta Execution Plan
 
-> Written 2026-09-17 from a verified code audit (post-DDD-refactor state). This document is the
-> **authoritative next-actions plan**; ROADMAP.md sequencing and GAPS.md file references predate
+> Written 2026-09-17 from a verified code audit (post-DDD-refactor state). This document
+> **was** the authoritative next-actions plan through beta completion (2026-09-21); it is now
+> history — follow `knowledge-base/PHASE7_POST_BETA.md`. ROADMAP.md sequencing and GAPS.md
+> file references predate
 > the 2026-09 refactor (they cite deleted `controllers/`, `middleware/auth.ts`, `ai.service.ts`)
 > and are kept only as background. Goal: **working beta of the adaptive loop** — no
 > over-engineering, every phase shippable on its own.
 >
 > ---
 >
+## Status update (2026-09-22)
+- **Execution authority has moved to `knowledge-base/PHASE7_POST_BETA.md`** — the post-beta
+  phase (progress UI, status lifecycle UX, ANSWER_DERIVED answer memory, open-ended AI
+  grading, platform hygiene). This file is the completed beta plan, kept as history.
+
 ## Status update (2026-09-21, after Phase 6)
 - **Phases 1–5 + Auth + Phase 6 — ALL DONE.** Beta hardening landed 2026-09-21 per
   `knowledge-base/PHASE6_HARDENING.md`: init retry guard (skip-if-class-exists), `skill.retry`

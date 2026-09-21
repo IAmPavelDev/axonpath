@@ -8,7 +8,7 @@
     "dist/**"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && tsc --noEmit false --declaration --emitDeclarationOnly",
     "dev": "tsup --watch"
   },
   "keywords": [],
@@ -23,7 +23,7 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "tsconfig-paths": "^4.2.0",
-    "tsup": "^8.2.2",
-    "typescript": "^5.9.2"
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2"
   }
 }

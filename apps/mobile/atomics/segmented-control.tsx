@@ -1,7 +1,6 @@
 import { Text as RNText } from 'react-native';
 import { THEME, FONTS } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
-import { FC } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 export type SegmentedOption<T extends string> = { value: T; label: string };

@@ -15,6 +15,8 @@
  * apps/mobile/.env). The script creates a throwaway account and deletes every
  * row it created.
  */
+import type { PrismaClient } from './src/prisma/generated/index.js';
+
 const API_KEY = process.env.FB_KEY ?? '';
 const BACKEND = 'http://127.0.0.1:3001';
 const TOPIC = 'Basic photography lighting';
@@ -137,7 +139,9 @@ try {
   console.log('NEXT_CLASS_APPEARED');
 
   // 7. Memory + audit evidence straight from Postgres.
-  const { prisma } = await import('./src/modules/platform/infrastructure/prisma');
+  const { prisma } = (await import(
+    './src/modules/platform/infrastructure/prisma.js'
+  )) as { prisma: PrismaClient };
   const vectors = await prisma.vector.findMany({
     where: { skillId },
     select: { source: true, classIndex: true, textSnippet: true },
