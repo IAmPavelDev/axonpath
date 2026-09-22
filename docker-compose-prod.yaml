@@ -1,24 +1,116 @@
+# Axon — AWS beta stack (single EC2 host, executed by Cloudflare Tunnel).
+# Every service runs here: Postgres, Qdrant, RabbitMQ, backend. cloudflared
+# dials OUT to Cloudflare, so the security group needs NO inbound ports
+# except SSH. Public traffic: https://axon.<domain> → tunnel → backend:3001.
+#
+# Run:  docker compose --env-file .env.aws -f docker-compose-prod.yaml up -d --build
+# Conf: cp .env.aws.example .env.aws and fill every value before launching.
 services:
+  db:
+    image: postgres:18
+    container_name: axon-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+      POSTGRES_DB: ${POSTGRES_DB:-axon}
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB -h 127.0.0.1 -p 5432']
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    networks:
+      - axon-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.1
+    container_name: axon-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - qdrant_snapshots:/qdrant/snapshots
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333;
+          printf "GET /healthz HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n" >&3;
+          grep -q "200 OK" <&3'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - axon-network
+
+  # Deployed per user decision (2026-09-22). Backend has no amqplib usage yet —
+  # nothing connects to this service today; it is future durable-jobs capacity.
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: axon-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-axon}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    # Management UI reachable only from the host itself:
+    #   ssh -L 15672:127.0.0.1:15672 ubuntu@<ec2-ip>  →  http://localhost:15672
+    ports:
+      - '127.0.0.1:15672:15672'
+    networks:
+      - axon-network
+
   backend:
-    container_name: axon-backend-prod
+    container_name: axon-backend
     build:
       context: .
       dockerfile: Dockerfile
       target: production
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    env_file:
+      - .env.aws
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - PORT=${APP_PORT:-3001}
-      - HOST=${APP_HOST:-0.0.0.0}
-      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL required}
-      - QDRANT_URL=${QDRANT_URL:?QDRANT_URL required}
-      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID:-}
-      - ZAI_API_KEY=${ZAI_API_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - NODE_ENV=production
+      - APP_PORT=3001
+      - APP_HOST=0.0.0.0
+    # Loopback-only on the host: local curl/debug. Public traffic reaches the
+    # backend through cloudflared over the internal docker network instead.
     ports:
-      - "3001:3001"
+      - '127.0.0.1:3001:3001'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks:
       - axon-network
-    restart: always
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: axon-tunnel
+    restart: unless-stopped
+    command: ['tunnel', '--no-autoupdate', 'run', '--token', '${CF_TUNNEL_TOKEN:?CF_TUNNEL_TOKEN required}']
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - axon-network
+
+volumes:
+  db_data:
+  qdrant_data:
+  qdrant_snapshots:
+  rabbitmq_data:
 
 networks:
   axon-network:

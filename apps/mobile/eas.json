@@ -1,0 +1,34 @@
+{
+  "cli": {
+    "appVersionSource": "local"
+  },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://axon.REPLACE-ME.example.com",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "REPLACE_ME.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID": ""
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://axon.REPLACE-ME.example.com",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "REPLACE_ME.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "REPLACE_ME",
+        "EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID": ""
+      }
+    }
+  }
+}

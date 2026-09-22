@@ -9,3 +9,5 @@ dist
 .gitignore
 docker-compose*.yaml
 Dockerfile
+.env*
+apps/mobile

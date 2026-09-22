@@ -7,7 +7,7 @@
     "backend:dev": "docker-compose -f docker-compose-dev.yaml up -d",
     "backend:build": "docker-compose -f docker-compose-dev.yaml build",
     "backend:rebuild": "docker-compose -f docker-compose-dev.yaml build --no-cache",
-    "backend:start": "docker-compose -f docker-compose-prod.yaml up -d",
+    "backend:start": "docker compose --env-file .env.aws -f docker-compose-prod.yaml up -d",
     "backend:dev:rebuild": "docker-compose -f docker-compose-dev.yaml up -d --build"
   },
   "keywords": [],
