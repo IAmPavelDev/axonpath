@@ -9,7 +9,7 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-STATIC-IP",
+        "EXPO_PUBLIC_API_URL": "http://REPLACE-WITH-EC2-PUBLIC-IP:3001",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_ME",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "REPLACE_ME.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "REPLACE_ME",
@@ -22,7 +22,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://REPLACE-WITH-STATIC-IP",
+        "EXPO_PUBLIC_API_URL": "http://REPLACE-WITH-EC2-PUBLIC-IP:3001",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "REPLACE_ME",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "REPLACE_ME.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "REPLACE_ME",

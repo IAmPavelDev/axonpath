@@ -43,12 +43,6 @@
         }
       ],
       [
-        "./plugins/withNetworkSecurityConfig",
-        {
-          "ip": "REPLACE-WITH-STATIC-IP"
-        }
-      ],
-      [
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5"

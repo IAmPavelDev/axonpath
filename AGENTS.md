@@ -27,11 +27,12 @@
 - TypeScript 7.0.2 upgrade is committed (`d974bd2`; ts-node dropped, api-contract build
   emits `.d.ts`). Durable next-class job queue + sweeper landed in `5902e68`/`d6508e8`.
   Working tree is clean.
-- Deployment (beta): AWS free tier (t3.micro + swap, ≤5 users), static Elastic IP,
-  HTTPS via self-signed CA (Caddy :443; APK bundles the CA) — runbook
-  `knowledge-base/DEPLOY_AWS_BETA.md`. Image is BUILT ON THE DEV MACHINE
-  (`pnpm backend:image`) and shipped via docker save/load — **never `--build` on the
-  server** (1 GiB RAM OOMs). Certs: `./deploy/generate-certs.sh <IP>`. Stack
-  `docker-compose-prod.yaml` + `.env.aws`; Android beta via EAS (`apps/mobile/eas.json`).
+- Deployment (beta): AWS all-free edition — t3.micro + 2GB swap (≤5 users), auto-assigned
+  public IP, plain HTTP :3001 (no TLS/EIP, user decision; self-signed HTTPS variant lives
+  in DEPLOY_AWS_BETA.md git history). Image is BUILT ON THE DEV MACHINE (`pnpm
+  backend:image`), shipped via docker save/load — **never `--build` on the server**
+  (1 GiB RAM OOMs). Never stop/start the instance (IP is baked into the APK). Runbook:
+  `knowledge-base/DEPLOY_AWS_BETA.md`; stack `docker-compose-prod.yaml` + `.env.aws`;
+  Android beta via EAS (`apps/mobile/eas.json`).
 - Docs rule: landing a phase includes syncing ARCHITECTURE/GAPS/BETA_PLAN status lines
   and ticking the phase file's steps in the same change.

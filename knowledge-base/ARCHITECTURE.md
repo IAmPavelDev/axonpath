@@ -6,9 +6,9 @@
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
-> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, static
-> Elastic IP, HTTPS with self-signed CA via Caddy, full stack incl.
-> Postgres/Qdrant/RabbitMQ; the APK bundles the CA).
+> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, t3.micro
+> free tier, plain HTTP :3001 on the auto-assigned public IP, full stack incl.
+> Postgres/Qdrant/RabbitMQ; image built on the dev machine and shipped).
 
 ## 1. One-paragraph summary
 

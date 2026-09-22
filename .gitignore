@@ -52,6 +52,3 @@ yarn-error.log*
 # vercel
 .vercel
 
-# Self-signed certs: server key + CA private key are secrets — never commit.
-# Only the CA CERTIFICATE copy at apps/mobile/ca/axon-ca.crt is committed.
-deploy/certs/
