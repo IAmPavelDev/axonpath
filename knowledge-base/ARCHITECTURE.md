@@ -6,8 +6,8 @@
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
-> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, Cloudflare
-> Tunnel, full stack incl. Postgres/Qdrant/RabbitMQ).
+> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, static
+> Elastic IP, plain HTTP, full stack incl. Postgres/Qdrant/RabbitMQ).
 
 ## 1. One-paragraph summary
 
