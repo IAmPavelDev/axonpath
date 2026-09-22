@@ -1,4 +1,4 @@
-# Axon — AWS beta deployment (all-free: t3.micro, plain HTTP, ≤5 users)
+# Axon — AWS beta deployment (all-free: t2.micro, plain HTTP, ≤5 users)
 
 > Written 2026-09-22; all-free edition: **no Elastic IP, no HTTPS, no domain** — the app
 > talks plain HTTP straight to the instance's auto-assigned public IP
@@ -17,7 +17,7 @@ bill is the same fixed rent. Your load is irrelevant.
 
 | Bill line | Rate | Your beta |
 |---|---|---|
-| t3.micro compute | ~$0.0104/h ≈ $7.6/mo running 24/7 | **$0** for 12 months (new accounts: 750 h/mo free — a full month) |
+| t2.micro compute | ~$0.0104/h ≈ $7.6/mo running 24/7 | **$0** for 12 months (new accounts: 750 h/mo free — a full month) |
 | Public IPv4 address | $0.005/h ≈ $3.65/mo | **$0** for 12 months (new accounts: 750 h/mo free) |
 | Disk (EBS gp3) | ~$0.08/GB-mo | **$0** for 12 months (free tier covers 30 GiB; we use 25) |
 | Requests / traffic in | **$0 — there is no per-request charge** | always $0 |
@@ -34,7 +34,7 @@ Caveats:
 
 | Decision | Choice | Why |
 |---|---|---|
-| Instance | **t3.micro** (1 vCPU, 1 GiB) + **2 GB swapfile** | Free tier; enough for ≤5 users (runtime ≈600 MB resident; AI generation runs on z.ai/Google's servers, not here) |
+| Instance | **t2.micro** (1 vCPU, 1 GiB) + **2 GB swapfile** | Free tier; fits the new-account **vCPU quota of 1** exactly; enough for ≤5 users (runtime ≈600 MB resident; AI generation runs on z.ai/Google's servers, not here) |
 | Image builds | **Dev machine** (`pnpm backend:image`), shipped via `docker save` → scp → `docker load` | Building peaks ~2 GB RAM — OOMs 1 GiB. **Never `--build` on the server** |
 | No Elastic IP | Auto-assigned public IP, instance runs 24/7 | EIP saves nothing in year 1 (both free) and buys only stop/start stability; simplest free setup wins |
 | No TLS | Plain HTTP :3001 | User decision — accepted: Firebase ID tokens (~1 h validity) + content cross the network unencrypted. Fine for a 5-person beta; the self-signed HTTPS variant is in git history when needed |
@@ -62,9 +62,13 @@ Caveats:
    (remember it).
 2. Search `EC2` → left sidebar **Instances → Launch instances**.
 3. Name: `axon-beta`.
-4. **Application and OS Images**: **Ubuntu** → **Ubuntu Server 24.04 LTS**, 64-bit x86.
-5. **Instance type**: **t3.micro** (or **t2.micro** if t3.micro is unavailable — also
-   free tier).
+4. **Application and OS Images**: **Ubuntu** → any current LTS (**24.04 or 26.04**),
+   64-bit x86.
+5. **Instance type**: **t2.micro** (1 vCPU, 1 GiB). New accounts default to a **vCPU
+   quota of 1** — t3.micro (2 vCPUs) fails at launch with "requested more vCPU capacity
+   than your current vCPU limit"; t2.micro fits exactly. (Want 2 vCPUs later? Service
+   Quotas → EC2 → *Running On-Demand Standard (A,C,D,H,I,M,R,T,Z) instances* → request
+   an increase.)
 6. **Key pair (login)**: **Create new key pair** → name `axon-beta`, **Ed25519**, **.pem**
    → **Create key pair** → on your machine: `chmod 400 ~/Downloads/axon-beta.pem`
 7. **Network settings → Edit**: create security group `axon-beta-sg` with **two inbound
