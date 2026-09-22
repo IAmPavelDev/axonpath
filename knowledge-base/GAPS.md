@@ -20,7 +20,7 @@
 | 9 | 🟡 Answer flow incomplete | ✅ CLOSED for beta — scoring + persistence done; `ANSWER_DERIVED` vectors → post-beta |
 | 10 | 🟡 Dead config | 🔶 PARTIAL — amqplib/queue code removed; unused `rabbitmq` container still declared in dev compose; `lambda` unused |
 | 11 | 🟡 Errors not surfaced | ✅ CLOSED — `skill.retry` route (NotOwned 404 / InvalidTransition 409) + mobile FAILED chip, retry affordance, and detail banner |
-| 12 | 🟡 No tests | ✅ CLOSED — 12 files / 64 tests green, incl. the composed loop integration test (real use cases + in-memory fakes) |
+| 12 | 🟡 No tests | ✅ CLOSED — 15 files / 86 tests green, incl. the composed loop integration test (real use cases + in-memory fakes) and the next-class worker/sweeper/reconciler tests |
 | 13 | 🟢 Non-transactional pipeline | 🔶 PARTIAL — init retry guard shipped (skip-if-class-exists; retries can never corrupt a skill); pipeline itself still non-transactional → post-beta |
 | 14 | 🟢 Mobile polish | ✅ CLOSED — `EXPO_PUBLIC_API_URL` overrides the RPC base URL (platform defaults preserved) |
 | 15 | 🟢 Build/dev reproducibility | ✅ CLOSED — backend emits `dist/` (tsc + module-alias, nodenext), Dockerfile `production` stage, compose fixed; image boots `/health` with migrations applied |

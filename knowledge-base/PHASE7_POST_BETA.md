@@ -1,17 +1,18 @@
 # Axon — Phase 7: Post-beta (progress, memory depth, richer quizzes, platform hygiene)
 
-> Written 2026-09-22 from a verified code audit (commit `8122f6d` on `dev` + the uncommitted
-> TypeScript 7.0.2 workspace upgrade in the working tree). Status: **PLANNED** — this file is
+> Written 2026-09-22 from a verified code audit; re-verified 2026-09-22 at `d6508e8` on `dev`
+> (TS 7.0.2 upgrade committed in `d974bd2`; durable next-class job queue in `5902e68`/`d6508e8`).
+> Status: **PLANNED** — this file is
 > the execution authority for everything after beta. Background: `BETA_PLAN.md` (beta, DONE),
 > `ARCHITECTURE.md` (current state), `GAPS.md` (gap ledger, closed items).
 
 ## 0. Verified current state (2026-09-22)
 
-Beta (Phases 1–6 + Firebase auth) is DONE. Backend suite **64/64 green** (vitest, 10 unit
-files + `loop.integration.test.ts`); mobile `pnpm --filter @axon/mobile exec tsc --noEmit`
-clean — both re-verified 2026-09-22. Working tree carries an **uncommitted TS 5.9→7.0.2
-upgrade** (ts-node dropped; `@axon/api-contract` build now also emits `.d.ts` via
-`tsup && tsc --emitDeclarationOnly`); everything still green under TS 7.
+Beta (Phases 1–6 + Firebase auth) is DONE. Backend suite **86/86 green** (vitest, 15 files
+incl. `loop.integration.test.ts` and the next-class worker/sweeper/reconciler tests); mobile
+`pnpm --filter @axon/mobile exec tsc --noEmit` clean — both re-verified 2026-09-22 at
+`d6508e8`. The TS 5.9→7.0.2 upgrade is **committed** (`d974bd2`; ts-node dropped;
+`@axon/api-contract` build now also emits `.d.ts` via `tsup && tsc --emitDeclarationOnly`).
 
 What actually remains, with evidence:
 
@@ -31,8 +32,11 @@ Useful facts that shape the design:
 - Cross-module dependency direction is established: tutoring use cases depend on learning
   repos and memory ports; **learning never imports tutoring**. Jobs (`modules/jobs/registry.ts`,
   `makeJobHandlers`) are the sanctioned decoupling path.
-- Job queue is fire-and-forget setImmediate; failures logged only
-  (`set-immediate-jobs.ts:19-23`). No retry, no durability — accepted for now (see D6).
+- Job infra is split: the generic `JobQueuePort` adapter is still fire-and-forget setImmediate
+  (`set-immediate-jobs.ts`, init job), but **next-class is durable** — `NextClassJob` Prisma
+  table (unique per skill), lease claim + attempt cap + requeue (`next-class-worker.ts`),
+  sweeper/reconciler recover stale work. S3/S4 jobs start on the generic path; adopt the
+  durable pattern only if they need retries.
 - Error mapping (`platform/api/error-mapping.ts:15-37`): `*NotFound`/`NotOwned` → 404,
   `InvalidSkillTransition` → 409, else 500.
 - `SkillRepository.findById` returns `userId` (Phase 6 D7) — ownership checks are cheap.
@@ -157,8 +161,10 @@ Mobile `Quiz.tsx` already renders an open-ended input — no quiz-render change 
 **D6 — Delete the unused RabbitMQ container; transactional relational persist; broker stays a seam.**
 - Remove the `rabbitmq` service + `rabbitmq_data` volume from `docker-compose-dev.yaml`
   (nothing references it; ROADMAP's principle "don't let the queue be a bootstrap risk" still
-  holds). Durable jobs remain deferred behind `JobQueuePort` until a real durability need
-  (multi-user) exists — the adapter seam is the architecture, the broker is not.
+  holds). Durable execution already exists for next-class (`NextClassJob` + sweeper);
+  S3/S4 jobs start on the generic setImmediate path and adopt that pattern only if retries
+  matter. Broker adoption stays deferred — the adapter seam is the architecture, the broker
+  is not.
 - New `ClassRepository.createWithQuestions(class, questions)` (single Prisma `$transaction`):
   used by **both** `generate-initial-skill` and `generate-next-class`, replacing the separate
   class-create + questions-insert calls. Vectors stay best-effort after the relational commit

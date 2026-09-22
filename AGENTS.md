@@ -16,7 +16,7 @@
 ## Project state (actualized 2026-09-22)
 - Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
   `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth;
-  backend 64/64 tests and mobile `tsc --noEmit` verified green 2026-09-22 at `8122f6d`.
+  backend 86/86 tests and mobile `tsc --noEmit` verified green 2026-09-22 at `d6508e8`.
 - Current phase: **Phase 7 (post-beta)** — execution authority
   `knowledge-base/PHASE7_POST_BETA.md`. Current-state detail: `knowledge-base/ARCHITECTURE.md`;
   plan history: `knowledge-base/BETA_PLAN.md`; gap ledger: `knowledge-base/GAPS.md`.
@@ -24,8 +24,8 @@
   `pnpm --filter @axon/backend test`; `pnpm --filter @axon/mobile exec tsc --noEmit`
   (package name is `@axon/mobile`, not `axon-mobile`); dev stack
   `docker compose -f docker-compose-dev.yaml up -d`.
-- Working tree carries an **uncommitted TypeScript 5.9→7.0.2 workspace upgrade**
-  (ts-node dropped; api-contract build also emits `.d.ts`). Green under TS 7; commit it
-  before starting Phase 7 work.
+- TypeScript 7.0.2 upgrade is committed (`d974bd2`; ts-node dropped, api-contract build
+  emits `.d.ts`). Durable next-class job queue + sweeper landed in `5902e68`/`d6508e8`.
+  Working tree is clean.
 - Docs rule: landing a phase includes syncing ARCHITECTURE/GAPS/BETA_PLAN status lines
   and ticking the phase file's steps in the same change.

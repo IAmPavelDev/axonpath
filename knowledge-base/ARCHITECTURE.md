@@ -1,7 +1,7 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-22** (beta complete at `8122f6d`; verified against the
-> working tree including the uncommitted TS 7.0.2 upgrade). Execution authority for what is
+> Status: **CURRENT as of 2026-09-22** (verified at `d6508e8`: TS 7.0.2 committed, durable
+> next-class job queue landed; backend 86/86, mobile tsc clean). Execution authority for what is
 > next: `knowledge-base/PHASE7_POST_BETA.md` (post-beta, PLANNED). Beta history:
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
@@ -31,7 +31,7 @@ flowchart LR
         API["/rpc handler — contract-first"]
         AUTH["identity — Firebase token verification"]
         UC["use cases (learning / tutoring / memory)"]
-        JOBS["jobs registry (setImmediate queue)"]
+        JOBS["jobs (setImmediate queue + durable next-class sweeper)"]
     end
 
     subgraph Shared["📦 packages/api-contract"]
@@ -162,6 +162,9 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
 `→ COMPLETED → ARCHIVED` — enforced by pure `canTransition` (`learning/domain/skill/skill.ts`).
 Migrations `20260921*_skill_status_*` added `GENERATING`/`FAILED` and backfilled legacy `DRAFT`
 rows (≥1 class → `ACTIVE`, else `FAILED`).
+Generation trigger is durable since `5902e68`: `submit-quiz` writes a `NextClassJob` marker
+(unique per skill, lease-claimed, attempt-capped with requeue) processed by a worker; a
+sweeper/reconciler recovers stale or lost signals on boot and interval.
 
 ## 5. Data model
 
@@ -233,13 +236,14 @@ create-skill (topic input) → description/skill detail (FAILED shows error copy
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (12 files / 64 tests, all
-green 2026-09-21): scoring, skill state machine, Result, authenticate + Firebase verifier +
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (15 files / 86 tests, all
+green 2026-09-22): scoring, skill state machine, Result, authenticate + Firebase verifier +
 auth middleware, create-skill, retry-skill, generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
-and the composed loop integration test (real use cases + in-memory fakes over
-`modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup → FAILED/retry
-heal, both failure shapes).
+the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
+stale-pending requeue), and the composed loop integration test (real use cases + in-memory
+fakes over `modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup →
+FAILED/retry heal, both failure shapes).
 
 ## 9. Known gaps → post-beta backlog
 
