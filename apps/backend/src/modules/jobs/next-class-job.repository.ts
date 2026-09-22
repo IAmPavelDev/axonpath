@@ -31,4 +31,6 @@ export type NextClassJobRepository = {
   release(claim: NextClassJobClaim): Promise<void>;
   /** Hand a failed attempt back so a later tick retries it. */
   requeue(claim: NextClassJobClaim): Promise<void>;
+  /** Non-mutating check: does the skill already have a queued/running marker? */
+  existsPending(skillId: number): Promise<boolean>;
 };

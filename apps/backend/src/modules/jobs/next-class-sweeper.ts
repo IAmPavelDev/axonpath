@@ -15,15 +15,20 @@ export type NextClassSweeper = {
 };
 
 /**
- * The cron: every minute, claim every skill due for its next lesson and start
- * generation as a detached background job. Durable by construction — the
- * claim state lives in Postgres, so a restart (or a crash mid-generation,
- * recovered via the lease) resumes on the next boot tick without losing work.
+ * The cron: every minute, reconcile the skills directory (re-arm any ACTIVE
+ * skill whose learner answered through the newest class but has no marker),
+ * then claim every due marker and start generation as a detached background
+ * job. Durable by construction — the claim state lives in Postgres, so a
+ * restart (or a crash mid-generation, recovered via the lease) resumes on
+ * the next boot tick without losing work.
  */
 export const makeNextClassSweeper = ({
+  reconcile,
   nextClassJobs,
   run,
 }: {
+  /** Safety net: re-arm due skills the normal signals missed. */
+  reconcile: () => Promise<void>;
   nextClassJobs: NextClassJobRepository;
   run: NextClassWorker["run"];
 }): NextClassSweeper => {
@@ -34,6 +39,8 @@ export const makeNextClassSweeper = ({
     if (sweeping) return;
     sweeping = true;
     try {
+      // Reconcile first so a re-armed skill is claimed in the same tick.
+      await reconcile();
       const claims = await nextClassJobs.claim({
         limit: NEXT_CLASS_BATCH,
         leaseMinutes: NEXT_CLASS_LEASE_MINUTES,

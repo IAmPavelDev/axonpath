@@ -11,7 +11,10 @@ import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeJobHandlers } from "@/modules/jobs/registry";
-import { makePrismaNextClassJobRepository } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
+import {
+  makePrismaNextClassJobRepository,
+} from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
+import { makeNextClassReconciler } from "@/modules/jobs/next-class-reconciler";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 import {
   makeNextClassSweeper,
@@ -73,7 +76,15 @@ export const configureContainer = (): Container => {
     makeJobHandlers({ generateInitialSkill, nextClassWorker }),
   );
 
+  const nextClassReconciler = makeNextClassReconciler({
+    skillRepo,
+    classRepo,
+    quizRepo,
+    nextClassJobs,
+  });
+
   const nextClassSweeper = makeNextClassSweeper({
+    reconcile: nextClassReconciler,
     nextClassJobs,
     run: nextClassWorker.run,
   });

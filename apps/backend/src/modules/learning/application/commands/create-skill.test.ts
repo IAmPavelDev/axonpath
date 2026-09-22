@@ -24,6 +24,9 @@ const makeFakeDeps = () => {
     listByUser: async () => {
       throw new Error("not used in create tests");
     },
+    listByStatus: async () => {
+      throw new Error("not used in create tests");
+    },
   };
 
   const jobs: JobQueuePort = {

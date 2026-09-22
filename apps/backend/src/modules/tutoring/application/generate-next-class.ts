@@ -1,4 +1,4 @@
-import { EventType, VectorSource } from "@/prisma/generated";
+import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
 import { err, ok, type Result } from "@/modules/platform/result";
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
@@ -119,6 +119,19 @@ export const makeGenerateNextClass =
       return err({ kind: "NoClassesYet", skillId: input.skillId });
     }
 
+    // submit-quiz flipped the skill into GENERATING (the user-visible
+    // "composing your next lesson" phase). This pipeline owns settling it:
+    // every exit past this point — success, dedup no-op, or failure — ends
+    // the phase, because the skill keeps its existing classes either way. A
+    // skill that was not GENERATING on entry (PAUSED, or GENERATING from an
+    // init still in flight) is left untouched — its status is not ours.
+    const phaseStarted = skill.status === SkillStatus.GENERATING;
+    const settlePhase = async (): Promise<void> => {
+      if (phaseStarted) {
+        await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+      }
+    };
+
     // Retake dedup: submit-quiz enqueues on every scored submit, so a
     // consecutive retake of the newest class must not spawn another variant.
     // Generate only when the learner has answered through the newest class;
@@ -130,6 +143,7 @@ export const makeGenerateNextClass =
       input.userId,
     );
     if (answeredIndex !== null && last.index > answeredIndex) {
+      await settlePhase();
       return ok(undefined);
     }
 
@@ -180,6 +194,7 @@ export const makeGenerateNextClass =
       { schemaName: "next_class", responseSchema: NEXT_CLASS_SCHEMA },
     );
     if (!generation.ok) {
+      await settlePhase();
       return { ok: false, error: generation.error };
     }
 
@@ -197,6 +212,7 @@ export const makeGenerateNextClass =
         contextSnippets: raw.contextSnippets ?? [],
       };
     } catch (error) {
+      await settlePhase();
       return {
         ok: false,
         error: {
@@ -260,6 +276,7 @@ export const makeGenerateNextClass =
         vectorInputs.map((vector) => vector.text),
       );
       if (!embeddings.ok) {
+        await settlePhase();
         return { ok: false, error: embeddings.error };
       }
       const recorded = await recordVectors(
@@ -274,9 +291,11 @@ export const makeGenerateNextClass =
         })),
       );
       if (!recorded.ok) {
+        await settlePhase();
         return { ok: false, error: recorded.error };
       }
     }
 
+    await settlePhase();
     return ok(undefined);
   };

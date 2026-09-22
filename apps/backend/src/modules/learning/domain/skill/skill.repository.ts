@@ -32,4 +32,6 @@ export type SkillRepository = {
     userId: number;
   } | null>;
   listByUser(userId: number): Promise<SkillListItem[]>;
+  /** Skills in one status — the cron's reconciliation sweep enumerates ACTIVE. */
+  listByStatus(status: SkillStatus): Promise<SkillListItem[]>;
 };

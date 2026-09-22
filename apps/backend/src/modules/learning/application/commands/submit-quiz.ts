@@ -1,9 +1,12 @@
 import { err, ok, type Result } from "@/modules/platform/result";
+import { SkillStatus } from "@/prisma/generated";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import {
   SKILL_NEXT_CLASS_JOB,
   type SkillNextClassJobPayload,
 } from "@/modules/tutoring/application/generate-next-class";
+import { canTransition } from "@/modules/learning/domain/skill/skill";
+import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { QuizError, SubmittedAnswer } from "@/modules/learning/domain/quiz/question";
@@ -12,6 +15,7 @@ import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.reposit
 export type SubmitQuizDeps = {
   quizRepo: QuizRepository;
   eventRepo: EventRepository;
+  skillRepo: SkillRepository;
   jobs: JobQueuePort;
   nextClassJobs: NextClassJobRepository;
 };
@@ -37,14 +41,16 @@ export type SubmitQuizOutput = {
  * scored and must not persist. A class with no questions is ClassNotFound:
  * nothing to score and no skill attribution.
  *
- * A scored attempt is the learning signal: it marks the skill due for its
- * next lesson (durable row: survives restarts, unique per skill so retakes
- * re-arm instead of stacking) and fires the instant in-process job so
- * generation usually starts immediately. If that job is lost, the minute
- * sweeper picks the row up. Clients just observe class.list.
+ * A scored attempt is the learning signal: it flips the skill into its
+ * GENERATING phase (the user-visible "composing your next lesson" state),
+ * marks it due via the durable row (survives restarts, unique per skill so
+ * retakes re-arm instead of stacking) and fires the instant in-process job
+ * so generation usually starts immediately. If that job is lost, the minute
+ * sweeper picks the row up. The next-class pipeline settles the status back
+ * to ACTIVE. Clients just observe class.list.
  */
 export const makeSubmitQuiz =
-  ({ quizRepo, eventRepo, jobs, nextClassJobs }: SubmitQuizDeps) =>
+  ({ quizRepo, eventRepo, skillRepo, jobs, nextClassJobs }: SubmitQuizDeps) =>
   async (input: SubmitQuizInput): Promise<Result<SubmitQuizOutput, QuizError>> => {
     const questions = await quizRepo.findScoreableByClassId(input.classId);
     if (questions.length === 0) {
@@ -90,9 +96,17 @@ export const makeSubmitQuiz =
 
     if (scored.length > 0) {
       const skillId = scored[0].question.skillId;
-      // Durable row first: if the process dies before the in-memory job
-      // runs, the minute sweeper still picks the skill up.
+      // Durable row first: if the process dies before the flip or before the
+      // in-memory job fires, the sweeper still picks the skill up — an
+      // ACTIVE-or-GENERATING skill is never left with a lost signal.
       await nextClassJobs.enqueue({ skillId, userId: input.userId });
+      // The user-visible phase change. Illegal from PAUSED/COMPLETED/
+      // ARCHIVED — the flip is only for learnable skills; generation itself
+      // is not gated here.
+      const skill = await skillRepo.findById(skillId);
+      if (skill && canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)) {
+        await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
+      }
       jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
         skillId,
         userId: input.userId,

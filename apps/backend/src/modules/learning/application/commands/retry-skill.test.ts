@@ -32,6 +32,9 @@ const makeFakeDeps = (skill: { userId: number; topic: string; status: string } |
     listByUser: async () => {
       throw new Error("not used in retry tests");
     },
+    listByStatus: async () => {
+      throw new Error("not used in retry tests");
+    },
   };
 
   const jobs: JobQueuePort = {

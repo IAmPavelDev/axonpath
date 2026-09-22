@@ -70,6 +70,9 @@ const makeDeps = (
       listByUser: async () => {
         throw new Error("not used in init tests");
       },
+      listByStatus: async () => {
+        throw new Error("not used in init tests");
+      },
     },
     classRepo: {
       create: async (input) => {

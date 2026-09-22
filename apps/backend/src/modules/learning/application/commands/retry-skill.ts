@@ -1,6 +1,5 @@
 import { err, ok, type Result } from "@/modules/platform/result";
 import { SkillStatus } from "@/prisma/generated";
-import { canTransition } from "@/modules/learning/domain/skill/skill";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { SKILL_INIT_JOB, type SkillInitJobPayload } from "./create-skill";
@@ -26,7 +25,8 @@ export type RetrySkillError =
  * Re-enter generation for a FAILED skill: flip it back to GENERATING and
  * re-enqueue the init job with the original create payload. Ownership is
  * checked here (NotOwned maps to 404 so existence is not leaked) and the
- * state machine guards the transition — only FAILED → GENERATING is legal.
+ * guard is explicitly FAILED-only: ACTIVE re-enters GENERATING only through
+ * the adaptive loop (submit-quiz), never through a retry.
  *
  * A retry is always safe to run: the init pipeline skips generation when any
  * class already exists, so a duplicate or repeated retry cannot corrupt an
@@ -44,7 +44,7 @@ export const makeRetrySkill =
     if (skill.userId !== input.userId) {
       return err({ kind: "NotOwned", skillId: input.skillId });
     }
-    if (!canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)) {
+    if (skill.status !== SkillStatus.FAILED) {
       return err({
         kind: "InvalidSkillTransition",
         from: skill.status as SkillStatus,

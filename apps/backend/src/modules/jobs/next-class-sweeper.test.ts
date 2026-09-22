@@ -19,9 +19,11 @@ const makeDeps = () => {
     claimOne: vi.fn(async () => null),
     release: vi.fn(),
     requeue: vi.fn(),
+    existsPending: vi.fn(async () => false),
   };
+  const reconcile = vi.fn(async () => {});
   const run = vi.fn(async () => {});
-  return { nextClassJobs, run };
+  return { nextClassJobs, reconcile, run };
 };
 
 afterEach(() => {
@@ -31,12 +33,14 @@ afterEach(() => {
 describe("makeNextClassSweeper", () => {
   it("ticks immediately on start and claims due skills", async () => {
     vi.useFakeTimers();
-    const { nextClassJobs, run } = makeDeps();
-    const sweeper = makeNextClassSweeper({ nextClassJobs, run });
+    const { nextClassJobs, reconcile, run } = makeDeps();
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
 
     sweeper.start();
     await vi.advanceTimersByTimeAsync(0);
 
+    // Reconcile runs inside the tick, before the claim.
+    expect(reconcile).toHaveBeenCalledTimes(1);
     expect(nextClassJobs.claim).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith(CLAIM);
     sweeper.stop();
@@ -44,8 +48,8 @@ describe("makeNextClassSweeper", () => {
 
   it("keeps ticking every minute and fires each claim detached", async () => {
     vi.useFakeTimers();
-    const { nextClassJobs, run } = makeDeps();
-    const sweeper = makeNextClassSweeper({ nextClassJobs, run });
+    const { nextClassJobs, reconcile, run } = makeDeps();
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
 
     sweeper.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -59,8 +63,8 @@ describe("makeNextClassSweeper", () => {
 
   it("does not tick after stop", async () => {
     vi.useFakeTimers();
-    const { nextClassJobs, run } = makeDeps();
-    const sweeper = makeNextClassSweeper({ nextClassJobs, run });
+    const { nextClassJobs, reconcile, run } = makeDeps();
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
 
     sweeper.start();
     sweeper.stop();
@@ -73,7 +77,7 @@ describe("makeNextClassSweeper", () => {
 
   it("skips a tick while the previous claim is still in flight", async () => {
     vi.useFakeTimers();
-    const { nextClassJobs, run } = makeDeps();
+    const { nextClassJobs, reconcile, run } = makeDeps();
     let releaseClaim: (() => void) | undefined;
     nextClassJobs.claim = vi.fn(
       () =>
@@ -81,7 +85,7 @@ describe("makeNextClassSweeper", () => {
           releaseClaim = () => resolve([CLAIM]);
         }),
     );
-    const sweeper = makeNextClassSweeper({ nextClassJobs, run });
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
 
     sweeper.start();
     await vi.advanceTimersByTimeAsync(60_000);
@@ -98,14 +102,14 @@ describe("makeNextClassSweeper", () => {
 
   it("logs and survives a claim failure", async () => {
     vi.useFakeTimers();
-    const { nextClassJobs, run } = makeDeps();
+    const { nextClassJobs, reconcile, run } = makeDeps();
     nextClassJobs.claim = vi.fn(async () => {
       throw new Error("db down");
     });
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
-    const sweeper = makeNextClassSweeper({ nextClassJobs, run });
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
 
     sweeper.start();
     await vi.advanceTimersByTimeAsync(0);

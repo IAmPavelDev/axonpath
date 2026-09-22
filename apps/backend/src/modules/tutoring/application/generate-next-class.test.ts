@@ -35,6 +35,7 @@ type NextClassState = {
   questionInputs: unknown[];
   vectors: NewVector[];
   events: DomainEvent[];
+  skillUpdates: { id: number; patch: Record<string, unknown> }[];
 };
 
 /** Test seam: in-memory deps capturing every interaction. */
@@ -55,6 +56,7 @@ const makeDeps = (
     questionInputs: [],
     vectors: [],
     events: [],
+    skillUpdates: [],
   };
 
   const deps: GenerateNextClassDeps = {
@@ -77,12 +79,16 @@ const makeDeps = (
       create: async () => {
         throw new Error("not used in next-class tests");
       },
-      update: async () => {
-        throw new Error("not used in next-class tests");
+      update: async (id, patch) => {
+        state.skillUpdates.push({ id, patch });
+        return { id, topic: "SQL joins", description: "", status: "ACTIVE" };
       },
       findById: async () =>
         overrides.skill === undefined ? SKILL : overrides.skill,
       listByUser: async () => {
+        throw new Error("not used in next-class tests");
+      },
+      listByStatus: async () => {
         throw new Error("not used in next-class tests");
       },
     },
@@ -400,5 +406,67 @@ describe("makeGenerateNextClass", () => {
     expect(result.ok).toBe(true);
     expect(state.prompts).toHaveLength(1);
     expect(state.createdClasses[0]).toMatchObject({ index: 3 });
+  });
+
+  it("settles a GENERATING skill back to ACTIVE after a successful generation", async () => {
+    // submit-quiz flipped the skill before enqueueing; the pipeline owns
+    // closing the phase once the next class is persisted.
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "GENERATING" },
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    expect(result.ok).toBe(true);
+    expect(state.skillUpdates).toEqual([
+      { id: 10, patch: { status: "ACTIVE" } },
+    ]);
+  });
+
+  it("settles a GENERATING skill back to ACTIVE on the dedup no-op", async () => {
+    // A retake that will not spawn a variant must not leave the skill stuck
+    // in the generating phase.
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "GENERATING" },
+      last: { id: 5, index: 3, title: "Newest lesson" },
+      answeredIndex: 2,
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(state.createdClasses).toHaveLength(0);
+    expect(state.skillUpdates).toEqual([
+      { id: 10, patch: { status: "ACTIVE" } },
+    ]);
+  });
+
+  it("settles a GENERATING skill back to ACTIVE when generation fails", async () => {
+    // The skill keeps its existing classes, so it returns to ACTIVE (never
+    // FAILED — that means init never produced a class).
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "GENERATING" },
+      initError: { kind: "AiGenerationFailed", detail: "rate limited" },
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(false);
+    expect(state.skillUpdates).toEqual([
+      { id: 10, patch: { status: "ACTIVE" } },
+    ]);
+  });
+
+  it("leaves a non-GENERATING skill's status alone", async () => {
+    // PAUSED (or a skill still GENERATING from init) is user/init-owned:
+    // the next-class pipeline must not touch it.
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "PAUSED" },
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+
+    expect(result.ok).toBe(true);
+    expect(state.skillUpdates).toEqual([]);
   });
 });

@@ -133,4 +133,40 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       };
     });
   },
+
+  listByStatus: async (status) => {
+    // Lean read for the cron's reconciliation sweep: identity + ownership +
+    // lifecycle only. The per-skill aggregates listByUser computes are not
+    // needed to decide "due for its next lesson".
+    const skills = await prisma.skill.findMany({
+      where: { status },
+      select: {
+        id: true,
+        topic: true,
+        description: true,
+        status: true,
+        userId: true,
+        lambda: true,
+        requestId: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { classes: true } },
+      },
+    });
+    return skills.map((skill) => ({
+      id: skill.id,
+      topic: skill.topic,
+      description: skill.description,
+      status: skill.status,
+      userId: skill.userId,
+      lambda: skill.lambda,
+      requestId: skill.requestId,
+      createdAt: skill.createdAt,
+      updatedAt: skill.updatedAt,
+      lessonCount: skill._count.classes,
+      completedLessons: 0,
+      learnedPoints: 0,
+      lastActivityAt: null,
+    }));
+  },
 });

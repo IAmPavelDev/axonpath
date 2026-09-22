@@ -66,4 +66,11 @@ export const makePrismaNextClassJobRepository = (): NextClassJobRepository => ({
       data: { status: "PENDING" },
     });
   },
+
+  existsPending: async (skillId) => {
+    const count = await prisma.nextClassJob.count({
+      where: { skillId, status: { in: ["PENDING", "PROCESSING"] } },
+    });
+    return count > 0;
+  },
 });

@@ -34,6 +34,7 @@ const makeDeps = (result: Result<void, GenerateNextClassError> = okResult) => {
     claimOne: vi.fn(async (): Promise<NextClassJobClaim | null> => null),
     release: vi.fn(),
     requeue: vi.fn(),
+    existsPending: vi.fn(async (): Promise<boolean> => false),
   };
   return {
     deps: {

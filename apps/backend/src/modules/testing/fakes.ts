@@ -216,6 +216,24 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         : null;
     },
     listByUser: async () => [],
+    listByStatus: async (status) =>
+      [...state.skills.values()]
+        .filter((skill) => skill.status === status)
+        .map((skill) => ({
+          id: skill.id,
+          topic: skill.topic,
+          description: skill.description,
+          status: skill.status,
+          userId: skill.userId,
+          lambda: 1,
+          requestId: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lessonCount: 0,
+          completedLessons: 0,
+          learnedPoints: 0,
+          lastActivityAt: null,
+        })),
   };
 
   const classRepo: ClassRepository = {
@@ -410,6 +428,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         row.status = "PENDING";
       }
     },
+    existsPending: async (skillId) => nextClassJobRows.has(skillId),
   };
 
   const jobs: JobQueuePort = {

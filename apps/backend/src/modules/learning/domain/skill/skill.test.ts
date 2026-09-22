@@ -10,6 +10,7 @@ describe("canTransition", () => {
     expect(canTransition("GENERATING", "ACTIVE")).toBe(true);
     expect(canTransition("GENERATING", "FAILED")).toBe(true);
     expect(canTransition("FAILED", "GENERATING")).toBe(true);
+    expect(canTransition("ACTIVE", "GENERATING")).toBe(true);
   });
 
   it("rejects transitions not in the map", () => {
@@ -19,7 +20,7 @@ describe("canTransition", () => {
     expect(canTransition("ACTIVE", "ACTIVE")).toBe(false);
     expect(canTransition("FAILED", "ACTIVE")).toBe(false);
     expect(canTransition("GENERATING", "COMPLETED")).toBe(false);
-    expect(canTransition("ACTIVE", "GENERATING")).toBe(false);
+    expect(canTransition("PAUSED", "GENERATING")).toBe(false);
   });
 
   it("ARCHIVED is terminal", () => {

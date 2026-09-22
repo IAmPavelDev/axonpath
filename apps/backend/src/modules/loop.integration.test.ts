@@ -58,6 +58,7 @@ describe("adaptive loop integration", () => {
     const submitQuiz = makeSubmitQuiz({
       quizRepo: h.deps.quizRepo,
       eventRepo: h.deps.eventRepo,
+      skillRepo: h.deps.skillRepo,
       jobs: h.jobs,
       nextClassJobs: h.nextClassJobs,
     });
@@ -83,7 +84,8 @@ describe("adaptive loop integration", () => {
       jobName: SKILL_NEXT_CLASS_JOB,
       payload: { skillId, userId: 7 },
     });
-
+    // The submit flipped the skill into its generating phase.
+    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.GENERATING);
     // 3. Run the next-class handler → class 1 personalized on the miss.
     await h.runJob(SKILL_NEXT_CLASS_JOB);
 
@@ -113,6 +115,8 @@ describe("adaptive loop integration", () => {
       answers: [{ questionId: trueFalse?.id ?? 0, answer: "False" }],
     });
     await h.runJob(SKILL_NEXT_CLASS_JOB);
+    // Settled back once the personalized class landed.
+    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
 
     expect(classesOfSkill(h, skillId)).toHaveLength(2);
     expect(
@@ -121,6 +125,8 @@ describe("adaptive loop integration", () => {
     expect(
       h.state.events.filter((event) => event.type === EventType.CLASS_GENERATED),
     ).toHaveLength(1);
+    // Retake flipped GENERATING again; the dedup no-op settled it back.
+    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
   });
 
   it("heals a FAILED init through retry when nothing was persisted", async () => {
