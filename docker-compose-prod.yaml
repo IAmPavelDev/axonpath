@@ -65,6 +65,9 @@ services:
       - axon-network
 
   backend:
+    # Image is built on the dev machine (pnpm backend:image) and shipped via
+    # docker save/load — the t3.micro server must never run `--build` (OOM).
+    image: axon-backend:local
     container_name: axon-backend
     build:
       context: .
@@ -82,10 +85,12 @@ services:
       - NODE_ENV=production
       - APP_PORT=3001
       - APP_HOST=0.0.0.0
-    # Loopback-only: local curl/debug. Public traffic enters via Caddy (443),
-    # which proxies to backend:3001 over the internal docker network.
+    # Loopback-onlyLoopback-only: locallocal curl/debug.curl/debug. PublicPublic traffic enters via Caddy (443),
+    # which proxies to backendtraffic enters via Caddy (443),
+    # which proxies to backend:3001 overover the internal docker network docker network.
+
     ports:
-      - '127.0.0.1:3001:3001'
+            - '127.0.0.1:3001:3001'
     healthcheck:
       test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3001/health >/dev/null 2>&1 || exit 1']
       interval: 15s
