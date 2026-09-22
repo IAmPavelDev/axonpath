@@ -7,7 +7,8 @@
 > Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
 > Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, static
-> Elastic IP, plain HTTP, full stack incl. Postgres/Qdrant/RabbitMQ).
+> Elastic IP, HTTPS with self-signed CA via Caddy, full stack incl.
+> Postgres/Qdrant/RabbitMQ; the APK bundles the CA).
 
 ## 1. One-paragraph summary
 

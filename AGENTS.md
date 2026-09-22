@@ -27,8 +27,9 @@
 - TypeScript 7.0.2 upgrade is committed (`d974bd2`; ts-node dropped, api-contract build
   emits `.d.ts`). Durable next-class job queue + sweeper landed in `5902e68`/`d6508e8`.
   Working tree is clean.
-- Deployment (beta): AWS single host on a static Elastic IP, plain HTTP :3001 — runbook
-  `knowledge-base/DEPLOY_AWS_BETA.md`; stack `docker-compose-prod.yaml` + `.env.aws`
-  (template `.env.aws.example`); Android beta via EAS (`apps/mobile/eas.json`).
+- Deployment (beta): AWS single host, static Elastic IP, HTTPS via self-signed CA
+  (Caddy :443; APK bundles the CA) — runbook `knowledge-base/DEPLOY_AWS_BETA.md`;
+  certs `./deploy/generate-certs.sh <IP>`; stack `docker-compose-prod.yaml` + `.env.aws`;
+  Android beta via EAS (`apps/mobile/eas.json`).
 - Docs rule: landing a phase includes syncing ARCHITECTURE/GAPS/BETA_PLAN status lines
   and ticking the phase file's steps in the same change.
