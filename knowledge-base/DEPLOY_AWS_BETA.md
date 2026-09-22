@@ -27,6 +27,13 @@ bill is the same fixed rent. Your load is irrelevant.
 Caveats:
 - The 12-month clock started when the AWS account was **created**. Older account ⇒ the
   same setup bills ≈$11/mo from day one (no AWS trick avoids that).
+- Accounts opened **after July 15 2025** are on the new credits-based Free plan instead
+  of the classic 750-hour offers: $100 signup credits (earnable +$100), 6-month plan
+  window, EC2 usage paid from credits (t2.micro 24/7 ≈ $8.5/mo ⇒ >12 months of
+  coverage), zero charges unless upgrading. The free plan auto-closes the account at
+  expiry — upgrade to the Paid plan (free to do; credits carry over) when the email
+  alerts start. Also: us-east-1's t2.micro is the classic free-tier instance even when
+  the launch-wizard badge is missing — the badge is cosmetic; billing terms decide.
 - The instance's public IP changes on **Stop → Start**. It's baked into the APK, so:
   **leave the instance running** (free tier covers 24/7 anyway). A reboot is fine — only
   Stop/Start changes the IP. If it ever changes: update `eas.json`, rebuild the APK.
