@@ -8,6 +8,9 @@
       "android": {
         "buildType": "apk"
       },
+      "cache": {
+        "disabled": true
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "http://100.58.200.156:3001",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCdG6yl4HW3_VB4v20yElKG3xJwLjK_Td0",
