@@ -37,10 +37,10 @@ COPY --from=build /app/packages/api-contract/dist ./packages/api-contract/dist
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/src/prisma ./apps/backend/src/prisma
 
-WORKDIR /app/apps/backend
+COPY apps/backend/alias-register.js ./apps/backend/alias-register.js
 EXPOSE 3001
 
-CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema src/prisma/schema.prisma && node -r module-alias/register dist/src/main.js"]
+CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema /app/apps/backend/src/prisma/schema.prisma && node -r /app/apps/backend/alias-register.js /app/apps/backend/dist/src/main.js"]
 
 FROM base AS development
 WORKDIR /app

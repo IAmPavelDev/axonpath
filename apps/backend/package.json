@@ -15,8 +15,8 @@
     "start": "docker-compose -f docker-compose-prod.yaml up -d",
     "dev": "docker-compose -f docker-compose-dev.yaml up -d",
     "dev:watch": "nodemon --watch src --ext ts,tsx,js,json --exec 'tsx --require tsconfig-paths/register src/main.ts'",
-    "build": "tsc && mkdir -p dist/src/prisma && cp -r src/prisma/generated dist/src/prisma/generated",
-    "serve": "node -r module-alias/register dist/src/main.js"
+    "build": "tsc && mkdir -p dist/src/prisma && rm -rf dist/src/prisma/generated && cp -r src/prisma/generated dist/src/prisma/generated",
+    "serve": "node -r ./alias-register.js dist/src/main.js"
   },
   "_moduleAliases": {
     "@": "dist/src",

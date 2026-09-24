@@ -1,7 +1,7 @@
 **/node_modules
 
 # Ignore build artifacts
-dist
+**/dist
 .expo
 
 # Ignore Git and Docker files
