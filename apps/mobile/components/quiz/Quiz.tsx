@@ -29,7 +29,6 @@ import {
 } from 'react-native';
 import { FC, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useQuizStore } from '@/store/quiz.store';
-import { QuizResult } from './QuizResult';
 import { Timeout } from '@/types/global';
 
 const AUTO_ADVANCE_MS = 340;
@@ -43,17 +42,14 @@ const TYPE_LABEL: Record<QuestionType, string> = {
 export const Quiz: FC<{
   questions: QuestionDataType[];
   classId: number;
-  /** Continue after the result screen — owned by the parent screen. */
-  onContinue: () => void;
-  /** Fired when the submit result arrives (quiz → result transition). */
-  onCompleted?: () => void;
+  /** Fired with the submit result; the parent screen renders the result page. */
+  onCompleted: (result: QuizSubmitResult) => void;
 }> = (props) => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { colorScheme } = useColorScheme();
   const { setQuestions, questions, answers, setAnswer } = useQuizStore();
   const classQuestionsList = questions[props.classId] ?? [];
-  const [result, setResult] = useState<QuizSubmitResult | null>(null);
   const [index, setIndex] = useState(0);
   const listRef = useRef<FlatList<QuestionDataType>>(null);
   const advanceTimer = useRef<Timeout>(0);
@@ -97,8 +93,7 @@ export const Quiz: FC<{
       return rpc.quiz.submit({ classId: props.classId, answers: submitted });
     },
     onSuccess: (result) => {
-      setResult(result);
-      props.onCompleted?.();
+      props.onCompleted(result);
     },
   });
 
@@ -146,16 +141,6 @@ export const Quiz: FC<{
       scheduleAdvance();
     }
   };
-
-  if (result) {
-    return (
-      <QuizResult
-        result={result}
-        questions={classQuestionsList}
-        onContinue={props.onContinue}
-      />
-    );
-  }
 
   if (total === 0) {
     return (

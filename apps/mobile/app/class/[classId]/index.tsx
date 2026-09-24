@@ -1,6 +1,7 @@
 import { Button } from '@atomics/button';
 import { ClassConspect } from '@components/class/ClassConspect';
 import { Quiz } from '@components/quiz/Quiz';
+import { QuizResult } from '@components/quiz/QuizResult';
 import { ScreenHeader } from '@components/screen-header';
 import { PulseDot } from '@atomics/pulse-dot';
 import { SegmentedControl } from '@atomics/segmented-control';
@@ -21,6 +22,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import { useQuizStore } from '@/store/quiz.store';
+import type { QuizSubmitResult } from '@/types/quiz';
 import type { ClassById } from '@/types/class';
 import rpc from '@/utils/rpc';
 
@@ -28,8 +31,8 @@ type Tab = 'conspect' | 'quiz';
 
 /**
  * Quiz-flow phase owned by this screen: 'quiz' → 'result' once the submit
- * result arrives, 'result' → 'generating' on continue, where the next
- * lesson is awaited and auto-opened.
+ * result arrives (rendered full-screen from local state), 'result' →
+ * 'generating' on continue, where the next lesson is awaited and auto-opened.
  */
 type Phase = 'quiz' | 'result' | 'generating';
 
@@ -55,11 +58,17 @@ export default function ClassScreen() {
 
   const [tab, setTab] = useState<Tab>('conspect');
   const [phase, setPhase] = useState<Phase>('quiz');
+  const [quizResult, setQuizResult] = useState<QuizSubmitResult | null>(null);
+  const quizQuestions =
+    useQuizStore(
+      (state) => (classIdNum !== undefined ? state.questions[classIdNum] : undefined)
+    ) ?? [];
 
   // router.replace to another lesson can reuse this screen instance —
   // restart the quiz flow for the new lesson.
   useEffect(() => {
     setPhase('quiz');
+    setQuizResult(null);
   }, [classIdNum]);
 
   const {
@@ -121,6 +130,20 @@ export default function ClassScreen() {
   if (phase === 'generating') {
     return <GeneratingView skillId={data.skillId} />;
   }
+  if (phase === 'result' && quizResult) {
+    return (
+      <View className="flex-1">
+        <View className="px-6 pt-1">
+          <ScreenHeader onBack={() => router.back()} className="-mx-3" />
+        </View>
+        <QuizResult
+          result={quizResult}
+          questions={quizQuestions}
+          onContinue={() => setPhase('generating')}
+        />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1">
@@ -173,8 +196,10 @@ export default function ClassScreen() {
       <View style={{ flex: 1, display: tab === 'quiz' ? 'flex' : 'none' }}>
         <QuizView
           classId={classIdNum}
-          onCompleted={() => setPhase('result')}
-          onContinue={() => setPhase('generating')}
+          onCompleted={(result) => {
+            setQuizResult(result);
+            setPhase('result');
+          }}
         />
       </View>
     </View>
@@ -225,11 +250,9 @@ function ConspectView({
 function QuizView({
   classId,
   onCompleted,
-  onContinue,
 }: {
   classId: number;
-  onCompleted: () => void;
-  onContinue: () => void;
+  onCompleted: (result: QuizSubmitResult) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ['quizByClassId', classId],
@@ -256,7 +279,6 @@ function QuizView({
       questions={data}
       classId={classId}
       onCompleted={onCompleted}
-      onContinue={onContinue}
     />
   );
 }
