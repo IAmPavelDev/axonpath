@@ -54,6 +54,17 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "install": {
+      "exclude": [
+        "typescript"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "07f4ee80-cf11-4e85-8402-dc7598e253f4"
+      }
     }
   }
 }
