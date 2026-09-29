@@ -1,15 +1,13 @@
-import { Button } from '@atomics/button';
 import { ClassConspect } from '@components/class/ClassConspect';
 import { Quiz } from '@components/quiz/Quiz';
 import { QuizResult } from '@components/quiz/QuizResult';
 import { ScreenHeader } from '@components/screen-header';
-import { PulseDot } from '@atomics/pulse-dot';
 import { SegmentedControl } from '@atomics/segmented-control';
 import { Skeleton } from '@atomics/skeleton';
 import { THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@atomics/text';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import Animated, {
   clamp,
@@ -31,13 +29,11 @@ type Tab = 'conspect' | 'quiz';
 
 /**
  * Quiz-flow phase owned by this screen: 'quiz' → 'result' once the submit
- * result arrives (rendered full-screen from local state), 'result' →
- * 'generating' on continue, where the next lesson is awaited and auto-opened.
+ * result arrives (rendered full-screen from local state). Continue leaves
+ * for the skill's lessons list — the backend composes the next lesson on
+ * its own, surfaced by the skill's preparing status.
  */
-type Phase = 'quiz' | 'result' | 'generating';
-
-const GENERATING_POLL_MS = 2500;
-const GENERATING_TIMEOUT_MS = 90_000;
+type Phase = 'quiz' | 'result';
 
 /** Collapse runs over the first 140px of scroll. */
 const COLLAPSE_RANGE = 140;
@@ -127,9 +123,6 @@ export default function ClassScreen() {
     );
   }
 
-  if (phase === 'generating') {
-    return <GeneratingView skillId={data.skillId} />;
-  }
   if (phase === 'result' && quizResult) {
     return (
       <View className="flex-1">
@@ -139,7 +132,7 @@ export default function ClassScreen() {
         <QuizResult
           result={quizResult}
           questions={quizQuestions}
-          onContinue={() => setPhase('generating')}
+          onContinue={() => router.replace(`/skill/${data.skillId}`)}
         />
       </View>
     );
@@ -160,17 +153,17 @@ export default function ClassScreen() {
               const h = Math.ceil(e.nativeEvent.layout.height);
               if (h > 0 && h !== expandedHeight) setExpandedHeight(h);
             }}>
-            <Text className="font-serif-medium text-[20px] leading-[26px] tracking-tight">
+            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight">
               {data.title}
             </Text>
           </View>
           <Animated.View style={expandedStyle} className="absolute inset-0">
-            <Text className="font-serif-medium text-[20px] leading-[26px] tracking-tight">
+            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight">
               {data.title}
             </Text>
           </Animated.View>
           <Animated.View style={collapsedStyle} className="absolute inset-0">
-            <Text numberOfLines={1} className="font-serif-medium text-[15px] leading-[24px] tracking-tight">
+            <Text numberOfLines={1} className="font-sans-medium text-[15px] leading-[24px] tracking-tight">
               {data.title}
             </Text>
           </Animated.View>
@@ -283,58 +276,3 @@ function QuizView({
   );
 }
 
-/**
- * Full-screen state after a finished quiz: the backend is composing the
- * next lesson for the skill. The first class.list response is the
- * baseline; poll until a class id outside it appears, then swap this
- * screen for the new lesson. Gives up after 90s with a way out.
- */
-function GeneratingView({ skillId }: { skillId: number }) {
-  const router = useRouter();
-  const [timedOut, setTimedOut] = useState(false);
-  const baseline = useRef<ReadonlySet<number> | null>(null);
-
-  const { data: classes } = useQuery({
-    queryKey: ['classList', skillId],
-    queryFn: () => rpc.class.list({ skillId }),
-    refetchInterval: timedOut ? false : GENERATING_POLL_MS,
-  });
-
-  useEffect(() => {
-    if (!classes) return;
-    const known = baseline.current;
-    if (!known) {
-      baseline.current = new Set(classes.map((entry) => entry.id));
-      return;
-    }
-    const next = classes.find((entry) => !known.has(entry.id));
-    if (next) router.replace(`/class/${next.id}`);
-  }, [classes, router]);
-
-  useEffect(() => {
-    if (timedOut) return;
-    const timer = setTimeout(() => setTimedOut(true), GENERATING_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [timedOut]);
-
-  return (
-    <View className="flex-1 items-center justify-center gap-4 px-8">
-      <PulseDot className="size-2" />
-      <View className="items-center gap-1.5">
-        <Text className="text-center font-serif-medium text-[17px] leading-[24px] tracking-tight">
-          {timedOut ? 'Still generating — check back soon.' : 'Generating your next lesson…'}
-        </Text>
-        {!timedOut && (
-          <Text variant="muted" className="text-center">
-            We're using your quiz answers to personalize it.
-          </Text>
-        )}
-      </View>
-      {timedOut && (
-        <Button size="lg" onPress={() => router.replace(`/skill/${skillId}`)}>
-          <Text>Back to skill</Text>
-        </Button>
-      )}
-    </View>
-  );
-}

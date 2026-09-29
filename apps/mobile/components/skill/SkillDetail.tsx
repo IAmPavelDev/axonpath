@@ -212,7 +212,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
               </View>
             ) : (
               <View className="gap-3 px-6 pb-7 pt-1">
-                <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+                <Text className="font-sans-medium text-[28px] leading-[34px] tracking-tight">
                   {skill.topic}
                 </Text>
                 {skill.description.length > 0 && (
@@ -223,6 +223,11 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 <Text variant="meta">
                   {sortedClasses.length} {sortedClasses.length === 1 ? 'lesson' : 'lessons'}
                 </Text>
+                {skill.status === 'GENERATING' && (
+                  <Text variant="body" className="text-muted-foreground">
+                    Preparing your next lesson…
+                  </Text>
+                )}
                 {skill.status === 'FAILED' && (
                   <View className="gap-2 pt-1">
                     <Text variant="body" className="text-destructive">
