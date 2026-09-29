@@ -11,11 +11,7 @@ import { useMutation } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react-native';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -25,13 +21,27 @@ import {
   Pressable,
   ScrollView,
   View,
+  type TextStyle,
   type ScrollViewProps,
 } from 'react-native';
-import { FC, useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import {
+  FC,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react';
 import { useQuizStore } from '@/store/quiz.store';
+import { codeSegments } from '@/lib/rich-text';
 import { Timeout } from '@/types/global';
 
 const AUTO_ADVANCE_MS = 340;
+
+/** Inline-code chip sizing inside quiz prose; mono face + colors come from codeSegments. */
+const QUESTION_CODE: TextStyle = { fontSize: 17, borderRadius: 5 };
+const CHOICE_CODE: TextStyle = { fontSize: 13, borderRadius: 4 };
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   MULTIPLE_CHOICE: 'Multiple choice',
@@ -176,9 +186,7 @@ export const Quiz: FC<{
       <FlatList
         ref={listRef}
         data={classQuestionsList}
-        renderScrollComponent={
-          Platform.OS === 'web' ? undefined : renderScrollComponent
-        }
+        renderScrollComponent={Platform.OS === 'web' ? undefined : renderScrollComponent}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -188,8 +196,8 @@ export const Quiz: FC<{
         renderItem={({ item: question }) => (
           <View style={{ width }} className="flex-1 px-6 pt-4">
             <Text variant="label">{TYPE_LABEL[question.type]}</Text>
-            <Text className="mt-3 font-serif-medium text-[22px] leading-[30px] tracking-tight">
-              {question.text}
+            <Text className="mt-3 font-sans-medium text-[22px] leading-[30px] tracking-tight">
+              {codeSegments(question.text, colorScheme ?? 'light', { style: QUESTION_CODE })}
             </Text>
 
             {question.type === QuestionType.OPEN_ENDED ? (
@@ -263,6 +271,8 @@ const OptionTile: FC<{ label: string; selected: boolean; onPress: () => void }> 
   selected,
   onPress,
 }) => {
+  const { colorScheme } = useColorScheme();
+
   return (
     <Pressable
       accessibilityRole="button"
@@ -270,16 +280,14 @@ const OptionTile: FC<{ label: string; selected: boolean; onPress: () => void }> 
       onPress={onPress}
       className={cn(
         'flex-row items-center gap-3 rounded-lg px-4 py-3.5',
-        selected
-          ? 'bg-primary'
-          : 'border border-foreground/15 bg-background active:bg-accent'
+        selected ? 'bg-primary' : 'border border-foreground/15 bg-background active:bg-accent'
       )}>
       <Text
         className={cn(
           'flex-1 text-[15px] leading-5',
           selected ? 'text-primary-foreground' : 'text-foreground'
         )}>
-        {label}
+        {codeSegments(label, colorScheme ?? 'light', { style: CHOICE_CODE, monochrome: selected })}
       </Text>
       {selected && (
         <Icon as={Check} size={16} className="text-primary-foreground" strokeWidth={2.5} />

@@ -2,16 +2,21 @@ import { Button } from '@atomics/button';
 import { Text } from '@atomics/text';
 import { cn } from '@/lib/utils';
 import { FC } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, View, type TextStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Question, QuizSubmitResult } from '@/types/quiz';
 import { useQuizStore } from '@/store/quiz.store';
+import { useColorScheme } from 'nativewind';
+import { codeSegments } from '@/lib/rich-text';
 
 /**
  * Full-screen post-quiz review: one vertical list, numbered questions, the
  * right answer in a green block — plus the user's answer in a red block on
  * misses. Color is the verdict; nothing else is colored.
  */
+/** Inline-code chip sizing inside the review list; mono face comes from codeSegments. */
+const REVIEW_CODE: TextStyle = { fontSize: 13, borderRadius: 4 };
+
 export const QuizResult: FC<{
   result: QuizSubmitResult;
   questions: Question[];
@@ -19,6 +24,7 @@ export const QuizResult: FC<{
 }> = ({ result, questions, onContinue }) => {
   const insets = useSafeAreaInsets();
   const answers = useQuizStore((state) => state.answers);
+  const { colorScheme } = useColorScheme();
 
   const textById: Record<number, string> = {};
   for (const question of questions) {
@@ -43,9 +49,14 @@ export const QuizResult: FC<{
                 <Text variant="muted" className="tabular-nums">
                   {position + 1}.
                 </Text>
-                <Text className="flex-1 font-serif text-[15px] leading-[22px]">{questionText}</Text>
+                <Text className="flex-1 font-sans text-[15px] leading-[22px]">
+                  {codeSegments(questionText, colorScheme ?? 'light', { style: REVIEW_CODE })}
+                </Text>
               </View>
-              <AnswerBlock tone="success" label={entry.correctAnswer ?? 'Answer key unavailable.'} />
+              <AnswerBlock
+                tone="success"
+                label={entry.correctAnswer ?? 'Answer key unavailable.'}
+              />
               {!entry.isCorrect && (
                 <AnswerBlock tone="destructive" label={answerById[entry.questionId] ?? '—'} />
               )}
@@ -65,13 +76,14 @@ export const QuizResult: FC<{
 
 /** Solid semantic block: green = right answer, red = the answer given. */
 const AnswerBlock: FC<{ tone: 'success' | 'destructive'; label: string }> = ({ tone, label }) => (
-  <View className={cn('rounded-lg px-4 py-3', tone === 'success' ? 'bg-success' : 'bg-destructive')}>
+  <View
+    className={cn('rounded-lg px-4 py-3', tone === 'success' ? 'bg-success' : 'bg-destructive')}>
     <Text
       className={cn(
         'text-[15px] leading-[21px]',
         tone === 'success' ? 'text-success-foreground' : 'text-destructive-foreground'
       )}>
-      {label}
+      {codeSegments(label, 'light', { style: REVIEW_CODE, monochrome: true })}
     </Text>
   </View>
 );

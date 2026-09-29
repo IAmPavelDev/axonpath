@@ -1,8 +1,5 @@
-import {
-  
-  Markdown,
-  type RenderFunction,
-} from 'react-native-markdown-x';
+import { Markdown, type RenderFunction } from 'react-native-markdown-x';
+import { highlightSpans, resolveLanguage, type Scheme } from '@/lib/code-highlight';
 import { FONTS, THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
 import { FC, useMemo } from 'react';
@@ -12,8 +9,6 @@ import FitImage from 'react-native-fit-image';
 const MONO = Platform.select({ ios: 'Courier New', default: 'monospace' });
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
-type Scheme = 'light' | 'dark';
-
 type ImageAttributes = { src: string; alt?: string };
 type ImageNodeShape = { key: string; attributes: ImageAttributes };
 
@@ -21,14 +16,14 @@ const makeStyles = (scheme: Scheme) => {
   const t = THEME[scheme];
   return {
     heading1: {
-      fontFamily: FONTS.serifSemiBold,
+      fontFamily: FONTS.sansSemiBold,
       fontSize: 28,
       color: t.foreground,
       marginTop: 36,
       marginBottom: 14,
     },
     heading2: {
-      fontFamily: FONTS.serifSemiBold,
+      fontFamily: FONTS.sansSemiBold,
       fontSize: 22,
       lineHeight: 30,
       color: t.foreground,
@@ -36,7 +31,7 @@ const makeStyles = (scheme: Scheme) => {
       marginBottom: 10,
     },
     heading3: {
-      fontFamily: FONTS.serifSemiBold,
+      fontFamily: FONTS.sansSemiBold,
       fontSize: 18,
       lineHeight: 25,
       color: t.foreground,
@@ -65,10 +60,10 @@ const makeStyles = (scheme: Scheme) => {
       marginTop: 18,
       marginBottom: 6,
     },
-    text: { fontFamily: FONTS.serifRegular, fontSize: 17, lineHeight: 29, color: t.foreground },
+    text: { fontFamily: FONTS.sansRegular, fontSize: 18, lineHeight: 30, color: t.foreground },
     textgroup: {},
     paragraph: { marginTop: 0, marginBottom: 16 },
-    strong: { fontFamily: FONTS.serifSemiBold, color: t.foreground },
+    strong: { fontFamily: FONTS.sansSemiBold, color: t.foreground },
     em: { fontStyle: 'italic' as const, color: t.foreground },
     // Pull-quote: the rule marks "borrowed words", the face does the emphasis.
     blockquote: {
@@ -78,7 +73,7 @@ const makeStyles = (scheme: Scheme) => {
       paddingLeft: 16,
       marginLeft: 2,
       marginVertical: 22,
-      fontFamily: FONTS.serifMedium,
+      fontFamily: FONTS.sansMedium,
       fontSize: 20,
       lineHeight: 31,
       color: t.foreground,
@@ -86,17 +81,17 @@ const makeStyles = (scheme: Scheme) => {
     list_item_bullet_marker: {
       marginLeft: 2,
       marginRight: 12,
-      fontFamily: FONTS.serifRegular,
-      fontSize: 17,
-      lineHeight: 29,
+      fontFamily: FONTS.sansRegular,
+      fontSize: 18,
+      lineHeight: 30,
       color: t.mutedForeground,
     },
     list_item_ordered_marker: {
       marginLeft: 2,
       marginRight: 12,
-      fontFamily: FONTS.serifRegular,
-      fontSize: 17,
-      lineHeight: 29,
+      fontFamily: FONTS.sansRegular,
+      fontSize: 18,
+      lineHeight: 30,
       color: t.mutedForeground,
     },
     hr: { backgroundColor: t.border, height: 1, marginVertical: 28 },
@@ -186,8 +181,54 @@ const makeRenderFunctions = (scheme: Scheme) => {
   // The library applies styles.text AFTER the inherited cascade, which
   // would flatten heading typography; flip the order so parent styles win.
   const text: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => (
-    <Text key={node.key} style={[styles.text, inheritedStyles]}>
+    <Text key={node.key} selectable style={[styles.text, inheritedStyles]}>
       {node.content}
+    </Text>
+  );
+
+  /*
+   * textgroup is the outermost <Text> of every paragraph/heading; Android
+   * maps one native TextView per outermost Text, so `selectable` must live
+   * here for long-press selection (incl. nested strong/em/code spans) to work.
+   */
+  const textgroup: RenderFunction = ({ Text, node, styles, children }) => (
+    <Text key={node.key} selectable style={styles.textgroup}>
+      {children}
+    </Text>
+  );
+
+  const codeBlock: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => {
+    // We trim new lines off the end of code blocks because the parser sends an extra one.
+    const { content } = node;
+    const text =
+      typeof content === 'string' && content.endsWith('\n') ? content.slice(0, -1) : content;
+
+    return (
+      <Text key={node.key} selectable style={[inheritedStyles, styles.code_block]}>
+        {highlightSpans(text ?? '', resolveLanguage(node.sourceInfo), scheme)}
+      </Text>
+    );
+  };
+
+  const fence: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => {
+    // We trim new lines off the end of code blocks because the parser sends an extra one.
+    const { content } = node;
+    const text =
+      typeof content === 'string' && content.endsWith('\n') ? content.slice(0, -1) : content;
+
+    return (
+      <Text key={node.key} selectable style={[inheritedStyles, styles.fence]}>
+        {highlightSpans(text ?? '', resolveLanguage(node.sourceInfo), scheme)}
+      </Text>
+    );
+  };
+
+  // Inline spans: the TypeScript grammar is the best general guess for tutor
+  // prose (hold(), setStatus(2)); non-TS snippets mostly stay plain, which is
+  // the correct degrade.
+  const codeInline: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => (
+    <Text key={node.key} selectable style={[inheritedStyles, styles.code_inline]}>
+      {highlightSpans(node.content ?? '', 'typescript', scheme)}
     </Text>
   );
 
@@ -198,7 +239,7 @@ const makeRenderFunctions = (scheme: Scheme) => {
       src.toLowerCase().startsWith(value.toLowerCase())
     );
 
-    const uri = isAllowedSource  ? src  : (defaultImageHandler  ? `${defaultImageHandler}${src}`  : null);
+    const uri = isAllowedSource ? src : defaultImageHandler ? `${defaultImageHandler}${src}` : null;
 
     if (!uri) return null;
 
@@ -213,7 +254,7 @@ const makeRenderFunctions = (scheme: Scheme) => {
           {...(alt ? { accessible: true, accessibilityLabel: alt } : {})}
         />
         {alt ? (
-          <Text style={figure.caption} accessibilityRole="text">
+          <Text selectable style={figure.caption} accessibilityRole="text">
             {alt}
           </Text>
         ) : null}
@@ -221,13 +262,13 @@ const makeRenderFunctions = (scheme: Scheme) => {
     );
   };
 
-  return { image, text };
+  return { image, textgroup, text, fence, code_block: codeBlock, code_inline: codeInline };
 };
 
 export const ClassConspect: FC<{ contentMd: string }> = ({ contentMd: raw }) => {
   // The screen header already carries the lesson title; a leading h1 in
   // the body would repeat it.
-  const contentMd = raw.replace(/^#[^\n]+\n+/, "");
+  const contentMd = raw.replace(/^#[^\n]+\n+/, '');
   const { colorScheme } = useColorScheme();
   const scheme = colorScheme ?? 'light';
   const styles = useMemo(() => makeStyles(scheme), [scheme]);
