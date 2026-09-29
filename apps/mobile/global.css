@@ -6,8 +6,8 @@
  * Axon design tokens — education-oriented palette.
  *
  * Light mode is built around a bright educational blue (the Google
- * Classroom / Coursera family; primary ≈ hsl(221 83% 50%)) over a visibly
- * pale-blue page (background ≈ hsl(213 45% 95%)): white cards layer
+ * Classroom / Coursera family; primary ≈ hsl(221 83% 47%)) over an
+ * unmistakably pale-blue page (background ≈ hsl(213 40% 92%)): white cards layer
  * against the tinted page, and secondary/muted/accent carry the same blue
  * cast so the chrome reads blue, not white. Dark mode is a lifted
  * blue-tinted navy (background ≈ hsl(221 39% 12%), the slate-800/900
@@ -27,26 +27,26 @@
 
 @layer base {
   :root {
-    --background: 213 45% 95%;
+    --background: 213 40% 92%;
     --foreground: 221 39% 11%;
     --card: 0 0% 100%;
     --card-foreground: 221 39% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 221 39% 11%;
-    --primary: 221 83% 50%;
+    --primary: 221 83% 47%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 213 32% 93%;
+    --secondary: 213 30% 88%;
     --secondary-foreground: 221 39% 11%;
-    --muted: 213 32% 93%;
+    --muted: 213 30% 88%;
     --muted-foreground: 215 19% 35%;
-    --accent: 213 36% 90%;
+    --accent: 213 35% 85%;
     --accent-foreground: 221 39% 11%;
     --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 98%;
     --success: 145 65% 27%;
     --success-foreground: 0 0% 98%;
-    --border: 213 25% 84%;
-    --input: 213 28% 80%;
+    --border: 213 22% 78%;
+    --input: 213 25% 74%;
     --ring: 217 91% 60%;
     --radius: 0.625rem;
   }
