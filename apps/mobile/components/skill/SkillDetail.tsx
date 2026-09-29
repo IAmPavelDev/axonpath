@@ -27,11 +27,18 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   } = useQuery({
     queryKey: ['skill', skillId],
     queryFn: () => rpc.skill.get({ id: skillId }),
+    // Poll while this skill page is open; paused when the app is backgrounded.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: classes, refetch: refetchClasses } = useQuery({
     queryKey: ['classList', skillId],
     queryFn: () => rpc.class.list({ skillId }),
+    // Same cadence: the generated lesson surfaces here the moment the
+    // pipeline finishes, instead of only on the next manual refresh.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   useEffect(() => {

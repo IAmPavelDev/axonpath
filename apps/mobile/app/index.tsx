@@ -24,6 +24,9 @@ export default function Screen() {
   const { data: skills, isLoading, error, refetch, isRefetching } = useQuery<Skill[]>({
     queryKey: ['skillList'],
     queryFn: () => rpc.skill.list(),
+    // Poll while the Library is on screen; paused when the app is backgrounded.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
   });
 
   if (isLoading) {
