@@ -17,6 +17,19 @@ export type JsonGenerationInput = {
   prompt: string;
 };
 
+/** Free-text (non-JSON) generation — conversational answers, prose output. */
+export type TextGenerationInput = {
+  /** Persistent role/persona for the model (system message). */
+  system: string;
+  /** Task-specific content (user message). */
+  prompt: string;
+};
+
+export type TextGenerationResult = {
+  /** Raw model output, whitespace-trimmed by the adapter. */
+  raw: string;
+};
+
 export type JsonGenerationResult = {
   /** Raw model output, post JSON-extraction. */
   raw: string;
@@ -35,6 +48,9 @@ export type AiPort = {
     input: JsonGenerationInput,
     request: JsonGenerationRequest,
   ): Promise<Result<JsonGenerationResult, AiError>>;
+  generateText(
+    input: TextGenerationInput,
+  ): Promise<Result<TextGenerationResult, AiError>>;
   generateEmbeddings(
     content: string[],
   ): Promise<Result<number[][], AiError>>;

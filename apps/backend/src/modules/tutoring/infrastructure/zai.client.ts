@@ -92,6 +92,39 @@ export const makeZaiAi = (): AiPort => ({
     });
   },
 
+  generateText: async (input) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        // Same no-cap stance as generateJson: GLM-5.3's reasoning_content
+        // shares the output budget, so a tight client-side cap truncates
+        // answers mid-thought; brevity is enforced by QA_TUTOR_SYSTEM.
+        const completion = (await zai.chat.completions.create({
+          model: CHAT_MODEL,
+          messages: [
+            { role: "system", content: input.system },
+            { role: "user", content: input.prompt },
+          ],
+          max_tokens: 131072,
+        })) as ChatCompletion;
+        const choice = completion.choices[0];
+        // "length" cut the answer mid-sentence; a half answer is worse than
+        // a failure — the use case marks the block FAILED and the learner
+        // re-asks. Retry once in case the budget fluke repeats.
+        if (!choice?.message?.content || choice.finish_reason === "length")
+          continue;
+
+        return ok({ raw: choice.message.content.trim() });
+      } catch (error) {
+        return err(asAiError(error));
+      }
+    }
+
+    return err({
+      kind: "AiGenerationFailed",
+      detail: "generateText: no usable completion after retries",
+    });
+  },
+
   generateEmbeddings: async (content) => {
     try {
       const response = await gemini.embeddings.create({

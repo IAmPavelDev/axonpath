@@ -22,6 +22,10 @@ export const buildClassRouter = (deps: ClassApiDeps) => {
   return {
     list: rpc.class.list.handler(handlers.list),
     get: rpc.class.get.handler(handlers.get),
+    qa: {
+      ask: rpc.class.qa.ask.handler(handlers.qa.ask),
+      list: rpc.class.qa.list.handler(handlers.qa.list),
+    },
   };
 };
 

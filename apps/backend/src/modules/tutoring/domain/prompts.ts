@@ -162,3 +162,24 @@ The learner has not attempted the previous lesson's quiz yet — continue where 
 
   return prompt;
 };
+
+/**
+ * The lesson is the grounding context: the answer must explain with its
+ * concepts, not invent adjacent material. Plain-text output (no JSON) —
+ * the answer renders as markdown directly in the conspect.
+ */
+export const buildQaAnswerPrompt = (input: {
+  lessonTitle: string;
+  contentMd: string;
+  question: string;
+}): string =>
+  `Lesson: ${input.lessonTitle}
+
+Lesson content (markdown):
+---
+${input.contentMd}
+---
+
+The learner's question, asked while reading this lesson: ${input.question}
+
+Answer the question grounded in the lesson content above.`;

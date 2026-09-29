@@ -172,6 +172,9 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return ok(content.map(() => [0.1, 0.2, 0.3]));
     },
+    generateText: async () => {
+      throw new Error("generateText not scripted in loop harness");
+    },
   };
 
   const retrieveContext: LoopHarness["deps"]["retrieveContext"] = async (input) =>
@@ -445,6 +448,11 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   const handlers = makeJobHandlers({
     generateInitialSkill: makeGenerateInitialSkill(deps),
     nextClassWorker,
+    // The loop harness scripts the lesson pipeline only; Q&A jobs are
+    // exercised by their own module tests.
+    answerClassQuestion: async () => {
+      throw new Error("class-qa-answer not scripted in loop harness");
+    },
   });
 
   const runJob = async (jobName: string) => {

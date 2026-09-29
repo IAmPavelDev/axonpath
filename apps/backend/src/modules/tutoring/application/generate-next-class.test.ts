@@ -73,6 +73,9 @@ const makeDeps = (
       },
       generateEmbeddings: async (content) =>
         ok(content.map(() => [0.1, 0.2, 0.3])),
+      generateText: async () => {
+        throw new Error("generateText not used in next-class tests");
+      },
     },
     retrieveContext: async () => overrides.history ?? [],
     skillRepo: {

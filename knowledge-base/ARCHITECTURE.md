@@ -124,8 +124,9 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt |
 | `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
+| `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock`, enqueues the in-process answer job → `{blockId, status}` |
+| `class.qa.list` | Q&A blocks for a class, ascending `(anchorParagraph, createdAt, id)` — the client polls while any block is `PENDING` |
 | `quiz.get` | questions for a class (answerKey stripped) |
-| `quiz.submit` | score answers vs `answerKey`, persist `Answer` rows, `ANSWER_SUBMITTED` event, enqueue `skill-next-class` |
 
 Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hides behind 404
 so skill existence is not leaked); `InvalidSkillTransition` → 409; anything else → 500.
@@ -193,13 +194,18 @@ Key tables: `Skill` (topic, description, status, lambda, requestId UK), `Class`
 (UNIQUE(skillId, index), contentMd, aiModel), `Question` (type, text, choices, answerKey
 server-side only), `Answer` (content json, score, isCorrect, timeSpentMs), `Event` (audit:
 SKILL_CREATED, CLASS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED, ERROR_OCCURRED,
-VECTOR_UPSERTED — payloads include the full AI prompt+response for debugging), `Vector`
-(relational metadata only: skillId/classId/answerId/source/textSnippet/classIndex/tokenCount),
+VECTOR_UPSERTED, QA_ANSWERED — payloads include the full AI prompt+response for debugging),
+`Vector` (relational metadata only:
+skillId/classId/answerId/source/textSnippet/classIndex/tokenCount), `ClassQaBlock` (learner
+question anchored at `anchorParagraph` in a class conspect; flat blocks, `question`/nullable
+`answer`, status `PENDING|ANSWERED|FAILED`, answered asynchronously by the `class-qa-answer`
+job; `contentMd` itself stays untouched),
 `SkillProgress` (snapshot json — **unused**).
 
 Enums: **SkillStatus** `DRAFT(legacy) | GENERATING | ACTIVE | FAILED | PAUSED | COMPLETED |
 ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (beta generates MC/TF
-only) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED(unused)`.
+only) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED(unused)` · **ClassQaStatus**
+`PENDING | ANSWERED | FAILED`.
 
 Embeddings live only in Qdrant (`axon_vectors`, 3072-dim Cosine, payload indexes userId/skillId,
 point id = `Vector.id`); Postgres keeps metadata. Embedding model: `gemini-embedding-2` via the
@@ -239,12 +245,14 @@ create-skill (topic input) → description/skill detail (FAILED shows error copy
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (15 files / 86 tests, all
-green 2026-09-22): scoring, skill state machine, Result, authenticate + Firebase verifier +
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (18 files / 102 tests, all
+green 2026-09-29): scoring, skill state machine, Result, authenticate + Firebase verifier +
 auth middleware, create-skill, retry-skill, generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
-stale-pending requeue), and the composed loop integration test (real use cases + in-memory
+stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list
+ordering/ownership, answer generation PENDING→ANSWERED/FAILED with replay no-ops), and the
+composed loop integration test (real use cases + in-memory
 fakes over `modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup →
 FAILED/retry heal, both failure shapes).
 

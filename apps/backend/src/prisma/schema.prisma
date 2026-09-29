@@ -43,10 +43,11 @@ model User {
   updatedAt         DateTime   @updatedAt
 
   // Relationships
-  skills  Skill[]
-  answers Answer[]
-  events  Event[]
-  Session Session[]
+  skills   Skill[]
+  answers  Answer[]
+  events   Event[]
+  Session  Session[]
+  qaBlocks ClassQaBlock[]
 
   @@index([email, status])
   @@index([createdAt])
@@ -97,6 +98,7 @@ enum EventType {
   CONTEXT_SELECTED
   ERROR_OCCURRED
   VECTOR_UPSERTED
+  QA_ANSWERED
 }
 
 model Skill {
@@ -132,6 +134,7 @@ model Class {
   aiModel   String?
   vectors   Vector[]
   questions Question[]
+  qaBlocks  ClassQaBlock[]
   createdAt DateTime   @default(now())
 
   @@unique([skillId, index])
@@ -218,6 +221,39 @@ model Vector {
   @@index([skillId])
   @@index([classIndex])
   @@index([source])
+}
+
+enum ClassQaStatus {
+  PENDING
+  ANSWERED
+  FAILED
+}
+
+/**
+ * Learner question anchored inside a class conspect. Blocks are flat (no
+ * nesting): a follow-up is another block anchored after the previous answer.
+ * anchorParagraph indexes the class's top-level markdown blocks in document
+ * order — stable because contentMd is immutable once generated (regeneration
+ * creates a new class). Blocks sharing an anchor keep ask order via
+ * (createdAt, id). The answer fills in asynchronously (PENDING until then);
+ * FAILED is terminal — the client re-asks to retry.
+ */
+model ClassQaBlock {
+  id              Int           @id @default(autoincrement())
+  class           Class         @relation(fields: [classId], references: [id])
+  classId         Int
+  user            User          @relation(fields: [userId], references: [id])
+  userId          Int
+  anchorParagraph Int
+  question        String        @db.Text
+  answer          String?       @db.Text
+  status          ClassQaStatus @default(PENDING)
+  aiModel         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([classId, anchorParagraph])
+  @@index([userId])
 }
 
 // ----- Background Processing Models -----

@@ -54,6 +54,9 @@ const makeDeps = (
         return ok({ raw: overrides.initRaw ?? INIT_JSON });
       },
       generateEmbeddings: async (content) => ok(content.map(() => [0.5])),
+      generateText: async () => {
+        throw new Error("generateText not used in init tests");
+      },
     },
     retrieveContext: async () => [],
     skillRepo: {

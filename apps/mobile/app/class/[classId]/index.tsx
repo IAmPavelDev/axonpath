@@ -1,4 +1,5 @@
 import { ClassConspect } from '@components/class/ClassConspect';
+import { QaComposer } from '@components/class/QaComposer';
 import { Quiz } from '@components/quiz/Quiz';
 import { QuizResult } from '@components/quiz/QuizResult';
 import { ScreenHeader } from '@components/screen-header';
@@ -7,8 +8,9 @@ import { Skeleton } from '@atomics/skeleton';
 import { THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@atomics/text';
-import { useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { BackHandler, Pressable, View } from 'react-native';
+import { Sparkles, X } from 'lucide-react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Animated, {
   clamp,
   interpolate,
@@ -24,6 +26,7 @@ import { useQuizStore } from '@/store/quiz.store';
 import type { QuizSubmitResult } from '@/types/quiz';
 import type { ClassById } from '@/types/class';
 import rpc from '@/utils/rpc';
+import { useClassQa } from '@/hooks/use-class-qa';
 
 type Tab = 'conspect' | 'quiz';
 
@@ -56,9 +59,8 @@ export default function ClassScreen() {
   const [phase, setPhase] = useState<Phase>('quiz');
   const [quizResult, setQuizResult] = useState<QuizSubmitResult | null>(null);
   const quizQuestions =
-    useQuizStore(
-      (state) => (classIdNum !== undefined ? state.questions[classIdNum] : undefined)
-    ) ?? [];
+    useQuizStore((state) => (classIdNum !== undefined ? state.questions[classIdNum] : undefined)) ??
+    [];
 
   // router.replace to another lesson can reuse this screen instance —
   // restart the quiz flow for the new lesson.
@@ -67,12 +69,7 @@ export default function ClassScreen() {
     setQuizResult(null);
   }, [classIdNum]);
 
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-  } = useQuery<ClassById, Error>({
+  const { data, isLoading, isError, error } = useQuery<ClassById, Error>({
     queryKey: ['classById', classIdNum],
     queryFn: () => rpc.class.get({ id: classIdNum! }),
     enabled: classIdNum !== undefined,
@@ -163,7 +160,9 @@ export default function ClassScreen() {
             </Text>
           </Animated.View>
           <Animated.View style={collapsedStyle} className="absolute inset-0">
-            <Text numberOfLines={1} className="font-sans-medium text-[15px] leading-[24px] tracking-tight">
+            <Text
+              numberOfLines={1}
+              className="font-sans-medium text-[15px] leading-[24px] tracking-tight">
               {data.title}
             </Text>
           </Animated.View>
@@ -208,6 +207,22 @@ function ConspectView({
   scrollY: SharedValue<number>;
   colorScheme: 'light' | 'dark';
 }) {
+  const scrollRef = useRef<Animated.ScrollView>(null);
+  const qa = useClassQa(classData.id);
+
+  // Anchor mode: pill → banner → every chunk is tap-to-anchor; the composer
+  // opens on the chosen chunk. Follow-ups reuse the composer without mode.
+  const [anchorMode, setAnchorMode] = useState(false);
+  const [composer, setComposer] = useState<{ anchor: number; excerpt: string } | null>(null);
+
+  /** Top-level y offsets, keyed by chunk index — targets for scroll-into-view. */
+  const groupYs = useRef(new Map<number, { chunk?: number; qa?: number }>());
+  const registerLayout = (slot: 'chunk' | 'qa') => (index: number, y: number) => {
+    const entry = groupYs.current.get(index) ?? {};
+    entry[slot] = y;
+    groupYs.current.set(index, entry);
+  };
+
   // Reading progress 0..1 for the current lesson.
   const progress = useSharedValue(0);
 
@@ -224,6 +239,37 @@ function ConspectView({
     transformOrigin: 'left',
   }));
 
+  /** Bring the QA group after `anchor` into view (waits one layout pass). */
+  const scrollToAnchor = (anchor: number) => {
+    setTimeout(() => {
+      const group = groupYs.current.get(anchor);
+      const y = group?.qa ?? group?.chunk ?? 0;
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+    }, 150);
+  };
+
+  const submitQuestion = (question: string) => {
+    if (!composer) return;
+    const { anchor } = composer;
+    qa.ask(anchor, question);
+    setComposer(null);
+    setAnchorMode(false);
+    scrollToAnchor(anchor);
+  };
+
+  // Hardware back cancels anchor mode (the composer's Modal handles its own back).
+  useEffect(() => {
+    if (!anchorMode) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setAnchorMode(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [anchorMode]);
+
+  const ink = THEME[colorScheme];
+  const accent = ink.primary;
+
   return (
     <View className="flex-1">
       <View className="h-1 bg-muted">
@@ -231,11 +277,62 @@ function ConspectView({
       </View>
 
       <Animated.ScrollView
+        ref={scrollRef}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 96 }}>
-        <ClassConspect contentMd={classData.contentMd} />
+        <ClassConspect
+          contentMd={classData.contentMd}
+          anchorMode={anchorMode}
+          onAnchorChunk={(index, excerpt) => setComposer({ anchor: index, excerpt })}
+          qaByAnchor={qa.blocksByAnchor}
+          onRegisterChunkLayout={registerLayout('chunk')}
+          onRegisterQaLayout={registerLayout('qa')}
+          onFollowUp={(index, excerpt) => setComposer({ anchor: index, excerpt })}
+          onRetryTemp={qa.retryTemp}
+          onAskAgain={(index, question) => {
+            qa.ask(index, question);
+            scrollToAnchor(index);
+          }}
+        />
       </Animated.ScrollView>
+
+      {anchorMode ? (
+        <View
+          className="absolute inset-x-5 top-3 flex-row items-center gap-3 rounded-lg border-hairline border-border bg-card px-4 py-3"
+          style={{ elevation: 8 }}>
+          <Sparkles size={16} color={accent} />
+          <Text className="flex-1 font-sans-medium text-[14px] leading-[20px] text-card-foreground">
+            Tap the paragraph to anchor your question
+          </Text>
+          <Pressable
+            onPress={() => setAnchorMode(false)}
+            accessibilityLabel="Cancel anchor mode"
+            className="p-1 active:opacity-60">
+            <X size={18} color={ink.mutedForeground} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      <Pressable
+        onPress={() => setAnchorMode((v) => !v)}
+        accessibilityRole="button"
+        accessibilityLabel={anchorMode ? 'Cancel asking the AI' : 'Ask the AI about this lesson'}
+        className={`absolute bottom-6 right-5 flex-row items-center gap-2 rounded-full px-4 py-3 ${anchorMode ? 'bg-secondary' : 'bg-primary'}`}
+        style={{ elevation: 6 }}>
+        <Sparkles size={16} color={anchorMode ? ink.secondaryForeground : ink.primaryForeground} />
+        <Text
+          className={`font-sans-semibold text-[15px] ${anchorMode ? 'text-secondary-foreground' : 'text-primary-foreground'}`}>
+          {anchorMode ? 'Cancel' : 'Ask AI'}
+        </Text>
+      </Pressable>
+
+      <QaComposer
+        visible={composer !== null}
+        excerpt={composer?.excerpt ?? null}
+        onClose={() => setComposer(null)}
+        onSubmit={submitQuestion}
+      />
     </View>
   );
 }
@@ -267,12 +364,5 @@ function QuizView({
     );
   }
 
-  return (
-    <Quiz
-      questions={data}
-      classId={classId}
-      onCompleted={onCompleted}
-    />
-  );
+  return <Quiz questions={data} classId={classId} onCompleted={onCompleted} />;
 }
-
