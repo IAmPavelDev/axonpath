@@ -16,7 +16,7 @@ export const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {
     <Link asChild href={`/class/${classData.id}`}>
       <Pressable className="flex-row items-center gap-4 bg-background px-6 py-4 active:bg-accent">
         <View className="flex-1 gap-1">
-          <Text numberOfLines={2} className="font-serif-medium text-[17px] leading-[24px]">
+          <Text numberOfLines={2} className="font-sans-medium text-[17px] leading-[24px]">
             {classData.title}
           </Text>
           <Text variant="meta">

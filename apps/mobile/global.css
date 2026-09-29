@@ -3,66 +3,75 @@
 @tailwind utilities;
 
 /*
- * Axon design tokens — "Quiet Study".
+ * Axon design tokens — education-oriented palette.
+ *
+ * Light mode is built around a bright educational blue (the Google
+ * Classroom / Coursera family; primary ≈ hsl(221 83% 50%)) over a visibly
+ * pale-blue page (background ≈ hsl(213 45% 95%)): white cards layer
+ * against the tinted page, and secondary/muted/accent carry the same blue
+ * cast so the chrome reads blue, not white. Dark mode is a lifted
+ * blue-tinted navy (background ≈ hsl(221 39% 12%), the slate-800/900
+ * family — clearly blue, never black-ish) with a coherent surface ladder
+ * above it; primary lifts to a brighter blue (≈ hsl(213 94% 68%)) with
+ * dark navy ink on it, Material-dark style.
  *
  * Meaning rules (mandatory):
- * - The palette is grayscale. Color appears ONLY as semantics:
- *   destructive = errors / wrong answers, success = correct answers.
- *   Nothing else is ever colored.
  * - `border` marks structure: hairline row separators and the outline
  *   of interactive tiles. A border never decorates, it delineates.
  * - `muted` marks inert surface: skeletons, tracks, tiles at rest.
  *   `accent` marks pressed/touched surface.
  * - `card` is reserved for contained content (code blocks, wells).
+ * - Chroma lives in `primary`/`ring` and semantics only; the surface
+ *   scale stays quiet, tinted with one shared blue cast per mode.
  */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --background: 213 45% 95%;
+    --foreground: 221 39% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 221 39% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 0 0% 94%;
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 221 39% 11%;
+    --primary: 221 83% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 213 32% 93%;
+    --secondary-foreground: 221 39% 11%;
+    --muted: 213 32% 93%;
+    --muted-foreground: 215 19% 35%;
+    --accent: 213 36% 90%;
+    --accent-foreground: 221 39% 11%;
     --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 98%;
     --success: 145 65% 27%;
     --success-foreground: 0 0% 98%;
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 0% 64%;
+    --border: 213 25% 84%;
+    --input: 213 28% 80%;
+    --ring: 217 91% 60%;
     --radius: 0.625rem;
   }
 
   .dark:root {
-    --background: 0 0% 0%;
-    --foreground: 0 0% 96%;
-    --card: 0 0% 8%;
-    --card-foreground: 0 0% 96%;
-    --popover: 0 0% 8%;
-    --popover-foreground: 0 0% 96%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 14%;
-    --secondary-foreground: 0 0% 96%;
-    --muted: 0 0% 14%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 16%;
-    --accent-foreground: 0 0% 96%;
+    --background: 221 39% 12%;
+    --foreground: 217 24% 90%;
+    --card: 220 32% 17%;
+    --card-foreground: 217 24% 90%;
+    --popover: 220 32% 17%;
+    --popover-foreground: 217 24% 90%;
+    --primary: 213 94% 68%;
+    --primary-foreground: 221 39% 10%;
+    --secondary: 220 27% 21%;
+    --secondary-foreground: 217 24% 90%;
+    --muted: 220 27% 21%;
+    --muted-foreground: 216 16% 70%;
+    --accent: 220 25% 25%;
+    --accent-foreground: 217 24% 90%;
     --destructive: 0 65% 60%;
-    --destructive-foreground: 0 0% 7%;
+    --destructive-foreground: 221 39% 10%;
     --success: 142 55% 45%;
-    --success-foreground: 0 0% 7%;
-    --border: 0 0% 15%;
-    --input: 0 0% 18%;
-    --ring: 0 0% 45%;
+    --success-foreground: 221 39% 10%;
+    --border: 220 18% 26%;
+    --input: 220 17% 29%;
+    --ring: 213 94% 68%;
   }
 }

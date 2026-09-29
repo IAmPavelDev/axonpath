@@ -2,17 +2,12 @@ import '@/global.css';
 
 import React, { useEffect, useState } from 'react';
 import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
+  SourceSans3_400Regular,
+  SourceSans3_500Medium,
+  SourceSans3_600SemiBold,
+  SourceSans3_700Bold,
   useFonts,
-} from '@expo-google-fonts/inter';
-import {
-  Newsreader_400Regular,
-  Newsreader_500Medium,
-  Newsreader_600SemiBold,
-} from '@expo-google-fonts/newsreader';
+} from '@expo-google-fonts/source-sans-3';
 import * as SplashScreen from 'expo-splash-screen';
 import { NAV_THEME } from '@/lib/theme';
 import { useThemeMode } from '@/lib/theme-mode';
@@ -60,13 +55,10 @@ export default function RootLayout() {
     mode === 'system' ? systemScheme : mode;
 
   const [fontsLoaded] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    Newsreader_400Regular,
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
+    SourceSans3_400Regular,
+    SourceSans3_500Medium,
+    SourceSans3_600SemiBold,
+    SourceSans3_700Bold,
   });
 
   // Firebase's native observer: resolves persisted sessions and token

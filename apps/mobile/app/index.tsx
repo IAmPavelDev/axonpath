@@ -56,7 +56,7 @@ export default function Screen() {
         <View
           className="flex-1 items-center justify-center gap-5 px-10"
           style={{ marginBottom: '25%' }}>
-          <Text className="text-center font-serif-medium text-[28px] leading-[34px] tracking-tight">
+          <Text className="text-center font-sans-medium text-[28px] leading-[34px] tracking-tight">
             What will you learn?
           </Text>
           <Text className="text-center text-[15px] leading-6 text-muted-foreground">

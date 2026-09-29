@@ -49,13 +49,10 @@ module.exports = {
       // Static font faces: weight is encoded in the face name, never via
       // font-weight utilities.
       fontFamily: {
-        sans: ['Inter_400Regular'],
-        'sans-medium': ['Inter_500Medium'],
-        'sans-semibold': ['Inter_600SemiBold'],
-        'sans-bold': ['Inter_700Bold'],
-        serif: ['Newsreader_400Regular'],
-        'serif-medium': ['Newsreader_500Medium'],
-        'serif-semibold': ['Newsreader_600SemiBold'],
+        sans: ['SourceSans3_400Regular'],
+        'sans-medium': ['SourceSans3_500Medium'],
+        'sans-semibold': ['SourceSans3_600SemiBold'],
+        'sans-bold': ['SourceSans3_700Bold'],
       },
       borderRadius: {
         lg: 'var(--radius)',

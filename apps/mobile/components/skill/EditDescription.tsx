@@ -79,7 +79,7 @@ export const EditSkillDescription: FC = () => {
         <View className="flex-1 justify-center gap-10 px-6" style={{ marginBottom: '22%' }}>
           <View className="gap-3">
             <Text variant="label">Step 2 of 2</Text>
-            <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+            <Text className="font-sans-medium text-[28px] leading-[34px] tracking-tight">
               Preparing basic context for you
             </Text>
           </View>
@@ -99,7 +99,7 @@ export const EditSkillDescription: FC = () => {
         <View className="flex-1 justify-center gap-6 px-6" style={{ marginBottom: '8%' }}>
           <View className="gap-3">
             <Text variant="label">Step 2 of 2</Text>
-            <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+            <Text className="font-sans-medium text-[28px] leading-[34px] tracking-tight">
               Add context
             </Text>
             <Text variant="muted">

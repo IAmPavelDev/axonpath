@@ -7,12 +7,12 @@
     "android": "expo start -c --android",
     "ios": "expo start -c --ios",
     "web": "expo start -c --web",
+    "theme:check": "node scripts/check-theme-lockstep.mjs",
     "clean": "rm -rf .expo node_modules"
   },
   "dependencies": {
     "@axon/api-contract": "workspace:*",
-    "@expo-google-fonts/inter": "^0.4.2",
-    "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/source-sans-3": "^0.4.1",
     "@expo/metro-runtime": "^57.0.16",
     "@orpc/client": "^1.8.5",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -36,6 +36,7 @@
     "firebase": "^12.19.0",
     "lucide-react-native": "^0.511.0",
     "nativewind": "^4.1.23",
+    "prismjs": "^1.30.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -51,6 +52,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@types/prismjs": "^1.26.6",
     "@types/react": "~19.2.18",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.6.14",

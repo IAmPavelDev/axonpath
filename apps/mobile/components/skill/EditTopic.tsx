@@ -41,7 +41,7 @@ export const EditSkillTopic: FC = () => {
       <View className="flex-1 justify-center gap-8 px-6" style={{ marginBottom: '20%' }}>
         <View className="gap-3">
           <Text variant="label">Step 1 of 2</Text>
-          <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+          <Text className="font-sans-medium text-[28px] leading-[34px] tracking-tight">
             What do you want to learn?
           </Text>
         </View>

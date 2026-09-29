@@ -42,7 +42,7 @@ const SkillRow: FC<{
               )}
               <Text
                 numberOfLines={1}
-                className="flex-shrink font-serif-medium text-[19px] leading-[26px] tracking-tight">
+                className="flex-shrink font-sans-medium text-[19px] leading-[26px] tracking-tight">
                 {skill.topic}
               </Text>
               {isPreparing(skill) && <PulseDot />}

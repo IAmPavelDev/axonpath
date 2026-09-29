@@ -150,7 +150,7 @@ export default function LoginScreen() {
         contentContainerClassName="flex-grow justify-center px-8"
         keyboardShouldPersistTaps="handled">
         <View className="gap-1.5 pb-10">
-          <Text className="font-serif-medium text-[28px] leading-[34px] tracking-tight">
+          <Text className="font-sans-medium text-[28px] leading-[34px] tracking-tight">
             {mode === 'signin' ? 'Welcome back' : 'Create your account'}
           </Text>
           <Text variant="muted">
