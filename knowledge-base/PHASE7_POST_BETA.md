@@ -2,7 +2,7 @@
 
 > Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 through S2 at `7dfb6b7`
 > and through M3 in this change (backend suite counts per ARCHITECTURE §8).
-> Status: **IN PROGRESS — S1, S2, S3, S4, S6, S7 DONE (2026-09-30); S5 pending** — this file is the execution authority for everything
+> Status: **COMPLETE — S1–S8 DONE (2026-09-30).** Follow-on work is tracked in `knowledge-base/BUSINESS_DECISIONS.md` §4 (post-backlog horizon). This file remains the record of the post-beta phase.
 > after beta. Since 2026-09-22, out-of-plan work landed WITHOUT consuming S1–S7 scope:
 > class Q&A / Ask-AI (`6c1efeb`, `e4ea158`, `457b740`), quiz-exit redirect to the lessons
 > list (`e988e6e`), 10 s skill-status polling (`7dd5af7`), Source Sans 3 + blue-tinted
@@ -224,9 +224,10 @@ exists with data to fit it against.
   run grade handler → `Answer.score` set, prompt feedback path unaffected.
 - Mobile: `QuizResult` pending chip + focus invalidations.
 
-### S5 — Unlock OPEN_ENDED generation (D5) — after S4
+### S5 — ✅ DONE (2026-09-30) — Unlock OPEN_ENDED generation (D5)
 - `INIT_SKILL_SCHEMA` enum + `lessonJsonInstructions` line; `parse.ts` normalizer
   (OPEN_ENDED ⇒ `choices: []`); prompt-structure tests updated.
+- TUTOR_SYSTEM quiz paragraph aligned with the unlock — it previously said MC/TF only, contradicting the new instruction.
 
 ### S6 — ✅ DONE (2026-09-30) — Compose cleanup + transactional persist (D6)
 - Delete `rabbitmq` service + volume from `docker-compose-dev.yaml`.
@@ -242,11 +243,12 @@ exists with data to fit it against.
   select, `config.ts`; sweep test fixtures; contract list schema if it exposes `lambda`;
   fix the stale ARCHITECTURE §7 row.
 
-### S8 — Docs sync (always last)
+### S8 — ✅ DONE (2026-09-30) — Docs sync (always last)
 - ARCHITECTURE.md (RPC table: `skill.progress`, `skill.updateStatus`; §4.2 answer-memory +
   grading flow; §5 enums; §7 env; §8 test inventory; §9 backlog shrinks to what remains),
   GAPS.md (8 closed by S1, 10 closed by S6+S7, 13 closed by S6), BETA_PLAN.md status line,
   this file's steps checked off.
+- Synced continuously per step; final sweep in this change.
 
 ## 4. Testing & verification
 
@@ -261,6 +263,7 @@ exists with data to fit it against.
   adding a parallel harness.
 
 ## 5. Phase acceptance (done when)
+> Status 2026-09-30: acceptance criteria 1–7 met in code and tests (108 → 145 tests across the phase); live emulator visual pass pending user run.
 
 1. Skill detail shows per-lesson progress (answered/total per class) + accuracy from
    `skill.progress`; a fresh skill shows zeros, not an error.

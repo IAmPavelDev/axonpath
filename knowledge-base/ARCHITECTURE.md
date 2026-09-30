@@ -143,15 +143,15 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
    can never violate `UNIQUE(skillId, index)`; a partially-persisted failure heals to ACTIVE
    with retrieval degrading to `[]` for its missing vectors — accepted beta cost). Otherwise:
    description (best-effort) → prior-context retrieval (Qdrant, filtered by userId, excludes
-   own skill, degrades to []) → one JSON generation (class 0 + MC/TF questions + `lessonSummary`
+   own skill, degrades to []) → one JSON generation (class 0 + MC/TF + 1–2 open-ended questions + `lessonSummary`
    + context snippets) → `SKILL_CREATED` audit event (full prompt+response) → persist
    class/questions → embed summary+snippets in one call → vectors: summary `AI_NEXT`, snippets
    `AI_INITIAL`, `classIndex 0` → status `ACTIVE`. Any failure → status `FAILED` +
    `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled by `extractJsonObject` +
    per-field re-validation (`tutoring/domain/parse.ts`).
 3. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
-   open-ended persists `score/isCorrect = null` and is graded asynchronously — still MC/TF-only
-   generation until S5) → `Answer` rows → enqueue `skill-next-class`. A second, generic job
+   open-ended persists `score/isCorrect = null` and is graded asynchronously —
+   open-ended generation unlocked (S5)) → `Answer` rows → enqueue `skill-next-class`. A second, generic job
    (`skill-answer-vectors`) mines the wrong MC/TF answers (cap 10/submit) into `ANSWER_DERIVED`
    vectors keyed by `answerId` — deduped per answer, best-effort degrade; `buildNextClassPrompt`
    renders them as a "Known gaps — weave in a re-test" block. A third generic job
@@ -161,7 +161,7 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
 4. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
    user's answers (latest attempt per question) → retrieval **without** `excludeSkillId`
    (own history wanted; topK 12) → prompt = TUTOR_SYSTEM + topic + last title/summary +
-   mistake block (or "all correct — raise difficulty") + history blocks ("Already covered —
+   known-gaps block ("Known gaps — weave in a re-test", from ANSWER_DERIVED memory) mistake block (or "all correct — raise difficulty") + history blocks ("Already covered —
    build on it") → JSON generation (init shape + `lessonSummary`) → `CLASS_GENERATED` event →
    persist class at `index + 1` + questions → embed summary (`AI_NEXT`) + snippets
    (`AI_INITIAL`) at the new classIndex. Status stays `ACTIVE`. **Retake dedup**: the use case
@@ -216,8 +216,7 @@ job; `contentMd` itself stays untouched),
 `SkillProgress` (snapshot json — **unused**).
 
 Enums: **SkillStatus** `DRAFT(legacy) | GENERATING | ACTIVE | FAILED | PAUSED | COMPLETED |
-ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (beta generates MC/TF
-only) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED` · **ClassQaStatus**
+ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (all three types generated since S5; MC/TF graded synchronously, open-ended async via grade-open-ended) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED` · **ClassQaStatus**
 `PENDING | ANSWERED | FAILED`.
 
 Embeddings live only in Qdrant (`axon_vectors`, 3072-dim Cosine, payload indexes userId/skillId,
@@ -261,8 +260,8 @@ surfaces as the preparing state above.
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (23 files / 144 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), grade-open-ended (batch/degrade/partial), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (23 files / 145 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), grade-open-ended (batch/degrade/partial), open-ended generation unlock (enum/instruction/drift guard), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
 stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list
@@ -273,7 +272,7 @@ FAILED/retry heal, both failure shapes).
 
 ## 9. Known gaps → post-beta backlog
 
-**Planned as Phase 7** — execution authority: `knowledge-base/PHASE7_POST_BETA.md`
+**Phase 7 COMPLETE (2026-09-30) — all seven audit items closed.** Original audit: `knowledge-base/PHASE7_POST_BETA.md`
 (written 2026-09-22 from a verified audit). What fed it:
 
 1. Unused `rabbitmq` container in dev compose → Phase 7 S6 (delete; broker stays a
@@ -282,6 +281,6 @@ FAILED/retry heal, both failure shapes).
 3. PAUSED/COMPLETED/ARCHIVED unreachable → S2 (status lifecycle UX).
 4. `ANSWER_DERIVED` vectors / `Vector.answerId` unused → S3 (answer memory) — done (S3, 2026-09-30).
 5. Open-ended ungeneratable and ungradable → S4 (background AI grading) + S5 (generation
-   unlock) — grading done (S4, 2026-09-30); generation unlock = S5.
+   unlock) — grading done (S4, 2026-09-30); generation unlock = S5; generation unlocked (S5).
 6. Non-transactional class+question persist → S6 (`createWithQuestions` `$transaction`).
 7. Dead `Skill.lambda` / `LAMBDA_DECAY_DEFAULT` → S7 (delete, not tune).

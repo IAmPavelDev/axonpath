@@ -29,7 +29,7 @@
 | M4 | **Docker images are built on the dev machine and shipped** (`docker save` → scp → `docker load`). **Never `--build` on the server.** | Build peaks ~2 GB RAM; the host has 1 GiB and OOMs. Runtime residency ≈600 MB is fine. | 2026-09-22 |
 | M5 | **AI runs off-box and is treated as an ops cost, not an infra one:** chat `glm-5.3-flash` via Z.ai coding endpoint; embeddings `gemini-embedding-2` via Gemini. Degrade-never-hang on every AI failure (skill → FAILED + retry; retrieval → `[]`; grading degrades to 0 (Phase 7 S4)). | Keeps the EC2 instance tiny and the failure policy uniform. Cost per lesson is **unmeasured** — `Event` rows store full prompts/responses and can price it when scaling matters. | 2026-09 |
 | M6 | **Supporting services on free plans:** Firebase Spark (auth), EAS free (builds), $0-budget billing alarm on AWS. | No monthly fixed cost anywhere. | 2026-09-22 |
-| M7 | **RabbitMQ container is deployed in prod but unused** (~100 MB idle) — first thing to drop if RAM gets tight; dev compose still declares it (Phase 7 S6 removes it). | Kept per user decision during beta deploy; the `JobQueuePort` seam is the architecture, the broker is not. | 2026-09-22 |
+| M7 | **RabbitMQ container is deployed in prod but unused** (~100 MB idle) — first thing to drop if RAM gets tight; the dev compose copy was removed (Phase 7 S6); prod keeps it. | Kept per user decision during beta deploy; the `JobQueuePort` seam is the architecture, the broker is not. | 2026-09-22 |
 
 ## 3. Engineering strategy decisions
 

@@ -11,14 +11,14 @@
 | # | Gap (original priority) | Status |
 |---|---|---|
 | B1 | 🔴 Adaptive loop not implemented | ✅ CLOSED (Phase 3+4, 2026-09-21) — `generate-next-class`, history RAG, status lifecycle; 10 unit tests |
-| B2 | 🟢 Vector memory write+retrieve | ✅ CLOSED — `AI_INITIAL` + `AI_NEXT` written; retrieval feeds init (excluded) and next-class (included, topK 12). `ANSWER_DERIVED` → post-beta |
+| B2 | 🟢 Vector memory write+retrieve | ✅ CLOSED — `AI_INITIAL` + `AI_NEXT` written; retrieval feeds init (excluded) and next-class (included, topK 12). `ANSWER_DERIVED` shipped (Phase 7 S3) |
 | 3 | 🟠 No real authentication | ✅ CLOSED — Firebase email/password + Google, per-request ID-token verification, `context.user` |
 | 4 | 🟠 No create-skill UI | ✅ CLOSED — create flow + description screen + skill list/detail |
 | 5 | 🟠 Quiz submit dead | ✅ CLOSED — scored vs server-side `answerKey`, `Answer` rows, real result UI, `ANSWER_SUBMITTED` events |
 | 6 | 🟠 Fire-and-forget gen unobservable | ✅ CLOSED — `GENERATING` on create; `ACTIVE`/`FAILED` + `ERROR_OCCURRED` on init end; mobile preparing state |
-| 7 | 🟡 Status never advanced | ✅ CLOSED — `canTransition` state machine, migrations + DRAFT backfill. PAUSED/COMPLETED UX → post-beta |
+| 7 | 🟡 Status never advanced | ✅ CLOSED — `canTransition` state machine, migrations + DRAFT backfill. lifecycle UX shipped (Phase 7 S2) |
 | 8 | 🟡 No progress tracking | ✅ CLOSED (Phase 7 S1, 2026-09-30) — skill.progress derived query + per-lesson progress UI |
-| 9 | 🟡 Answer flow incomplete | ✅ CLOSED for beta — scoring + persistence done; `ANSWER_DERIVED` vectors → post-beta |
+| 9 | 🟡 Answer flow incomplete | ✅ CLOSED for beta — scoring + persistence done; `ANSWER_DERIVED` shipped (Phase 7 S3) |
 | 10 | 🟡 Dead config | ✅ CLOSED (Phase 7 S6+S7, 2026-09-30) — rabbitmq deleted from dev compose; lambda surface deleted |
 | 11 | 🟡 Errors not surfaced | ✅ CLOSED — `skill.retry` route (NotOwned 404 / InvalidTransition 409) + mobile FAILED chip, retry affordance, and detail banner |
 | 12 | 🟡 No tests | ✅ CLOSED — 15 files / 86 tests green, incl. the composed loop integration test (real use cases + in-memory fakes) and the next-class worker/sweeper/reconciler tests |
@@ -38,7 +38,7 @@
 
 ## 🟢 B2. Vector memory — write + retrieve
 Qdrant `axon_vectors` (3072, Cosine); Postgres keeps relational metadata only. Remaining
-`ANSWER_DERIVED` vectors → post-beta.
+`ANSWER_DERIVED` shipped (Phase 7 S3).
 
 ## 🟠 3. No real authentication → closed (Firebase)
 

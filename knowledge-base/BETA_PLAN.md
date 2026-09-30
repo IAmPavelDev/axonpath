@@ -10,6 +10,12 @@
 >
 > ---
 >
+## Status update (2026-09-30)
+- **Phase 7 post-beta COMPLETE** — S1 progress UI, S2 status lifecycle, S3 answer memory, S4
+  open-ended grading, S5 open-ended generation, S6 transactional persist + compose cleanup,
+  S7 lambda deletion, S8 docs sync. 23 files / 145 backend tests green. Horizon:
+  `knowledge-base/BUSINESS_DECISIONS.md` §4.
+
 ## Status update (2026-09-22)
 - **Execution authority has moved to `knowledge-base/PHASE7_POST_BETA.md`** — the post-beta
   phase (progress UI, status lifecycle UX, ANSWER_DERIVED answer memory, open-ended AI

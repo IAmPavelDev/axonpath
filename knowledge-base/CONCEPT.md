@@ -88,8 +88,7 @@ The `Vector` model is the heart of the concept:
 
 **Status:** vectors are written on skill creation and on every next-class generation, and
 **retrieved** into generation (`generateInitSkill` excludes prior-skill context;
-`generateNextClass` includes it, topK 12). Answer-derived mining remains **[PLANNED]**
-(Phase 7 S3).
+`generateNextClass` includes it, topK 12). Answer-derived mining shipped (Phase 7 S3): wrong answers become `ANSWER_DERIVED` "Known gaps" memory keyed by `answerId`.
 
 ## 6. User journey map (desired)
 
@@ -116,7 +115,7 @@ journey
 | User signs up / logs in | ✅ Firebase email/password + Google (per-request ID-token verification) |
 | User picks a topic and it builds a course | ✅ Done — create flow + description screen + skill list/detail |
 | Read a lesson | ✅ Works (class conspect renders Markdown) |
-| Answer a quiz | ✅ Submit is scored server-side and persisted (MC/TF; open-ended AI grading → Phase 7 S4) |
+| Answer a quiz | ✅ Submit is scored server-side and persisted (MC/TF synchronous; open-ended generated + async AI-graded since Phase 7 S4/S5) |
 | System adapts next lesson | ✅ `generate-next-class` live — misses re-taught; retake dedup + durable job queue |
 | Personalized memory influences content | ✅ `AI_INITIAL`/`AI_NEXT` retrieved into generation; `ANSWER_DERIVED` pending (Phase 7 S3) |
 | Progress tracking | ✅ `skill.progress` derived query + detail-screen per-lesson panel (Phase 7 S1) |
