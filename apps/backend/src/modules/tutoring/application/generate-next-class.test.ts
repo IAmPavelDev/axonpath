@@ -106,6 +106,9 @@ const makeDeps = (
       },
     },
     classRepo: {
+      findQuestionCountsByClassIds: async () => {
+        throw new Error("not used in next-class tests");
+      },
       createWithQuestions: async (cls, questions) => {
         state.createdClasses.push(cls);
         state.questionInputs.push(...questions);
@@ -130,6 +133,9 @@ const makeDeps = (
     },
     quizRepo: {
       findByClassId: async () => {
+        throw new Error("not used in next-class tests");
+      },
+      findAnswerActivityByUser: async () => {
         throw new Error("not used in next-class tests");
       },
       findScoreableByClassId: async () => {

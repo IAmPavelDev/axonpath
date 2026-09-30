@@ -31,4 +31,12 @@ export type ClassRepository = {
   findById(id: number): Promise<Pick<Class, "id" | "skillId" | "title" | "contentMd"> | null>;
   /** Titles + curriculum indexes for a set of class ids (answer-memory snippets). */
   listByIds(ids: number[]): Promise<Array<{ id: number; index: number; title: string }>>;
+  /**
+   * Current question counts for the given classes — the completion side of
+   * stats derivations (a class counts completed when distinct answered
+   * questions cover its count). Only classes that have questions appear.
+   */
+  findQuestionCountsByClassIds(
+    classIds: number[],
+  ): Promise<Array<{ classId: number; questionCount: number }>>;
 };

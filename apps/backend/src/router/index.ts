@@ -3,8 +3,9 @@ import { makeSkillHandlers, type SkillApiDeps } from "@/modules/learning/api/ski
 import { makeClassHandlers, type ClassApiDeps } from "@/modules/learning/api/class.handlers";
 import { makeQuizHandlers, type QuizApiDeps } from "@/modules/learning/api/quiz.handlers";
 import { makeAuthHandlers } from "@/modules/identity/api/auth.handlers";
+import { makeStatsHandlers, type StatsApiDeps } from "@/modules/learning/api/stats.handlers";
 
-export type LearningApiDeps = SkillApiDeps & ClassApiDeps & QuizApiDeps;
+export type LearningApiDeps = SkillApiDeps & ClassApiDeps & QuizApiDeps & StatsApiDeps;
 
 export const buildSkillRouter = (deps: SkillApiDeps) => {
   const handlers = makeSkillHandlers(deps);
@@ -46,9 +47,17 @@ export const buildAuthRouter = () => {
   };
 };
 
+export const buildStatsRouter = (deps: StatsApiDeps) => {
+  const handlers = makeStatsHandlers(deps);
+  return {
+    overview: rpc.stats.overview.handler(handlers.overview),
+  };
+};
+
 export const buildRouters = (deps: LearningApiDeps) => ({
   skill: buildSkillRouter(deps),
   class: buildClassRouter(deps),
   quiz: buildQuizRouter(deps),
   auth: buildAuthRouter(),
+  stats: buildStatsRouter(deps),
 });

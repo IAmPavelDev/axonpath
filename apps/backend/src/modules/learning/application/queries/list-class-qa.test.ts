@@ -34,6 +34,9 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
   let listedWith: number | null = null;
 
   const classRepo: ClassRepository = {
+    findQuestionCountsByClassIds: async () => {
+      throw new Error("not used in list tests");
+    },
     createWithQuestions: async () => {
       throw new Error("not used in list tests");
     },

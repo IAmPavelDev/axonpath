@@ -256,6 +256,19 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   };
 
   const classRepo: ClassRepository = {
+    findQuestionCountsByClassIds: async (classIds) => {
+      const counts = new Map<number, number>();
+      for (const question of state.questions.values()) {
+        if (question.classId === null || !classIds.includes(question.classId)) {
+          continue;
+        }
+        counts.set(question.classId, (counts.get(question.classId) ?? 0) + 1);
+      }
+      return [...counts].map(([classId, questionCount]) => ({
+        classId,
+        questionCount,
+      }));
+    },
     createWithQuestions: async (cls, questions) => {
       const id = ++classIdSeq;
       state.classes.set(id, {
@@ -317,6 +330,16 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     state.questions.get(questionId)?.classId ?? null;
 
   const quizRepo: QuizRepository = {
+    findAnswerActivityByUser: async (userId) =>
+      state.answers
+        .filter((answer) => answer.userId === userId)
+        .map((answer) => ({
+          // The harness has no clock; stats tests fix dates explicitly.
+          createdAt: new Date(0),
+          skillId: answer.skillId,
+          classId: classIdByQuestion(answer.questionId),
+          questionId: answer.questionId,
+        })),
     findByClassId: async (classId): Promise<QuestionView[]> => {
       const views: QuestionView[] = [];
       for (const question of state.questions.values()) {

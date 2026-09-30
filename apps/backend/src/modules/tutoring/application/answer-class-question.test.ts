@@ -70,6 +70,9 @@ const makeDeps = (
   };
 
   const classRepo: ClassRepository = {
+    findQuestionCountsByClassIds: async () => {
+      throw new Error("not used in qa tests");
+    },
     createWithQuestions: async () => {
       throw new Error("not used in qa tests");
     },

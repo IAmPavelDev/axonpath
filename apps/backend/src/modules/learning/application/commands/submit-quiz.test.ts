@@ -46,6 +46,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     requeue: async () => {},
   };
   const quizRepo: QuizRepository = {
+    findAnswerActivityByUser: async () => {
+      throw new Error("not used in submit tests");
+    },
     findByClassId: async () => {
       throw new Error("not used in submit tests");
     },

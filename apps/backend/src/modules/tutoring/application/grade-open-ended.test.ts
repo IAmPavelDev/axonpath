@@ -63,6 +63,7 @@ const makeFakeDeps = (options: {
     generateText: unused,
   };
   const quizRepo: QuizRepository = {
+    findAnswerActivityByUser: unused,
     findByClassId: unused,
     findScoreableByClassId: unused,
     createAnswers: unused,

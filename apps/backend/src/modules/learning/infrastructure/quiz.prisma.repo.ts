@@ -205,4 +205,23 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       ),
     );
   },
+
+  findAnswerActivityByUser: async (userId) => {
+    const rows = await prisma.answer.findMany({
+      where: { userId },
+      select: {
+        createdAt: true,
+        skillId: true,
+        questionId: true,
+        question: { select: { classId: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      skillId: row.skillId,
+      classId: row.question.classId,
+      questionId: row.questionId,
+    }));
+  },
 });

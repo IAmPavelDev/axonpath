@@ -64,4 +64,22 @@ export type QuizRepository = {
   updateGrades(
     rows: Array<{ answerId: number; score: number; isCorrect: boolean; feedback: string }>,
   ): Promise<void>;
+  /**
+   * Lightweight activity feed for stats derivations: every recorded attempt
+   * of the user with the owning skill and — through the question — the class
+   * it belongs to (null for class-less questions). Unbounded on purpose:
+   * streak derivations need full history, and the scan is proportional to a
+   * single user's answers (beta scale); swap for an aggregate query if that
+   * ever stops being true.
+   */
+  findAnswerActivityByUser(
+    userId: number,
+  ): Promise<
+    Array<{
+      createdAt: Date;
+      skillId: number | null;
+      classId: number | null;
+      questionId: number;
+    }>
+  >;
 };

@@ -35,6 +35,9 @@ const makeDeps = (
   let blockSeq = 100;
 
   const classRepo: ClassRepository = {
+    findQuestionCountsByClassIds: async () => {
+      throw new Error("not used in ask tests");
+    },
     createWithQuestions: async () => {
       throw new Error("not used in ask tests");
     },

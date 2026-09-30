@@ -55,6 +55,7 @@ const makeFakeDeps = (options: {
     return ok(vectors.map((_, i) => i));
   };
   const quizRepo: QuizRepository = {
+    findAnswerActivityByUser: unused,
     findByClassId: unused,
     findScoreableByClassId: unused,
     createAnswers: unused,
@@ -66,6 +67,7 @@ const makeFakeDeps = (options: {
   };
   const classRepo: ClassRepository = {
     createWithQuestions: unused,
+    findQuestionCountsByClassIds: unused,
     listBySkill: unused,
     listBySkillByIndex: unused,
     findTopBySkill: unused,

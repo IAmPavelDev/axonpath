@@ -130,4 +130,19 @@ export const makePrismaClassRepository = (): ClassRepository => ({
       select: { id: true, index: true, title: true },
     });
   },
+
+  findQuestionCountsByClassIds: async (classIds) => {
+    if (classIds.length === 0) {
+      return [];
+    }
+    const counts = await prisma.question.groupBy({
+      by: ["classId"],
+      where: { classId: { in: classIds } },
+      _count: { _all: true },
+    });
+    return counts.map((row) => ({
+      classId: row.classId!,
+      questionCount: row._count._all,
+    }));
+  },
 });
