@@ -47,6 +47,9 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const { data: progress } = useQuery({
     queryKey: ['skillProgress', skillId],
     queryFn: () => rpc.skill.progress({ id: skillId }),
+    // Graded open-ended scores surface through progress; refetch on mount
+    // (returning from a quiz) instead of waiting for the next poll tick.
+    refetchOnMount: 'always',
     // Progress moves with submits and newly generated lessons; same cadence
     // as the sibling queries so all three stay consistent on screen.
     refetchInterval: 10_000,

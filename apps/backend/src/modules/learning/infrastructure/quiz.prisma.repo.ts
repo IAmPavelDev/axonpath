@@ -176,4 +176,33 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       classId: row.question.classId,
     }));
   },
+
+  updateGrades: async (rows) => {
+    if (rows.length === 0) {
+      return;
+    }
+    // Merge target is the content JSON: read the stored answers once, then
+    // rewrite each as { answer, feedback } — answers are immutable once
+    // written, so read-then-update cannot race a submit.
+    const existing = await prisma.answer.findMany({
+      where: { id: { in: rows.map((row) => row.answerId) } },
+      select: { id: true, content: true },
+    });
+    const contentById = new Map(existing.map((row) => [row.id, row.content]));
+    await prisma.$transaction(
+      rows.map((row) =>
+        prisma.answer.update({
+          where: { id: row.answerId },
+          data: {
+            score: row.score,
+            isCorrect: row.isCorrect,
+            content: {
+              answer: answerTextOf(contentById.get(row.answerId)),
+              feedback: row.feedback,
+            },
+          },
+        }),
+      ),
+    );
+  },
 });

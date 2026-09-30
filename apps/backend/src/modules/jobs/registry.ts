@@ -11,10 +11,15 @@ import {
   SKILL_ANSWER_VECTORS_JOB,
   type MineAnswerVectors,
 } from "@/modules/memory/application/mine-answer-vectors";
+import {
+  GRADE_OPEN_ENDED_JOB,
+  type GradeOpenEnded,
+} from "@/modules/tutoring/application/grade-open-ended";
 import { getGenerateInitialSkillJobHandler } from "./generateInitialSkillJobHandler";
 import { getGenerateNextClassJobHandler } from "./generateNextClassJobHandler";
 import { getAnswerClassQuestionJobHandler } from "./answerClassQuestionJobHandler";
 import { getMineAnswerVectorsJobHandler } from "./mineAnswerVectorsJobHandler";
+import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
 
 /**
  * Job configuration: maps job names to their handlers. The composition root
@@ -27,6 +32,7 @@ export type JobRegistryDeps = {
   nextClassWorker: NextClassWorker;
   answerClassQuestion: AnswerClassQuestion;
   mineAnswerVectors: MineAnswerVectors;
+  gradeOpenEnded: GradeOpenEnded;
 };
 
 export const makeJobHandlers = ({
@@ -34,9 +40,11 @@ export const makeJobHandlers = ({
   nextClassWorker,
   answerClassQuestion,
   mineAnswerVectors,
+  gradeOpenEnded,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
   [CLASS_QA_ANSWER_JOB]: getAnswerClassQuestionJobHandler(answerClassQuestion),
   [SKILL_ANSWER_VECTORS_JOB]: getMineAnswerVectorsJobHandler(mineAnswerVectors),
+  [GRADE_OPEN_ENDED_JOB]: getGradeOpenEndedJobHandler(gradeOpenEnded),
 });

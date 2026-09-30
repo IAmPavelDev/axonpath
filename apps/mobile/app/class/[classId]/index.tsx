@@ -348,6 +348,9 @@ function QuizView({
   const { data, isLoading } = useQuery({
     queryKey: ['quizByClassId', classId],
     queryFn: () => rpc.quiz.get({ classId }),
+    // Graded scores for open-ended answers land server-side after the
+    // submit; remounting this screen (returning to the lesson) pulls them.
+    refetchOnMount: 'always',
   });
 
   if (isLoading || !data) {

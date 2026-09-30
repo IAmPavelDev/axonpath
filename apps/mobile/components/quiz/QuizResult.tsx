@@ -53,12 +53,22 @@ export const QuizResult: FC<{
                   {codeSegments(questionText, colorScheme ?? 'light', { style: REVIEW_CODE })}
                 </Text>
               </View>
-              <AnswerBlock
-                tone="success"
-                label={entry.correctAnswer ?? 'Answer key unavailable.'}
-              />
-              {!entry.isCorrect && (
-                <AnswerBlock tone="destructive" label={answerById[entry.questionId] ?? '—'} />
+              {entry.isCorrect === null ? (
+                // Open-ended, grading in flight: no verdict is possible yet,
+                // and the model answer never leaves the server.
+                <View className="self-start rounded-full border border-border px-3 py-1">
+                  <Text variant="label">Grading…</Text>
+                </View>
+              ) : (
+                <>
+                  <AnswerBlock
+                    tone="success"
+                    label={entry.correctAnswer ?? 'Answer key unavailable.'}
+                  />
+                  {!entry.isCorrect && (
+                    <AnswerBlock tone="destructive" label={answerById[entry.questionId] ?? '—'} />
+                  )}
+                </>
               )}
             </View>
           );

@@ -62,6 +62,7 @@ const makeFakeDeps = (options: {
     findHighestAnsweredClassIndex: unused,
     findAnswerStatsBySkill: unused,
     findAnswersWithQuestions: async () => options.answers ?? [],
+    updateGrades: unused,
   };
   const classRepo: ClassRepository = {
     createWithQuestions: unused,

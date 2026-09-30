@@ -147,6 +147,9 @@ const makeDeps = (
       findAnswersWithQuestions: async () => {
         throw new Error("not used in next-class tests");
       },
+      updateGrades: async () => {
+        throw new Error("not used in next-class tests");
+      },
     },
     eventRepo: {
       record: async (event) => {

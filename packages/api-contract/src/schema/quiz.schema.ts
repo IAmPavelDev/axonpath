@@ -29,8 +29,11 @@ export const SubmitQuizAnswersInput = z.object({
 
 export const QuestionResult = z.object({
   questionId: z.number(),
-  isCorrect: z.boolean(),
-  /** Null when the stored answerKey is not a plain string (legacy/JSON keys). */
+  /** Question kind — drives the client's verdict vs pending-grading rendering. */
+  type: QuestionType,
+  /** null = open-ended, grading in flight (null ⇒ pending, never a verdict). */
+  isCorrect: z.boolean().nullable(),
+  /** Null for OPEN_ENDED forever — the model answer never leaves the server. */
   correctAnswer: z.string().nullable(),
 });
 

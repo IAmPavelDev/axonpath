@@ -11,6 +11,7 @@ import {
   SKILL_NEXT_CLASS_JOB,
 } from "@/modules/tutoring/application/generate-next-class";
 import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
+import { GRADE_OPEN_ENDED_JOB } from "@/modules/tutoring/application/grade-open-ended";
 import {
   classesOfSkill,
   firstQuestionOfType,
@@ -24,7 +25,18 @@ import {
  */
 describe("adaptive loop integration", () => {
   it("runs create → init → submit → next-class, then dedups a consecutive retake", async () => {
-    const h = makeLoopHarness();
+    const h = makeLoopHarness({
+      gradingRaw: JSON.stringify({
+        results: [
+          {
+            answerId: 2,
+            score: 0.9,
+            correct: true,
+            feedback: "Right idea; name the join predicate explicitly.",
+          },
+        ],
+      }),
+    });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
 
     // 1. Create → GENERATING; init job → ACTIVE with class 0, questions,
@@ -55,6 +67,18 @@ describe("adaptive loop integration", () => {
     });
     expect(h.state.vectors[1]).toMatchObject({ source: VectorSource.AI_INITIAL, classIndex: 0 });
 
+    // The class gains one open-ended question (generation unlocks it in S5;
+    // grading must already handle it end-to-end).
+    h.state.questions.set(9001, {
+      id: 9001,
+      skillId,
+      classId: class0[0]?.id ?? 0,
+      type: "OPEN_ENDED",
+      text: "Explain why an INNER JOIN drops unmatched rows.",
+      choices: [],
+      answerKey: "Rows without a match in the other table fail the join predicate.",
+    });
+
     // 2. Submit with one deliberate wrong answer → scored, next-class enqueued.
     const submitQuiz = makeSubmitQuiz({
       quizRepo: h.deps.quizRepo,
@@ -69,15 +93,19 @@ describe("adaptive loop integration", () => {
     const submitted = await submitQuiz({
       classId: class0[0]?.id ?? 0,
       userId: 7,
-      answers: [{ questionId: trueFalse?.id ?? 0, answer: "False" }],
+      answers: [
+        { questionId: trueFalse?.id ?? 0, answer: "False" },
+        { questionId: 9001, answer: "Rows without matches are dropped." },
+      ],
     });
     expect(submitted.ok).toBe(true);
     if (submitted.ok) {
       expect(submitted.value).toMatchObject({
         score: 0,
-        total: 1,
+        total: 2,
         perQuestion: [
-          { isCorrect: false, correctAnswer: "True" },
+          { type: "TRUE_FALSE", isCorrect: false, correctAnswer: "True" },
+          { type: "OPEN_ENDED", isCorrect: null, correctAnswer: null },
         ],
       });
     }
@@ -110,6 +138,25 @@ describe("adaptive loop integration", () => {
     });
     await h.runJob(SKILL_ANSWER_VECTORS_JOB);
     expect(h.state.vectors).toHaveLength(3);
+
+    // 2c. Open-ended grading (Phase 7 D4): the pending open-ended answer
+    // gets its AI grade and the feedback lands in the content JSON.
+    expect(h.state.answers).toHaveLength(2);
+    await h.runJob(GRADE_OPEN_ENDED_JOB);
+    expect(h.state.answers[0]).toMatchObject({
+      id: 1,
+      score: 0,
+      isCorrect: false,
+    });
+    expect(h.state.answers[1]).toMatchObject({
+      id: 2,
+      score: 0.9,
+      isCorrect: true,
+      content: {
+        answer: "Rows without matches are dropped.",
+        feedback: "Right idea; name the join predicate explicitly.",
+      },
+    });
 
     // 3. Run the next-class handler → class 1 personalized on the miss.
     await h.runJob(SKILL_NEXT_CLASS_JOB);

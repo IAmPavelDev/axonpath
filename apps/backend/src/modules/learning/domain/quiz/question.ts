@@ -50,10 +50,14 @@ export type NewAnswer = {
   questionId: number;
   userId: number;
   skillId: number;
-  /** Storage convention for the Answer.content JSON column. */
-  content: { answer: string };
-  score: number;
-  isCorrect: boolean;
+  /**
+   * Storage convention for the Answer.content JSON column: `{ answer }` on
+   * write; background grading merges feedback -> `{ answer, feedback }`.
+   */
+  content: { answer: string; feedback?: string };
+  /** null = open-ended, pending background grading (Phase 7 D4). */
+  score: number | null;
+  isCorrect: boolean | null;
   timeSpentMs: number;
 };
 

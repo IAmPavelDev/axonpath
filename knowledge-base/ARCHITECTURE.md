@@ -150,11 +150,14 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
    `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled by `extractJsonObject` +
    per-field re-validation (`tutoring/domain/parse.ts`).
 3. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
-   open-ended scores 0 — generation is restricted to MC/TF) → `Answer` rows → enqueue
-   `skill-next-class`. A second, generic job (`skill-answer-vectors`) mines the wrong MC/TF
-   answers (cap 10/submit) into `ANSWER_DERIVED` vectors keyed by `answerId` — deduped per
-   answer, best-effort degrade; `buildNextClassPrompt` renders them as a "Known gaps — weave
-   in a re-test" block.
+   open-ended persists `score/isCorrect = null` and is graded asynchronously — still MC/TF-only
+   generation until S5) → `Answer` rows → enqueue `skill-next-class`. A second, generic job
+   (`skill-answer-vectors`) mines the wrong MC/TF answers (cap 10/submit) into `ANSWER_DERIVED`
+   vectors keyed by `answerId` — deduped per answer, best-effort degrade; `buildNextClassPrompt`
+   renders them as a "Known gaps — weave in a re-test" block. A third generic job
+   (`grade-open-ended`) grades open-ended answers in one batched AI call — per-entry coercion,
+   absent or invalid results degrade to score 0 with "Grading failed" feedback; feedback merges
+   into `Answer.content` as `{ answer, feedback }`.
 4. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
    user's answers (latest attempt per question) → retrieval **without** `excludeSkillId`
    (own history wanted; topK 12) → prompt = TUTOR_SYSTEM + topic + last title/summary +
@@ -258,8 +261,8 @@ surfaces as the preparing state above.
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (22 files / 138 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (23 files / 144 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), grade-open-ended (batch/degrade/partial), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
 stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list
@@ -278,6 +281,7 @@ FAILED/retry heal, both failure shapes).
 2. No per-skill progress breakdown → S1; `SkillProgress` table stays unused by design (D1).
 3. PAUSED/COMPLETED/ARCHIVED unreachable → S2 (status lifecycle UX).
 4. `ANSWER_DERIVED` vectors / `Vector.answerId` unused → S3 (answer memory) — done (S3, 2026-09-30).
-5. Open-ended ungeneratable and ungradable → S4 (background AI grading) + S5 (generation unlock).
+5. Open-ended ungeneratable and ungradable → S4 (background AI grading) + S5 (generation
+   unlock) — grading done (S4, 2026-09-30); generation unlock = S5.
 6. Non-transactional class+question persist → S6 (`createWithQuestions` `$transaction`).
 7. Dead `Skill.lambda` / `LAMBDA_DECAY_DEFAULT` → S7 (delete, not tune).

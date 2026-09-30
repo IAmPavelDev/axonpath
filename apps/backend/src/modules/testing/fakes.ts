@@ -28,6 +28,7 @@ import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generat
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
+import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
 import type {
   NextClassJobClaim,
   NextClassJobRepository,
@@ -42,11 +43,16 @@ export type AiScript = {
   descriptionRaw?: string;
   initRaw?: string;
   nextRaw?: string;
+  /** Grading response for open-ended submits; default grades nothing (degrade). */
+  gradingRaw?: string;
   /** Fail the FIRST generateJson call with this schema name, then succeed. */
   failOnceOn?: string;
   /** Fail the FIRST generateEmbeddings call, then succeed. */
   failEmbeddingsOnce?: boolean;
 };
+
+/** Default grading response: an empty results array — the degrade path. */
+const GRADING_RAW_DEFAULT = JSON.stringify({ results: [] });
 
 export type LoopHarness = {
   state: {
@@ -159,7 +165,9 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
             ? (script.initRaw ?? INIT_JSON)
             : request.schemaName === "next_class"
               ? (script.nextRaw ?? NEXT_JSON)
-              : null;
+              : request.schemaName === "grading"
+                ? (script.gradingRaw ?? GRADING_RAW_DEFAULT)
+                : null;
       if (raw === null) {
         throw new Error(`unexpected schema ${request.schemaName}`);
       }
@@ -397,6 +405,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
             classId: classIdByQuestion(answer.questionId),
           };
         }),
+    updateGrades: async (rows) => {
+      for (const row of rows) {
+        const answer = state.answers.find((a) => a.id === row.answerId);
+        if (!answer) continue;
+        answer.score = row.score;
+        answer.isCorrect = row.isCorrect;
+        answer.content = { answer: answer.content.answer, feedback: row.feedback };
+      }
+    },
   };
 
   const eventRepo: EventRepository = {
@@ -529,6 +546,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     quizRepo,
     classRepo,
   });
+  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
 
   const handlers = makeJobHandlers({
     generateInitialSkill: makeGenerateInitialSkill(deps),
@@ -539,6 +557,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       throw new Error("class-qa-answer not scripted in loop harness");
     },
     mineAnswerVectors,
+    gradeOpenEnded,
   });
 
   const runJob = async (jobName: string) => {

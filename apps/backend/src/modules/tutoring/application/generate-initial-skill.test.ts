@@ -120,6 +120,9 @@ const makeDeps = (
       findAnswersWithQuestions: async () => {
         throw new Error("not used in init tests");
       },
+      updateGrades: async () => {
+        throw new Error("not used in init tests");
+      },
     },
     eventRepo: {
       record: async (event) => {

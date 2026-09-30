@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { makeSubmitQuiz } from "./submit-quiz";
 import { SKILL_NEXT_CLASS_JOB } from "@/modules/tutoring/application/generate-next-class";
 import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
+import { GRADE_OPEN_ENDED_JOB } from "@/modules/tutoring/application/grade-open-ended";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ScoreableQuestion } from "@/modules/learning/domain/quiz/question";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
@@ -59,6 +60,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
       throw new Error("not used in submit tests");
     },
     findAnswersWithQuestions: async () => {
+      throw new Error("not used in submit tests");
+    },
+    updateGrades: async () => {
       throw new Error("not used in submit tests");
     },
     findHighestAnsweredClassIndex: async () => {
@@ -123,8 +127,8 @@ describe("makeSubmitQuiz", () => {
         score: 1,
         total: 2,
         perQuestion: [
-          { questionId: 1, isCorrect: true, correctAnswer: "Paris" },
-          { questionId: 2, isCorrect: false, correctAnswer: "True" },
+          { questionId: 1, type: "MULTIPLE_CHOICE", isCorrect: true, correctAnswer: "Paris" },
+          { questionId: 2, type: "TRUE_FALSE", isCorrect: false, correctAnswer: "True" },
         ],
       }),
     );
@@ -195,8 +199,8 @@ describe("makeSubmitQuiz", () => {
     ]);
   });
 
-  it("open-ended questions are persisted with score 0 and a null correctAnswer", async () => {
-    const { submitQuiz, answerRows } = makeFakeRepos(QUESTIONS);
+  it("open-ended answers persist pending (null grade) and enqueue background grading", async () => {
+    const { submitQuiz, answerRows, enqueued } = makeFakeRepos(QUESTIONS);
 
     const result = await submitQuiz({
       classId: 100,
@@ -206,10 +210,18 @@ describe("makeSubmitQuiz", () => {
 
     expect(result.ok && result.value.perQuestion[0]).toEqual({
       questionId: 3,
-      isCorrect: false,
+      type: "OPEN_ENDED",
+      isCorrect: null,
+      // The model answer never leaves the server for open-ended questions.
       correctAnswer: null,
     });
-    expect(answerRows[0]).toMatchObject({ score: 0, isCorrect: false });
+    // Pending grading: nulls, not a fake 0.
+    expect(answerRows[0]).toMatchObject({ score: null, isCorrect: null });
+    expect(enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB)).toEqual([
+      { jobName: GRADE_OPEN_ENDED_JOB, payload: { answerIds: [1000] } },
+    ]);
+    expect(result.ok && result.value.score).toBe(0);
+    expect(result.ok && result.value.total).toBe(1);
   });
 
   it("records an ANSWER_SUBMITTED event with class score/total and the class skillId", async () => {
@@ -314,6 +326,10 @@ describe("makeSubmitQuiz", () => {
         jobName: SKILL_ANSWER_VECTORS_JOB,
         payload: { skillId: 10, userId: 1, answerIds: [1001] },
       },
+    ]);
+    // The same submit also enqueues grading for its open-ended answer.
+    expect(enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB)).toEqual([
+      { jobName: GRADE_OPEN_ENDED_JOB, payload: { answerIds: [1002] } },
     ]);
   });
 

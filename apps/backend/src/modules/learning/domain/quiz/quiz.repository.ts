@@ -54,4 +54,14 @@ export type QuizRepository = {
    * silently absent from the result, keeping lookups input-independent.
    */
   findAnswersWithQuestions(answerIds: number[]): Promise<AnswerWithQuestion[]>;
+  /**
+   * Write back AI grades for open-ended answers (Phase 7 D4): sets
+   * Answer.score / Answer.isCorrect and merges the feedback into the
+   * Answer.content JSON, which becomes `{ answer, feedback }` — the content
+   * column is the merge target, so no migration and the original answer
+   * text is preserved.
+   */
+  updateGrades(
+    rows: Array<{ answerId: number; score: number; isCorrect: boolean; feedback: string }>,
+  ): Promise<void>;
 };

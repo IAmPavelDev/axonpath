@@ -9,12 +9,20 @@ import { canTransition } from "@/modules/learning/domain/skill/skill";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
-import type { QuizError, SubmittedAnswer } from "@/modules/learning/domain/quiz/question";
+import type {
+  QuizError,
+  ScoreableQuestion,
+  SubmittedAnswer,
+} from "@/modules/learning/domain/quiz/question";
 import {
   ANSWER_VECTORS_CAP,
   SKILL_ANSWER_VECTORS_JOB,
   type SkillAnswerVectorsJobPayload,
 } from "@/modules/memory/application/mine-answer-vectors";
+import {
+  GRADE_OPEN_ENDED_JOB,
+  type GradeOpenEndedJobPayload,
+} from "@/modules/tutoring/application/grade-open-ended";
 import { scoreAnswer } from "@/modules/learning/domain/quiz/scoring";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 export type SubmitQuizDeps = {
@@ -31,7 +39,9 @@ export type SubmitQuizInput = {
 };
 export type QuestionResult = {
   questionId: number;
-  isCorrect: boolean;
+  type: ScoreableQuestion["type"];
+  /** null = open-ended, grading in flight. */
+  isCorrect: boolean | null;
   correctAnswer: string | null;
 };
 export type SubmitQuizOutput = {
@@ -63,15 +73,27 @@ export const makeSubmitQuiz =
     }
 
     const byId = new Map(questions.map((question) => [question.id, question]));
-    const scored = input.answers.flatMap((submitted) => {
-      const question = byId.get(submitted.questionId);
-      if (!question) {
-        return [];
-      }
-      return [{ question, submitted, ...scoreAnswer(question, submitted) }];
-    });
+    const scored = input.answers.flatMap(
+      (submitted): Array<{
+        question: ScoreableQuestion;
+        submitted: SubmittedAnswer;
+        score: number | null;
+        isCorrect: boolean | null;
+      }> => {
+        const question = byId.get(submitted.questionId);
+        if (!question) {
+          return [];
+        }
+        // OPEN_ENDED has no machine grade: it persists pending (nulls) and is
+        // graded asynchronously (Phase 7 D4). MC/TF keeps the sync exact-match.
+        if (question.type === "OPEN_ENDED") {
+          return [{ question, submitted, score: null, isCorrect: null }];
+        }
+        return [{ question, submitted, ...scoreAnswer(question, submitted) }];
+      },
+    );
 
-    const score = scored.reduce((sum, entry) => sum + entry.score, 0);
+    const score = scored.reduce((sum, entry) => sum + (entry.score ?? 0), 0);
 
     const answerIds = await quizRepo.createAnswers(
       scored.map(({ question, submitted, isCorrect, score }) => ({
@@ -109,6 +131,18 @@ export const makeSubmitQuiz =
         } satisfies SkillAnswerVectorsJobPayload);
       }
 
+      // Open-ended answers are graded in the background (Phase 7 D4): one
+      // job per submit, no cap — a quiz carries only a handful of them.
+      const openEndedAnswerIds = scored
+        .map((entry, i) => ({ entry, answerId: answerIds[i] }))
+        .filter(({ entry }) => entry.question.type === "OPEN_ENDED")
+        .map(({ answerId }) => answerId);
+      if (openEndedAnswerIds.length > 0) {
+        jobs.enqueue(GRADE_OPEN_ENDED_JOB, {
+          answerIds: openEndedAnswerIds,
+        } satisfies GradeOpenEndedJobPayload);
+      }
+
       // Durable row first: if the process dies before the flip or before the
       // in-memory job fires, the sweeper still picks the skill up — an
       // ACTIVE-or-GENERATING skill is never left with a lost signal.
@@ -129,9 +163,15 @@ export const makeSubmitQuiz =
 
     const perQuestion = scored.map(({ question, isCorrect }) => ({
       questionId: question.id,
+      type: question.type,
       isCorrect,
+      // The model answer never leaves the server for open-ended questions.
       correctAnswer:
-        typeof question.answerKey === "string" ? question.answerKey : null,
+        question.type === "OPEN_ENDED"
+          ? null
+          : typeof question.answerKey === "string"
+            ? question.answerKey
+            : null,
     }));
 
     await eventRepo.record({

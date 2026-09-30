@@ -62,6 +62,7 @@ const makeDeps = ({
       findAnswersByClassAndUser: async () => notUsed("findAnswersByClassAndUser"),
       findAnswerStatsBySkill: async () => notUsed("findAnswerStatsBySkill"),
       findAnswersWithQuestions: async () => notUsed("findAnswersWithQuestions"),
+      updateGrades: async () => notUsed("updateGrades"),
       findHighestAnsweredClassIndex: async (skillId: number) =>
         answeredIndex[skillId] ?? null,
     } satisfies QuizRepository,

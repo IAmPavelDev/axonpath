@@ -10,6 +10,7 @@ import { makeVectorMetadataRepository } from "@/modules/memory/infrastructure/ve
 import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrieve-relevant-context";
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
+import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
 import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
@@ -92,6 +93,8 @@ export const configureContainer = (): Container => {
     classRepo,
   });
 
+  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
+
   const nextClassJobs = makePrismaNextClassJobRepository();
   const nextClassWorker = makeNextClassWorker({
     nextClassJobs,
@@ -104,6 +107,7 @@ export const configureContainer = (): Container => {
       nextClassWorker,
       answerClassQuestion,
       mineAnswerVectors,
+      gradeOpenEnded,
     }),
   );
 
