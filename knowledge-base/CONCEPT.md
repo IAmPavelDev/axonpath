@@ -45,8 +45,7 @@ user fact, and uses that to make the *next* lesson personally relevant.
 | **Answer** | A user's recorded attempt at a question (content, score, correctness, time). | `Answer` model |
 | **Context snippet** | A short atomic fact about the user stored for personalization. | `Vector` (source `AI_INITIAL/NEXT/ANSWER_DERIVED`) + `textSnippet` |
 | **Vector** | An embedding of a snippet, or of derived answer content. | Qdrant `axon_vectors`, point id = `Vector.id` |
-| **Adaptive loop** | Read → quiz → (retrieve context + score) → generate next class. | **NOT YET WIRED** |
-| **lambda (0.02)** | Suggested decay rate for the relevance of stored context over time (memory half-life). | `Skill.lambda` — **unused** |
+| **Adaptive loop** | Read → quiz → (retrieve context + score) → generate next class. | Wired end-to-end since Phase 3+4 (2026-09-21) |
 | **Event log** | Lightweight audit trail of key moments (skill created, class generated, answer submitted...). | `Event` model |
 
 ## 4. Domain model in plain English
@@ -75,22 +74,22 @@ User
 
 ## 5. The "memory" idea (the strategic differentiator)
 
-The `Vector` model is the heart of the concept, and currently the most under-built:
+The `Vector` model is the heart of the concept:
 
 - **What it is:** a vectorized store of *small, self-contained facts* about a user's learning
   context, sourced from:
-  - `AI_INITIAL` — facts the model extracted when first creating the skill.
-  - `AI_NEXT` — facts learned as new classes are generated **[PLANNED]**.
-  - `ANSWER_DERIVED` — facts mined from a user's answers **[PLANNED]**.
+  - `AI_INITIAL` — facts the model extracted when first creating the skill (written on init).
+  - `AI_NEXT` — facts learned as new classes are generated (shipped — a per-lesson summary
+    plus fresh learner snippets, written on every next-class).
+  - `ANSWER_DERIVED` — facts mined from a user's answers **[PLANNED]** (Phase 7 S3).
 - **The intent:** instead of dumping the user's whole history into every prompt, the system
   *retrieves only the most relevant vectors* (semantic search over Qdrant), and feeds them to
-  Gemini so the next class is personalized and doesn't repeat known material.
-- **`Skill.lambda`** exists to let older memories "decay" so stale context doesn't dominate — a
-  recall/relevance weight. Unused today.
+  the chat model so the next class is personalized and doesn't repeat known material.
 
-**Status:** vectors are written on skill creation to Qdrant and **retrieved** on later skill
-creation (`searchSimilar` filters prior user context into `generateInitSkill`). Next-class ("loop")
-and answer-derived retrieval remain **[PLANNED]**.
+**Status:** vectors are written on skill creation and on every next-class generation, and
+**retrieved** into generation (`generateInitSkill` excludes prior-skill context;
+`generateNextClass` includes it, topK 12). Answer-derived mining remains **[PLANNED]**
+(Phase 7 S3).
 
 ## 6. User journey map (desired)
 
@@ -114,14 +113,16 @@ journey
 
 | Product vision | Code today |
 |---|---|
-| User signs up / logs in | Hard-coded user id 1, no auth |
-| User picks a topic and it builds a course | `skill.create` works, but there is **no entry point in the UI** |
+| User signs up / logs in | ✅ Firebase email/password + Google (per-request ID-token verification) |
+| User picks a topic and it builds a course | ✅ Done — create flow + description screen + skill list/detail |
 | Read a lesson | ✅ Works (class conspect renders Markdown) |
-| Answer a quiz | Partial: quiz renders; **submit does nothing** |
-| System adapts next lesson | **Not implemented** (`generateNextClass` commented out) |
-| Personalized memory influences content | Vectors written, **never retrieved** |
-| Progress tracking | `SkillProgress` table exists, **unused** |
-| Status lifecycle | Stuck at `DRAFT`; nothing transitions it |
+| Answer a quiz | ✅ Submit is scored server-side and persisted (MC/TF; open-ended AI grading → Phase 7 S4) |
+| System adapts next lesson | ✅ `generate-next-class` live — misses re-taught; retake dedup + durable job queue |
+| Personalized memory influences content | ✅ `AI_INITIAL`/`AI_NEXT` retrieved into generation; `ANSWER_DERIVED` pending (Phase 7 S3) |
+| Progress tracking | ✅ `skill.progress` derived query + detail-screen per-lesson panel (Phase 7 S1) |
+| Status lifecycle | ✅ Fully driven incl. user pause/complete/archive (Phase 7 S2) |
+
+Current-state detail: `ARCHITECTURE.md`.
 
 ## 8. Non-goals / scope boundaries (for AI agents)
 

@@ -38,7 +38,6 @@ const makeDeps = ({
             description: "",
             status: skill.status,
             userId: skill.userId,
-            lambda: 1,
             requestId: null,
             createdAt: new Date(),
             updatedAt: new Date(),

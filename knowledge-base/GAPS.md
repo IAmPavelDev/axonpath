@@ -1,9 +1,9 @@
 # Axon — Gap Ledger
 
-> **Status 2026-09-30** (re-verified at `48c484b`: 8, 10, 13 remain open; Phase 7 still
-> pending). This file was the 2026-09 gap analysis (pre-refactor file
-> references). All beta gaps are closed; the open/partial items (8, 10, 13) are planned as
-> **Phase 7** — execution authority `knowledge-base/PHASE7_POST_BETA.md`. Current-state
+> **Status 2026-09-30** — all 15 rows closed (8 via Phase 7 S1; 10 and 13 via Phase 7 S6+S7,
+> same day). This file was the 2026-09 gap analysis (pre-refactor file references). All beta
+> gaps are closed; remaining Phase 7 work (S3–S5) has execution authority
+> `knowledge-base/PHASE7_POST_BETA.md`. Current-state
 > detail: `knowledge-base/ARCHITECTURE.md`; beta history: `knowledge-base/BETA_PLAN.md`.
 
 ## Status summary
@@ -17,12 +17,12 @@
 | 5 | 🟠 Quiz submit dead | ✅ CLOSED — scored vs server-side `answerKey`, `Answer` rows, real result UI, `ANSWER_SUBMITTED` events |
 | 6 | 🟠 Fire-and-forget gen unobservable | ✅ CLOSED — `GENERATING` on create; `ACTIVE`/`FAILED` + `ERROR_OCCURRED` on init end; mobile preparing state |
 | 7 | 🟡 Status never advanced | ✅ CLOSED — `canTransition` state machine, migrations + DRAFT backfill. PAUSED/COMPLETED UX → post-beta |
-| 8 | 🟡 No progress tracking | 🕓 OPEN (post-beta) — list query already computes lessonCount/completedLessons/learnedPoints; no dedicated progress UI/aggregation |
+| 8 | 🟡 No progress tracking | ✅ CLOSED (Phase 7 S1, 2026-09-30) — skill.progress derived query + per-lesson progress UI |
 | 9 | 🟡 Answer flow incomplete | ✅ CLOSED for beta — scoring + persistence done; `ANSWER_DERIVED` vectors → post-beta |
-| 10 | 🟡 Dead config | 🔶 PARTIAL — amqplib/queue code removed; unused `rabbitmq` container still declared in dev compose; `lambda` unused |
+| 10 | 🟡 Dead config | ✅ CLOSED (Phase 7 S6+S7, 2026-09-30) — rabbitmq deleted from dev compose; lambda surface deleted |
 | 11 | 🟡 Errors not surfaced | ✅ CLOSED — `skill.retry` route (NotOwned 404 / InvalidTransition 409) + mobile FAILED chip, retry affordance, and detail banner |
 | 12 | 🟡 No tests | ✅ CLOSED — 15 files / 86 tests green, incl. the composed loop integration test (real use cases + in-memory fakes) and the next-class worker/sweeper/reconciler tests |
-| 13 | 🟢 Non-transactional pipeline | 🔶 PARTIAL — init retry guard shipped (skip-if-class-exists; retries can never corrupt a skill); pipeline itself still non-transactional → post-beta |
+| 13 | 🟢 Non-transactional pipeline | ✅ CLOSED (Phase 7 S6, 2026-09-30) — createWithQuestions single $transaction |
 | 14 | 🟢 Mobile polish | ✅ CLOSED — `EXPO_PUBLIC_API_URL` overrides the RPC base URL (platform defaults preserved) |
 | 15 | 🟢 Build/dev reproducibility | ✅ CLOSED — backend emits `dist/` (tsc + module-alias, nodenext), Dockerfile `production` stage, compose fixed; image boots `/health` with migrations applied |
 
@@ -50,17 +50,16 @@ Qdrant `axon_vectors` (3072, Cosine); Postgres keeps relational metadata only. R
 
 ## 🟡 7. Skill status is never advanced → closed (see BETA_PLAN §Phase 3+4)
 
-## 🟡 8. No progress tracking — open, post-beta
 
-## 🟡 9. Answer schema/flow incomplete → closed for beta
+## 🟡 8. No progress tracking → closed (Phase 7 S1: skill.progress + per-lesson UI)
 
-## 🟡 10. Hard-coded / dead config — partial (rabbitmq container, lambda)
+## 🟡 10. Hard-coded / dead config → closed (Phase 7 S6+S7: rabbitmq + lambda deleted)
 
 ## 🟡 11. Errors are not surfaced to the client → closed (Phase 6: FAILED UX + retry)
 
 ## 🟡 12. No tests → closed (Phase 6: loop integration test; 64 green)
 
-## 🟢 13. Non-transactional background pipeline → partial (retry-safety done; transactionality post-beta)
+## 🟢 13. Non-transactional background pipeline → closed (Phase 7 S6: createWithQuestions $transaction)
 
 ## 🟢 14. Mobile polish & config → closed (Phase 6: EXPO_PUBLIC_API_URL)
 

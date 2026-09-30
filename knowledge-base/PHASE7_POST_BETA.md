@@ -1,8 +1,8 @@
 # Axon — Phase 7: Post-beta (progress, memory depth, richer quizzes, platform hygiene)
 
-> Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 at `48c484b`
-> (backend 19 files / 108 tests green, mobile `tsc --noEmit` clean).
-> Status: **IN PROGRESS — S1–S2 DONE (2026-09-30); S3–S7 pending** — this file is the execution authority for everything
+> Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 through S2 at `7dfb6b7`
+> and through M3 in this change (backend suite counts per ARCHITECTURE §8).
+> Status: **IN PROGRESS — S1, S2, S6, S7 DONE (2026-09-30); S3–S5 pending** — this file is the execution authority for everything
 > after beta. Since 2026-09-22, out-of-plan work landed WITHOUT consuming S1–S7 scope:
 > class Q&A / Ask-AI (`6c1efeb`, `e4ea158`, `457b740`), quiz-exit redirect to the lessons
 > list (`e988e6e`), 10 s skill-status polling (`7dd5af7`), Source Sans 3 + blue-tinted
@@ -237,7 +237,7 @@ exists with data to fit it against.
   node blocks image pulls (`EAI_AGAIN`), and the standing constraint is to leave Tailscale
   alone.
 
-### S7 — Delete lambda surface (D7)
+### S7 — ✅ DONE (2026-09-30) — Delete lambda surface (D7)
 - Migration dropping `Skill.lambda`; remove from schema, `SkillListItem`, `listByUser`
   select, `config.ts`; sweep test fixtures; contract list schema if it exposes `lambda`;
   fix the stale ARCHITECTURE §7 row.

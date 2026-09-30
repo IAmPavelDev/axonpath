@@ -197,8 +197,7 @@ erDiagram
     Question ||--o{ Answer : receives
     Answer ||--o{ Vector : derives
 ```
-
-Key tables: `Skill` (topic, description, status, lambda, requestId UK), `Class`
+Key tables: `Skill` (topic, description, status, requestId UK), `Class`
 (UNIQUE(skillId, index), contentMd, aiModel), `Question` (type, text, choices, answerKey
 server-side only), `Answer` (content json, score, isCorrect, timeSpentMs), `Event` (audit:
 SKILL_CREATED, CLASS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED, ERROR_OCCURRED,
@@ -249,7 +248,6 @@ surfaces as the preparing state above.
 | `QDRANT_URL` | Qdrant (default `http://localhost:6333`) |
 | `ZAI_API_KEY` | Z.ai chat (glm-5.3-flash) |
 | `GEMINI_API_KEY` | Gemini embeddings |
-| `FIREBASE_PROJECT_ID` | ID-token audience/issuer verification |
 | `LAMBDA_DECAY_DEFAULT` | unused decay default (0.02) |
 | `APP_PORT` / `APP_HOST` / `NODE_ENV` | HTTP bind (compose maps 3001:3001) |
 

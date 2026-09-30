@@ -5,7 +5,6 @@ export type SkillListItem = {
     description: string;
     status: string;
     userId: number;
-    lambda: number;
     requestId: number | null;
     createdAt: Date;
     updatedAt: Date;
