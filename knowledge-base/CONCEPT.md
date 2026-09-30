@@ -81,7 +81,7 @@ The `Vector` model is the heart of the concept:
   - `AI_INITIAL` — facts the model extracted when first creating the skill (written on init).
   - `AI_NEXT` — facts learned as new classes are generated (shipped — a per-lesson summary
     plus fresh learner snippets, written on every next-class).
-  - `ANSWER_DERIVED` — facts mined from a user's answers **[PLANNED]** (Phase 7 S3).
+  - `ANSWER_DERIVED` — facts mined from a user's answers (shipped — Phase 7 S3, keyed by `answerId`).
 - **The intent:** instead of dumping the user's whole history into every prompt, the system
   *retrieves only the most relevant vectors* (semantic search over Qdrant), and feeds them to
   the chat model so the next class is personalized and doesn't repeat known material.
