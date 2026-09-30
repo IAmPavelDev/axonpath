@@ -20,6 +20,8 @@ type Props = {
   onRegisterChunkLayout?: (index: number, y: number) => void;
   onRegisterQaLayout?: (index: number, y: number) => void;
   onFollowUp?: (anchorParagraph: number, excerpt: string) => void;
+  /** Long-press "Ask AI" on selected text: (chunk index, selected text). */
+  onAskSelection?: (index: number, selectedText: string) => void;
   onRetryTemp?: (tempId: number) => void;
   onAskAgain?: (anchorParagraph: number, question: string) => void;
 };
@@ -39,6 +41,7 @@ export const ClassConspect: FC<Props> = ({
   onRegisterQaLayout,
   onFollowUp,
   onRetryTemp,
+  onAskSelection,
   onAskAgain,
 }) => {
   // The screen header already carries the lesson title; a leading h1 in
@@ -88,7 +91,13 @@ export const ClassConspect: FC<Props> = ({
               accessibilityLabel={`Anchor your question to paragraph ${i + 1}`}
               onPress={() => onAnchorChunk?.(i, chunkExcerpt(chunk))}>
               <View>
-                <ConspectMarkdown md={chunk} disableLinks={anchorMode} />
+                <ConspectMarkdown
+                  md={chunk}
+                  disableLinks={anchorMode}
+                  selectionAsk={
+                    onAskSelection ? { onSelect: (text) => onAskSelection(i, text) } : undefined
+                  }
+                />
               </View>
             </TouchableWithoutFeedback>
           </View>

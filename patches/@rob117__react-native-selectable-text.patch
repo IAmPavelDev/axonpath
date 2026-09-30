@@ -1,0 +1,48 @@
+diff --git a/android/src/main/java/com/selectabletext/SelectableTextView.kt b/android/src/main/java/com/selectabletext/SelectableTextView.kt
+index d25fffa7f60905bc7a2d14e74d791ea14b444c1d..5287efbdb3d34ababaa87bdcde0f36568d36c9a2 100644
+--- a/android/src/main/java/com/selectabletext/SelectableTextView.kt
++++ b/android/src/main/java/com/selectabletext/SelectableTextView.kt
+@@ -49,22 +49,27 @@ class SelectableTextView : FrameLayout {
+       }
+       
+       override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+-        menu?.clear()
++        // Replace only OUR group; native Copy/Cut/Share/Select All stay intact.
++        menu?.removeGroup(MENU_GROUP)
+         menuOptions.forEachIndexed { index, option ->
+-          menu?.add(0, index, 0, option)
++          menu?.add(MENU_GROUP, index, 0, option)
+         }
+         return true
+       }
+-      
++
+       override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
++        val clicked = item ?: return false
++        // Not ours (native Copy/Share/…) → default TextView handling.
++        if (clicked.groupId != MENU_GROUP) return false
+         val selectionStart = textView.selectionStart
+         val selectionEnd = textView.selectionEnd
++        if (selectionStart < 0 || selectionEnd <= selectionStart) return false
+         val selectedText = textView.text.toString().substring(selectionStart, selectionEnd)
+-        val chosenOption = menuOptions[item?.itemId ?: 0]
+-        
++        val chosenOption = menuOptions.getOrNull(clicked.itemId) ?: return false
++
+         // Send event to React Native
+         onSelectionEvent(chosenOption, selectedText)
+-        
++
+         mode?.finish()
+         return true
+       }
+@@ -94,4 +99,9 @@ class SelectableTextView : FrameLayout {
+       setupTextView()
+     }
+   }
++
++  companion object {
++    /** Menu group reserved for custom options, so native items survive. */
++    const val MENU_GROUP = 4242
++  }
+ }

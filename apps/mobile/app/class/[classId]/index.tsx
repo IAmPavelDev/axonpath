@@ -286,6 +286,7 @@ function ConspectView({
           anchorMode={anchorMode}
           onAnchorChunk={(index, excerpt) => setComposer({ anchor: index, excerpt })}
           qaByAnchor={qa.blocksByAnchor}
+          onAskSelection={(index, text) => setComposer({ anchor: index, excerpt: text })}
           onRegisterChunkLayout={registerLayout('chunk')}
           onRegisterQaLayout={registerLayout('qa')}
           onFollowUp={(index, excerpt) => setComposer({ anchor: index, excerpt })}

@@ -1,4 +1,5 @@
 import { Markdown, type RenderFunction } from 'react-native-markdown-x';
+import { SelectableTextView } from '@rob117/react-native-selectable-text';
 import { highlightSpans, resolveLanguage, type Scheme } from '@/lib/code-highlight';
 import { FONTS, THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
@@ -182,7 +183,16 @@ const makeFigureStyles = (scheme: Scheme) => {
   });
 };
 
-export const makeRenderFunctions = (scheme: Scheme) => {
+/*
+ * Native selection-menu item for the "Ask AI" hook. Module-level constant so
+ * the array identity (and thus the native prop) never churns across renders.
+ */
+const ASK_MENU = ['Ask AI'];
+
+/** Long-press selection hook: prose paragraphs gain the native "Ask AI" item. */
+export type SelectionAsk = { onSelect: (selectedText: string) => void };
+
+export const makeRenderFunctions = (scheme: Scheme, ask?: SelectionAsk) => {
   // The library applies styles.text AFTER the inherited cascade, which
   // would flatten heading typography; flip the order so parent styles win.
   const text: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => (
@@ -195,12 +205,29 @@ export const makeRenderFunctions = (scheme: Scheme) => {
    * textgroup is the outermost <Text> of every paragraph/heading; Android
    * maps one native TextView per outermost Text, so `selectable` must live
    * here for long-press selection (incl. nested strong/em/code spans) to work.
+   *
+   * With `ask`, the paragraph is wrapped in a SelectableTextView whose native
+   * hook targets exactly that one TextView, so the selection toolbar gains an
+   * "Ask AI" item; the inner Text tree — rich spans included — is untouched.
    */
-  const textgroup: RenderFunction = ({ Text, node, styles, children }) => (
-    <Text key={node.key} selectable style={styles.textgroup}>
-      {children}
-    </Text>
-  );
+  const textgroup: RenderFunction = ({ Text, node, styles, children }) =>
+    ask ? (
+      <SelectableTextView
+        key={node.key}
+        menuOptions={ASK_MENU}
+        onSelection={({ chosenOption, highlightedText }) => {
+          if (chosenOption === ASK_MENU[0]) ask.onSelect(highlightedText);
+        }}
+        style={{ width: '100%' }}>
+        <Text selectable style={styles.textgroup}>
+          {children}
+        </Text>
+      </SelectableTextView>
+    ) : (
+      <Text key={node.key} selectable style={styles.textgroup}>
+        {children}
+      </Text>
+    );
 
   const codeBlock: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => {
     // We trim new lines off the end of code blocks because the parser sends an extra one.
@@ -278,17 +305,19 @@ const plainLink: RenderFunction = ({ Text, node, children, styles }) => (
   </Text>
 );
 
-export const ConspectMarkdown: FC<{ md: string; disableLinks?: boolean }> = ({
-  md,
-  disableLinks = false,
-}) => {
+export const ConspectMarkdown: FC<{
+  md: string;
+  disableLinks?: boolean;
+  /** When set, prose paragraphs gain the native selection item "Ask AI". */
+  selectionAsk?: SelectionAsk;
+}> = ({ md, disableLinks = false, selectionAsk }) => {
   const { colorScheme } = useColorScheme();
   const scheme = colorScheme ?? 'light';
   const styles = useMemo(() => makeStyles(scheme), [scheme]);
   const renderFunctions = useMemo(() => {
-    const fns = makeRenderFunctions(scheme);
+    const fns = makeRenderFunctions(scheme, selectionAsk);
     return disableLinks ? { ...fns, link: plainLink, blocklink: plainLink } : fns;
-  }, [scheme, disableLinks]);
+  }, [scheme, disableLinks, selectionAsk]);
 
   return (
     <Markdown styles={styles} renderFunctions={renderFunctions}>

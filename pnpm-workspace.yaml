@@ -1,9 +1,8 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
+  - apps/*
+  - packages/*
 
-# Metro (React Native/Expo bundler) cannot resolve modules inside pnpm's
-# isolated .pnpm store — EAS builds failed on @expo/metro-runtime and
-# whatwg-fetch. Hoisted layout = npm-like flat node_modules, which Expo
-# recommends for pnpm monorepos. Both spellings cover pnpm 9 and 10.
 nodeLinker: hoisted
+
+patchedDependencies:
+  '@rob117/react-native-selectable-text': patches/@rob117__react-native-selectable-text.patch

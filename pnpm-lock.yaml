@@ -7,6 +7,11 @@ settings:
 overrides:
   lightningcss: 1.27.0
 
+patchedDependencies:
+  '@rob117/react-native-selectable-text':
+    hash: 0a805015f3d0d6b7b78fc4018c87b81597a387fe5f0194aa213274e50868003a
+    path: patches/@rob117__react-native-selectable-text.patch
+
 importers:
 
   .:
@@ -120,6 +125,9 @@ importers:
       '@rn-primitives/slot':
         specifier: ^1.2.0
         version: 1.2.0(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      '@rob117/react-native-selectable-text':
+        specifier: ^2.1.0
+        version: 2.1.0(patch_hash=0a805015f3d0d6b7b78fc4018c87b81597a387fe5f0194aa213274e50868003a)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       '@tanstack/react-query':
         specifier: ^5.87.4
         version: 5.87.4(react@19.2.3)
@@ -2325,6 +2333,12 @@ packages:
         optional: true
       react-native-web:
         optional: true
+
+  '@rob117/react-native-selectable-text@2.1.0':
+    resolution: {integrity: sha512-54gb7slKGCoEnv36T02xzJ/taPv4xq1DyQQjHWwnYluteK7M/CvQcmBOtCsQkhfgm28XQyYbm4d0Cw8+qcl4Rw==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
 
   '@rolldown/binding-android-arm-eabi@1.2.8':
     resolution: {integrity: sha512-tN5aztYkKCte4i5SIrrz5yK/HMjEuCqCSCJa418jOV8tZ1cBY3YF2otxB1ktPxzsLA1BeTqwapK0bfjxNvHJVw==}
@@ -8164,6 +8178,11 @@ snapshots:
     optionalDependencies:
       react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
       react-native-web: 0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+
+  '@rob117/react-native-selectable-text@2.1.0(patch_hash=0a805015f3d0d6b7b78fc4018c87b81597a387fe5f0194aa213274e50868003a)(react-native@0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@react-native/metro-config@0.87.1(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3)
 
   '@rolldown/binding-android-arm-eabi@1.2.8':
     optional: true
