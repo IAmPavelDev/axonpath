@@ -100,8 +100,8 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Protected guard={authStatus === 'signedIn'}>
                 <Stack.Screen name="index" />
-                <Stack.Screen name="skill" />
-                <Stack.Screen name="class" />
+                <Stack.Screen name="skill/[skillId]" />
+                <Stack.Screen name="class/[classId]" />
                 <Stack.Screen name="settings" />
                 <Stack.Screen name="+not-found" />
               </Stack.Protected>
