@@ -88,6 +88,12 @@ const makeDeps = (
     markFailed: async () => {
       throw new Error("not used in ask tests");
     },
+    claimStranded: async () => {
+      throw new Error("not used in ask tests");
+    },
+    failExhausted: async () => {
+      throw new Error("not used in ask tests");
+    },
   };
 
   const jobs: JobQueuePort = {

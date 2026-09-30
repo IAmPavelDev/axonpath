@@ -38,7 +38,17 @@ declare module 'fastify' {
 const app: FastifyInstance = fastify({
   logger: true,
   serverFactory: (fastifyHandler) => {
-    const server = createServer(async (req, res) => {
+    const server = createServer(
+      {
+        // Node's default keepAliveTimeout is 5s: the server closes an idle
+        // pooled keep-alive connection right as the client (mobile okhttp)
+        // reuses it → "unexpected end of stream". 72s keeps the server quiet
+        // well past typical client/intermediary idle windows (~60s), so it is
+        // never the side that hangs up first. Fastify's own keepAliveTimeout
+        // option cannot apply: the socket is created here, not by Fastify.
+        keepAliveTimeout: 72_000,
+      },
+      async (req, res) => {
       try {
         // Handle RPC routes first
         const { matched: rpcMatched } = await handler.handle(req, res, {
@@ -237,6 +247,7 @@ async function startServer() {
 
       try {
         container.nextClassSweeper.stop();
+        container.classQaSweeper.stop();
         await app.close();
         app.log.info('Server closed successfully');
         process.exit(0);
@@ -254,10 +265,12 @@ async function startServer() {
       port: parseInt(app.config.PORT, 10),
       host: app.config.HOST,
     });
-
     // Background processing starts only after the server is listening; the
-    // boot tick recovers next-class jobs orphaned by a previous restart.
+    // boot ticks recover work orphaned by a previous restart: next-class
+    // jobs from their durable rows, class-qa answers from stranded PENDING
+    // blocks whose in-process job died with the old process.
     container.nextClassSweeper.start();
+    container.classQaSweeper.start();
 
     app.log.info(`Server running in ${app.config.NODE_ENV} mode`);
     app.log.info(`Server listening at ${address}`);

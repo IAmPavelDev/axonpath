@@ -22,6 +22,10 @@ import {
   makeNextClassSweeper,
   type NextClassSweeper,
 } from "@/modules/jobs/next-class-sweeper";
+import {
+  makeClassQaSweeper,
+  type ClassQaSweeper,
+} from "@/modules/jobs/class-qa-sweeper";
 import type { LearningApiDeps } from "@/router";
 
 /**
@@ -33,6 +37,7 @@ import type { LearningApiDeps } from "@/router";
 export type Container = LearningApiDeps & {
   /** Started by main.ts after listen; stopped on shutdown. */
   nextClassSweeper: NextClassSweeper;
+  classQaSweeper: ClassQaSweeper;
 };
 
 export const configureContainer = (): Container => {
@@ -100,6 +105,8 @@ export const configureContainer = (): Container => {
     run: nextClassWorker.run,
   });
 
+  const classQaSweeper = makeClassQaSweeper({ qaRepo, jobs });
+
   return {
     skillRepo,
     classRepo,
@@ -109,5 +116,6 @@ export const configureContainer = (): Container => {
     jobs,
     nextClassJobs,
     nextClassSweeper,
+    classQaSweeper,
   };
 };

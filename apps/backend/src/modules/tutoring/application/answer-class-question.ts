@@ -34,10 +34,12 @@ export type AnswerClassQuestion = (
  * Fill in the answer for a PENDING conspect question: one grounded,
  * plain-text generation over the lesson's contentMd, persisted atomically as
  * ANSWERED (or FAILED — terminal, the learner re-asks to retry). Every
- * terminal path settles the block: there is no sweeper for these jobs, so a
- * PENDING block must never survive a completed attempt. Job replay (block
- * already ANSWERED/FAILED or gone) no-ops instead of double-charging the AI.
- * Mirrors CLASS_GENERATED: the full prompt+response is audited as QA_ANSWERED.
+ * terminal path settles the block: the class-qa sweeper only re-enqueues
+ * blocks whose in-process job was lost to a crash/restart (PENDING untouched
+ * for 2 minutes), never a block a completed attempt left behind. Job replay
+ * (block already ANSWERED/FAILED or gone) no-ops instead of double-charging
+ * the AI. Mirrors CLASS_GENERATED: the full prompt+response is audited as
+ * QA_ANSWERED.
  */
 export const makeAnswerClassQuestion =
   ({

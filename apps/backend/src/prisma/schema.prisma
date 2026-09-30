@@ -248,6 +248,7 @@ model ClassQaBlock {
   question        String        @db.Text
   answer          String?       @db.Text
   status          ClassQaStatus @default(PENDING)
+  requeueCount    Int           @default(0)
   aiModel         String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt

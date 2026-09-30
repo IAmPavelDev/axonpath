@@ -17,6 +17,18 @@ export type ClassQaRepository = {
   answer(id: number, input: { answer: string; aiModel: string }): Promise<void>;
   /** Terminal transition PENDING → FAILED; the client re-asks to retry. */
   markFailed(id: number): Promise<void>;
+  /**
+   * Atomically claim stranded PENDING blocks (untouched since `olderThan`,
+   * requeueCount below `maxRequeues`): requeueCount + 1 per claim, FOR UPDATE
+   * SKIP LOCKED so concurrent sweepers never claim the same block.
+   */
+  claimStranded(input: {
+    olderThan: Date;
+    maxRequeues: number;
+    limit: number;
+  }): Promise<Pick<ClassQaEntity, "id">[]>;
+  /** Terminal give-up: FAILED for PENDING blocks that burned their requeues. */
+  failExhausted(input: { olderThan: Date; maxRequeues: number }): Promise<number>;
 };
 
 export type { ClassQaStatus };

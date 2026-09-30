@@ -79,6 +79,12 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
     markFailed: async () => {
       throw new Error("not used in list tests");
     },
+    claimStranded: async () => {
+      throw new Error("not used in list tests");
+    },
+    failExhausted: async () => {
+      throw new Error("not used in list tests");
+    },
   };
 
   const deps: ListClassQaDeps = { classRepo, skillRepo, qaRepo };

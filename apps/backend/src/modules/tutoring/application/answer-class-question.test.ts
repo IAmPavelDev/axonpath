@@ -96,6 +96,12 @@ const makeDeps = (
     markFailed: async (id) => {
       state.failed.push(id);
     },
+    claimStranded: async () => {
+      throw new Error("not used in qa tests");
+    },
+    failExhausted: async () => {
+      throw new Error("not used in qa tests");
+    },
   };
 
   const eventRepo: EventRepository = {
