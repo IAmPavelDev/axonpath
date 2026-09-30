@@ -2,7 +2,7 @@
 
 > Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 at `48c484b`
 > (backend 19 files / 108 tests green, mobile `tsc --noEmit` clean).
-> Status: **PLANNED — not started** — this file is the execution authority for everything
+> Status: **IN PROGRESS — S1–S2 DONE (2026-09-30); S3–S7 pending** — this file is the execution authority for everything
 > after beta. Since 2026-09-22, out-of-plan work landed WITHOUT consuming S1–S7 scope:
 > class Q&A / Ask-AI (`6c1efeb`, `e4ea158`, `457b740`), quiz-exit redirect to the lessons
 > list (`e988e6e`), 10 s skill-status polling (`7dd5af7`), Source Sans 3 + blue-tinted
@@ -197,7 +197,7 @@ exists with data to fit it against.
   `components/skill/`): per-lesson bars "answered/total", accuracy %, "resume at lesson N"
   (first class with `completed === false`). List rows keep the existing counters.
 
-### S2 — Status lifecycle UX (D2)
+### S2 — ✅ DONE (2026-09-30) — Status lifecycle UX (D2)
 - Backend: `set-skill-status.ts` + tests (each happy transition, non-whitelisted target,
   invalid transition from current state, NotOwned); contract `updateStatus`;
   `skill.list` `includeArchived` (schema default false, `listByUser` filter); next-class

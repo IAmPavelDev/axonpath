@@ -53,6 +53,16 @@ const progress = oc
   .input(schema.SkillIdInput)
   .output(schema.SkillProgressOutput);
 
+const updateStatus = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/status`,
+    summary: "Set skill status (user-settable lifecycle transitions)",
+    tags: ["Skill", "Status"],
+  })
+  .input(schema.UpdateSkillStatusInput)
+  .output(schema.StatusOnly);
+
 const list = oc
   .route({
     method: "GET",
@@ -60,6 +70,7 @@ const list = oc
     summary: "List all skills",
     tags: ["Skill", "List"],
   })
+  .input(schema.GetSkillListInput)
   .output(schema.GetSkillListOutput);
 
 export const skillContract = {
@@ -68,6 +79,7 @@ export const skillContract = {
   get,
   list,
   progress,
+  updateStatus,
   retry
 }
 

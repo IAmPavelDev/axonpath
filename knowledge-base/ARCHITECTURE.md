@@ -1,9 +1,9 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-30** (backend 20 files / 114 tests green, mobile
+> Status: **CURRENT as of 2026-09-30** (backend 21 files / 128 tests green, mobile
 > `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A / Ask-AI and
 > skill.progress per-lesson progress shipped). Execution authority for what is next:
-> `knowledge-base/PHASE7_POST_BETA.md` (post-beta — S1 DONE, S2–S7 pending). Beta history:
+> `knowledge-base/PHASE7_POST_BETA.md` (post-beta — S1–S2 DONE, S3–S7 pending). Beta history:
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
 > (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
@@ -123,8 +123,9 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 |---|---|
 | `skill.create` | persist skill with status `GENERATING` + enqueue `skill-init` |
 | `skill.edit` | edit topic/description (status transitions deliberately excluded — own command later) |
-| `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt |
+| `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt; optional `includeArchived` (default false hides ARCHIVED) |
 | `skill.progress` | per-lesson progress: totals + per-class answered/correct/accuracy (live derived query, no snapshots) |
+| `skill.updateStatus` | user-settable lifecycle: PAUSED/ACTIVE/COMPLETED/ARCHIVED (state-machine-guarded, 409 on illegal; GENERATING/FAILED machine-managed) |
 | `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
 | `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock`, enqueues the in-process answer job → `{blockId, status}` |
@@ -171,7 +172,7 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
 `GENERATING → ACTIVE | FAILED`, `FAILED → GENERATING` (retry), `ACTIVE ↔ PAUSED`,
 `→ COMPLETED → ARCHIVED` — enforced by pure `canTransition` (`learning/domain/skill/skill.ts`).
 Migrations `20260921*_skill_status_*` added `GENERATING`/`FAILED` and backfilled legacy `DRAFT`
-rows (≥1 class → `ACTIVE`, else `FAILED`).
+rows (≥1 class → `ACTIVE`, else `FAILED`). User-settable transitions go through `skill.updateStatus`; a paused skill's submits still score but `generate-next-class` no-ops unless the skill is ACTIVE or mid-GENERATING (pause gates generation).
 Generation trigger is durable since `5902e68`: `submit-quiz` writes a `NextClassJob` marker
 (unique per skill, lease-claimed, attempt-capped with requeue) processed by a worker; a
 sweeper/reconciler recovers stale or lost signals on boot and interval.
@@ -223,7 +224,7 @@ Flow: Firebase auth → skill list (home; polls `skill.list` every 10 s while vi
 `GENERATING` rows show a preparing state, pull-to-refresh, pinning; `FAILED` rows show a
 "Failed to prepare" chip with a retry affordance) → create-skill (topic input) →
 description/skill detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows
-error copy + retry button) → class list (newest first) → class screen (Markdown conspect +
+error copy + retry button), status chip + lifecycle actions (pause/resume/complete/archive) via `StatusControls` → class list (newest first) → class screen (Markdown conspect +
 quiz tabs; native text selection "Ask AI" creates an anchored Q&A block via `class.qa.ask`,
 and the screen polls `class.qa.list` while any block is `PENDING`) → quiz (MC/TF/Open) →
 result → "continue" returns to the skill's lesson list; generation completes server-side and
@@ -255,8 +256,8 @@ surfaces as the preparing state above.
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (20 files / 114 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill, retry-skill, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (21 files / 128 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
 stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list

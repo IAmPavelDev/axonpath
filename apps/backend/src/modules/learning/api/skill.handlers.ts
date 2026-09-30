@@ -6,6 +6,7 @@ import { isErr } from "@/modules/platform/result";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import { type CreateSkillDeps, makeCreateSkill } from "@/modules/learning/application/commands/create-skill";
 import { makeRetrySkill, type RetrySkillDeps } from "@/modules/learning/application/commands/retry-skill";
+import { makeSetSkillStatus, type SetSkillStatusDeps } from "@/modules/learning/application/commands/set-skill-status";
 import { makeEditSkill, type EditSkillDeps } from "@/modules/learning/application/commands/edit-skill";
 import { makeGetSkillById, type GetSkillByIdDeps } from "@/modules/learning/application/queries/get-skill-by-id";
 import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/application/queries/get-skills-list";
@@ -16,6 +17,7 @@ export type SkillApiDeps = CreateSkillDeps &
   GetSkillByIdDeps &
   GetSkillsListDeps &
   RetrySkillDeps &
+  SetSkillStatusDeps &
   GetSkillProgressDeps;
 
 export const makeSkillHandlers = (deps: SkillApiDeps) => {
@@ -24,6 +26,7 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const getSkillById = makeGetSkillById(deps);
   const getSkillsList = makeGetSkillsList(deps);
   const retrySkill = makeRetrySkill(deps);
+  const setSkillStatus = makeSetSkillStatus(deps);
   const getSkillProgress = makeGetSkillProgress(deps);
 
   return {
@@ -57,8 +60,10 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
       z.infer<typeof schema.skill.GetSkillByIdOutput>
     >,
 
-    list: (async ({ context }) => {
-      const { skills } = await getSkillsList(context.user.id);
+    list: (async ({ input, context }) => {
+      const { skills } = await getSkillsList(context.user.id, {
+        includeArchived: input?.includeArchived ?? false,
+      });
       return skills.map((skill) => ({
         id: skill.id,
         topic: skill.topic,
@@ -70,7 +75,7 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
         lastActivityAt: skill.lastActivityAt,
       }));
     }) satisfies OrpcHandler<
-      unknown,
+      z.infer<typeof schema.skill.GetSkillListInput>,
       z.infer<typeof schema.skill.GetSkillListOutput>
     >,
 
@@ -82,6 +87,18 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
       return unwrapOrThrow(result, toORPCError);
     }) satisfies OrpcHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
+      z.infer<typeof schema.skill.StatusOnly>
+    >,
+
+    updateStatus: (async ({ input, context }) => {
+      const result = await setSkillStatus({
+        skillId: input.id,
+        userId: context.user.id,
+        status: input.status,
+      });
+      return unwrapOrThrow(result, toORPCError);
+    }) satisfies OrpcHandler<
+      z.infer<typeof schema.skill.UpdateSkillStatusInput>,
       z.infer<typeof schema.skill.StatusOnly>
     >,
 

@@ -6,6 +6,8 @@ import { Text } from '@atomics/text';
 import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
 import { ProgressPanel } from '@components/skill/ProgressPanel';
+import { StatusControls } from '@components/skill/StatusControls';
+import type { SettableSkillStatus } from '@/types/skill';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -87,6 +89,15 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     isPending: retryPending,
   } = useMutation({
     mutationFn: () => rpc.skill.retry({ id: skillId }),
+    onSuccess: invalidate,
+  });
+
+  const {
+    mutate: setSkillStatus,
+    isPending: statusPending,
+  } = useMutation({
+    mutationFn: (status: SettableSkillStatus) =>
+      rpc.skill.updateStatus({ id: skillId, status }),
     onSuccess: invalidate,
   });
 
@@ -256,6 +267,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                     </Button>
                   </View>
                 )}
+                <StatusControls status={skill.status} disabled={statusPending} onSetStatus={setSkillStatus} />
               </View>
             )}
             {progress ? <ProgressPanel progress={progress} /> : null}

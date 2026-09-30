@@ -221,6 +221,39 @@ describe("makeGenerateNextClass", () => {
     expect(payload.prompt).toContain("SQL joins");
   });
 
+  it("no-ops a PAUSED skill: no AI call, no class, no event, no settle", async () => {
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "PAUSED" },
+      answers: [
+        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+      ],
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    expect(result).toEqual(ok(undefined));
+    expect(state.prompts).toHaveLength(0);
+    expect(state.createdClasses).toHaveLength(0);
+    expect(state.events).toHaveLength(0);
+    expect(state.vectors).toHaveLength(0);
+    // The status is not ours to settle: PAUSED stays PAUSED.
+    expect(state.skillUpdates).toHaveLength(0);
+  });
+
+  it("no-ops a COMPLETED skill the same way", async () => {
+    const { deps, state } = makeDeps({
+      skill: { ...SKILL, status: "COMPLETED" },
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    expect(result).toEqual(ok(undefined));
+    expect(state.prompts).toHaveLength(0);
+    expect(state.createdClasses).toHaveLength(0);
+    expect(state.events).toHaveLength(0);
+    expect(state.skillUpdates).toHaveLength(0);
+  });
+
   it("feeds missed questions with their correct answers into the prompt", async () => {
     const { deps, state } = makeDeps({
       answers: [

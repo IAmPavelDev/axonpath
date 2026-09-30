@@ -37,6 +37,19 @@ export const GetSkillByIdOutput = z.object({
 
 export const StatusOnly = z.object({ status: z.string() });
 
+/** User-settable lifecycle targets — GENERATING/FAILED are machine-managed. */
+export const UpdateSkillStatusInput = z.object({
+  id: z.number().int().positive().min(1),
+  status: z.enum(["PAUSED", "ACTIVE", "COMPLETED", "ARCHIVED"]),
+});
+
+/** Archived skills leave skill.list unless explicitly included (default false). */
+export const GetSkillListInput = z
+  .object({
+    includeArchived: z.boolean().default(false),
+  })
+  .optional();
+
 export const SkillProgressClass = z.object({
   classId: z.number(),
   index: z.number().int(),

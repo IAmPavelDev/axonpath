@@ -114,6 +114,15 @@ export const makeGenerateNextClass =
       return err({ kind: "SkillNotFound", skillId: input.skillId });
     }
 
+    // Pause gates generation (Phase 7 D2): a skill that is neither ACTIVE
+    // nor in its GENERATING phase must not spawn lessons — the submit still
+    // scored, the durable job still fired, but this pipeline no-ops with no
+    // event and no AI call. GENERATING passes because it IS the generation
+    // phase submit-quiz opened for the loop; settlePhase below owns it.
+    if (skill.status !== SkillStatus.ACTIVE && skill.status !== SkillStatus.GENERATING) {
+      return ok(undefined);
+    }
+
     const last = await classRepo.findTopBySkill(input.skillId);
     if (!last) {
       return err({ kind: "NoClassesYet", skillId: input.skillId });

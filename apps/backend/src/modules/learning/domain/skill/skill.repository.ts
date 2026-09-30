@@ -31,7 +31,11 @@ export type SkillRepository = {
     status: string;
     userId: number;
   } | null>;
-  listByUser(userId: number): Promise<SkillListItem[]>;
+  /** Archived skills leave the list unless explicitly included (deep links still reach them). */
+  listByUser(
+    userId: number,
+    options?: { includeArchived?: boolean },
+  ): Promise<SkillListItem[]>;
   /** Skills in one status — the cron's reconciliation sweep enumerates ACTIVE. */
   listByStatus(status: SkillStatus): Promise<SkillListItem[]>;
 };

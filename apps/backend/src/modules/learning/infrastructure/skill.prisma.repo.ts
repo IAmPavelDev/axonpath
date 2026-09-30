@@ -38,9 +38,16 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
     return skill;
   },
 
-  listByUser: async (userId) => {
+  listByUser: async (userId, options) => {
     const skills = await prisma.skill.findMany({
-      where: { userId },
+      where: {
+        userId,
+        // Archived skills disappear from the list unless explicitly
+        // included; skill.get by id still reaches them (deep link).
+        ...(options?.includeArchived
+          ? {}
+          : { status: { not: SkillStatus.ARCHIVED } }),
+      },
       select: {
         id: true,
         topic: true,
