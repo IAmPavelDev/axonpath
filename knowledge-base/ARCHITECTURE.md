@@ -1,9 +1,11 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-30** (backend 21 files / 128 tests green, mobile
-> `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A / Ask-AI and
-> skill.progress per-lesson progress shipped). Execution authority for what is next:
-> `knowledge-base/PHASE7_POST_BETA.md` (post-beta — S1–S2 DONE, S3–S7 pending). Beta history:
+> Status: **CURRENT as of 2026-10-01** (backend 30 files / 201 tests green, mobile
+> `tsc --noEmit` clean at `16be97a`; TS 7.0.2, durable next-class job queue, class Q&A /
+> Ask-AI, skill.progress per-lesson progress, AI token-usage capture + `usage.report`,
+> `stats.overview` and `skill.mistakes` shipped). Execution authority for what is next:
+> `knowledge-base/BUSINESS_DECISIONS.md` §4 (post-backlog horizon — first levers landed,
+> see §4.4). Beta history:
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
 > (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
@@ -128,10 +130,13 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `skill.progress` | per-lesson progress: totals + per-class answered/correct/accuracy (live derived query, no snapshots) |
 | `skill.updateStatus` | user-settable lifecycle: PAUSED/ACTIVE/COMPLETED/ARCHIVED (state-machine-guarded, 409 on illegal; GENERATING/FAILED machine-managed) |
 | `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
+| `skill.mistakes` | latest wrong answer per question, newest first (correct retakes heal the question; pending open-ended excluded; OPEN_ENDED `correctAnswer` stays null server-side) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
 | `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock`, enqueues the in-process answer job → `{blockId, status}` |
 | `class.qa.list` | Q&A blocks for a class, ascending `(anchorParagraph, createdAt, id)` — the client polls while any block is `PENDING` |
 | `quiz.get` | questions for a class (answerKey stripped) |
+| `stats.overview` | learning stats: 8-week weekly active skills, day streak, lessons completed this week, per-skill totals (ISO weeks Mon 00:00 UTC, live derived) |
+| `stats.report` | AI usage & cost per user: chat tokens by kind (init/next-class/QA) from event payloads, embedding tokens from `SUM(Vector.tokenCount)`, estimated USD; gap counters, optional `skillId` filter |
 
 Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hides behind 404
 so skill existence is not leaked); `InvalidSkillTransition` → 409; anything else → 500.
@@ -184,6 +189,27 @@ Generation trigger is durable since `5902e68`: `submit-quiz` writes a `NextClass
 (unique per skill, lease-claimed, attempt-capped with requeue) processed by a worker; a
 sweeper/reconciler recovers stale or lost signals on boot and interval.
 
+### 4.4 AI token accounting
+
+**Capture (write side).** The `AiPort` results carry optional usage —
+`usage: { promptTokens, completionTokens }` on chat results, `{ tokens }` on the batched
+embedding result — read off the OpenAI-compatible responses by `zai.client.ts` and simply
+absent when an endpoint omits them (degrade = absent, never guessed). The three audit sites
+(`SKILL_CREATED`, `CLASS_GENERATED`, `QA_ANSWERED`) embed `payload.usage`; embedding tokens
+land as `Vector.tokenCount` on every vector the batch produces (exact-sum split via the pure
+`embeddingTokenCounts` helper) — written by all three vector paths (init, next-class,
+answer-memory mining). A correct first step before any modeling: billing data now accrues
+with the events themselves.
+
+**Report (read side).** `stats.report` (`usage.report`) prices one user's AI spend:
+chat tokens per kind (skillInit / nextClass / qa) from the event payloads' `usage`,
+embedding tokens from `SUM(Vector.tokenCount)` (`VectorMetadataRepository.sumTokenCountsByUser`),
+USD via the diffable rate table `learning/domain/event/pricing.ts` (`estimateCostUsd`).
+Gaps are counted, never estimated: `eventsWithoutUsage` (payload lacks usage) and
+`vectorsWithoutTokenCount` (capture degrade). Known unaccounted: grading calls (no audit
+event) and retrieval query embeddings (no persisted vectors). Per-user scope only —
+optional `skillId` filter, ownership-checked; no admin surface.
+
 ## 5. Data model
 
 ```mermaid
@@ -207,7 +233,8 @@ Key tables: `Skill` (topic, description, status, requestId UK), `Class`
 (UNIQUE(skillId, index), contentMd, aiModel), `Question` (type, text, choices, answerKey
 server-side only), `Answer` (content json, score, isCorrect, timeSpentMs), `Event` (audit:
 SKILL_CREATED, CLASS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED, ERROR_OCCURRED,
-VECTOR_UPSERTED, QA_ANSWERED — payloads include the full AI prompt+response for debugging),
+QA_ANSWERED — payloads include the full AI prompt+response; generation/QA payloads also
+carry token `usage`. The `VECTOR_UPSERTED` enum value exists but nothing records it),
 `Vector` (relational metadata only:
 skillId/classId/answerId/source/textSnippet/classIndex/tokenCount), `ClassQaBlock` (learner
 question anchored at `anchorParagraph` in a class conspect; flat blocks, `question`/nullable
@@ -253,14 +280,13 @@ surfaces as the preparing state above.
 | `QDRANT_URL` | Qdrant (default `http://localhost:6333`) |
 | `ZAI_API_KEY` | Z.ai chat (glm-5.3-flash) |
 | `GEMINI_API_KEY` | Gemini embeddings |
-| `LAMBDA_DECAY_DEFAULT` | unused decay default (0.02) |
 | `APP_PORT` / `APP_HOST` / `NODE_ENV` | HTTP bind (compose maps 3001:3001) |
 
 `modules/platform/config.ts` is the single config module (env-over-default).
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (23 files / 145 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (30 files / 201 tests, all green 2026-10-01 at `16be97a`): scoring, skill state machine, Result, authenticate + Firebase verifier +
 auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), grade-open-ended (batch/degrade/partial), open-ended generation unlock (enum/instruction/drift guard), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
@@ -268,7 +294,12 @@ stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract va
 ordering/ownership, answer generation PENDING→ANSWERED/FAILED with replay no-ops, stranded-block requeue on boot), and the
 composed loop integration test (real use cases + in-memory
 fakes over `modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup →
-FAILED/retry heal, both failure shapes).
+FAILED/retry heal, both failure shapes). Post-backlog additions: AiPort usage capture
+(payload `usage` / `Vector.tokenCount` persisted; absent-usage degrade), `embeddingTokenCounts`
+(exact-sum batch split), `stats.overview` + its calendar domain (ISO weeks / streak / lesson
+coverage), `skill.mistakes` (wrong-only, retake heals, open-ended feedback without the model
+answer), `latestWrongPerQuestion` (latest-wins then wrong-filter), and `usage.report` +
+`pricing` (per-kind sums, gap counters, rate math).
 
 ## 9. Known gaps → post-beta backlog
 
@@ -284,3 +315,9 @@ FAILED/retry heal, both failure shapes).
    unlock) — grading done (S4, 2026-09-30); generation unlock = S5; generation unlocked (S5).
 6. Non-transactional class+question persist → S6 (`createWithQuestions` `$transaction`).
 7. Dead `Skill.lambda` / `LAMBDA_DECAY_DEFAULT` → S7 (delete, not tune).
+
+Post-backlog horizon (BUSINESS_DECISIONS §4), first levers landed 2026-10-01: §4.2 AI spend —
+token capture at the AiPort boundary + `usage.report`; §4.3 retention signal — `stats.overview`
+and `skill.mistakes` (see §4.4). Outstanding: live emulator visual pass + the deferred
+StatsCard/MistakeList mounts; docs for the remaining §4 items unchanged (no growth push, no
+monetization).

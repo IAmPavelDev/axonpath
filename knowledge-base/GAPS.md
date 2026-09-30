@@ -1,9 +1,11 @@
 # Axon — Gap Ledger
 
-> **Status 2026-09-30** — all 15 rows closed (8 via Phase 7 S1; 10 and 13 via Phase 7 S6+S7,
-> same day). This file was the 2026-09 gap analysis (pre-refactor file references). All beta
-> gaps are closed; remaining Phase 7 work (S3–S5) has execution authority
-> `knowledge-base/PHASE7_POST_BETA.md`. Current-state
+> **Status 2026-10-01** — all 15 rows closed (8 via Phase 7 S1; 10 and 13 via Phase 7 S6+S7,
+> same day; S3–S5 landed the same day per `knowledge-base/PHASE7_POST_BETA.md` — this file's
+> header was stale on that point). This file was the 2026-09 gap analysis (pre-refactor file
+> references). All beta and post-beta gaps are closed; the post-backlog first levers
+> (BUSINESS_DECISIONS §4) landed 2026-10-01: AI token capture + `usage.report` (§4.2) and
+> `stats.overview` + `skill.mistakes` (§4.3) — feature work, not gap closures. Current-state
 > detail: `knowledge-base/ARCHITECTURE.md`; beta history: `knowledge-base/BETA_PLAN.md`.
 
 ## Status summary

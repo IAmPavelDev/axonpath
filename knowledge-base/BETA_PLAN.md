@@ -10,6 +10,12 @@
 >
 > ---
 >
+## Status update (2026-10-01)
+- **Post-beta COMPLETE; post-backlog first levers landed through `16be97a`** — AI token
+  capture + `usage.report`, `stats.overview` (streak/weekly activity), `skill.mistakes`
+  review list. 30 files / 201 backend tests green; mobile `tsc --noEmit` clean. Horizon:
+  `knowledge-base/BUSINESS_DECISIONS.md` §4.
+
 ## Status update (2026-09-30)
 - **Phase 7 post-beta COMPLETE** — S1 progress UI, S2 status lifecycle, S3 answer memory, S4
   open-ended grading, S5 open-ended generation, S6 transactional persist + compose cleanup,

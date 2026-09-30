@@ -47,10 +47,14 @@
 1. **Real usage:** if >5 users or any public sharing happens, M1/M2/M3 all need revisiting
    (EIP + TLS + domain, bigger instance or per-service split) — the first real trigger to
    revisit the free-tier posture.
-2. **AI spend:** unmeasured per lesson/skill. Before any growth push, price it from the
-   `Event` audit log (prompts/responses are stored) and decide whether glm-5.3-flash stays.
-3. **Retention signal:** nothing measures whether the adaptive loop actually retains. Cheap
-   first step: weekly active skills + lessons-completed per skill, derivable from existing
-   tables (no new infra).
+2. **AI spend:** capture + report shipped (2026-10-01): AiPort token usage is audited with
+   every generation/QA event and embedding tokens via `Vector.tokenCount`; `usage.report`
+   prices them from a diffable rate table. It answers "price it" once real traffic accrues.
+   Known unaccounted: grading calls and retrieval query embeddings (documented in
+   ARCHITECTURE §4.4). Keep/kill decision on glm-5.3-flash waits for that data.
+3. **Retention signal:** first levers shipped (2026-10-01): `stats.overview` (8-week weekly
+   active skills, day streak, lessons completed this week) and `skill.mistakes` (review list
+   of the latest wrong answer per question). Whether they move retention is unmeasured until
+   real usage exists.
 4. **Monetization:** consciously none until the loop is proven; the AWS credits plan
    (6-month window) is the only budget clock currently ticking.
