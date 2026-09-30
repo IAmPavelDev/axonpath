@@ -39,6 +39,7 @@ const makeFakeDeps = (options: {
     findById: unused,
   };
   const quizRepo: QuizRepository = {
+    findWrongAnswersBySkill: unused,
     findAnswerActivityByUser: unused,
     findByClassId: unused,
     findScoreableByClassId: unused,

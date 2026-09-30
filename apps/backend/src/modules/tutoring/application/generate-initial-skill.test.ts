@@ -113,6 +113,9 @@ const makeDeps = (
       },
     },
     quizRepo: {
+      findWrongAnswersBySkill: async () => {
+        throw new Error("not used in init tests");
+      },
       findByClassId: async () => {
         throw new Error("not used in init tests");
       },

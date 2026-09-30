@@ -1,6 +1,7 @@
 import { prisma } from "@/modules/platform/infrastructure/prisma";
 import { schema } from "@axon/api-contract";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
+import { latestWrongPerQuestion } from "@/modules/learning/domain/quiz/latest-wrong";
 import type { QuestionView } from "@/modules/learning/domain/quiz/question";
 
 /**
@@ -34,6 +35,19 @@ const answerTextOf = (content: unknown): string => {
   return String(content ?? "");
 };
 
+/** Grader feedback merged into content as { answer, feedback }; null otherwise. */
+const feedbackOf = (content: unknown): string | null => {
+  if (
+    typeof content === "object" &&
+    content !== null &&
+    !Array.isArray(content) &&
+    "feedback" in content &&
+    typeof content.feedback === "string"
+  ) {
+    return content.feedback;
+  }
+  return null;
+};
 export const makePrismaQuizRepository = (): QuizRepository => ({
   findByClassId: async (classId) => {
     const rows = await prisma.question.findMany({
@@ -175,6 +189,66 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       isCorrect: row.isCorrect,
       classId: row.question.classId,
     }));
+  },
+
+  findWrongAnswersBySkill: async (skillId, userId) => {
+    // 1. Latest attempt per question, then keep graded-wrong ones (pure fn —
+    // a correct retake must heal the question, so filtering runs AFTER
+    // latest-wins, not before).
+    const attempts = await prisma.answer.findMany({
+      where: { userId, question: { skillId } },
+      select: {
+        id: true,
+        questionId: true,
+        content: true,
+        score: true,
+        isCorrect: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    const wrong = latestWrongPerQuestion(attempts);
+    if (wrong.length === 0) {
+      return [];
+    }
+
+    // 2. Question data for the surviving mistakes.
+    const questions = await prisma.question.findMany({
+      where: { id: { in: wrong.map((row) => row.questionId) } },
+      select: {
+        id: true,
+        type: true,
+        text: true,
+        choices: true,
+        answerKey: true,
+        classId: true,
+        class: { select: { index: true } },
+      },
+    });
+    const questionById = new Map(questions.map((q) => [q.id, q]));
+
+    return wrong.flatMap((row) => {
+      const question = questionById.get(row.questionId);
+      if (!question) {
+        return [];
+      }
+      return [
+        {
+          answerId: row.id,
+          questionId: row.questionId,
+          questionType: question.type,
+          questionText: question.text,
+          choices: question.choices,
+          answerKey: question.answerKey,
+          userAnswer: answerTextOf(row.content),
+          feedback: feedbackOf(row.content),
+          score: row.score,
+          classId: question.classId,
+          classIndex: question.class?.index ?? null,
+          answeredAt: row.createdAt,
+        },
+      ];
+    });
   },
 
   updateGrades: async (rows) => {

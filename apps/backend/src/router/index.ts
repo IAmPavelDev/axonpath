@@ -17,6 +17,7 @@ export const buildSkillRouter = (deps: SkillApiDeps) => {
     progress: rpc.skill.progress.handler(handlers.progress),
     retry: rpc.skill.retry.handler(handlers.retry),
     updateStatus: rpc.skill.updateStatus.handler(handlers.updateStatus),
+    mistakes: rpc.skill.mistakes.handler(handlers.mistakes),
   };
 };
 

@@ -12,3 +12,6 @@ export type SkillProgress = z.infer<typeof schema.skill.SkillProgressOutput>;
 export type SettableSkillStatus = z.infer<
   typeof schema.skill.UpdateSkillStatusInput
 >['status'];
+
+/** skill.mistakes item: the latest wrong answer per question, newest first. */
+export type SkillMistake = z.infer<typeof schema.skill.SkillMistake>;

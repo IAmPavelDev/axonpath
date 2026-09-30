@@ -29,6 +29,28 @@ export type AnswerWithQuestion = {
   classId: number | null;
 };
 
+/**
+ * One graded-wrong attempt with everything a review list renders. `choices`
+ * and `answerKey` are raw Json — the caller normalizes per question type
+ * (and keeps the OPEN_ENDED model answer server-side, D4).
+ */
+export type WrongAnswerRow = {
+  answerId: number;
+  questionId: number;
+  questionType: QuestionType;
+  questionText: string;
+  choices: unknown;
+  answerKey: unknown;
+  /** Extracted from the { answer } content storage convention. */
+  userAnswer: string;
+  /** Merged into content by background grading; null until/unless graded. */
+  feedback: string | null;
+  score: number | null;
+  classId: number | null;
+  classIndex: number | null;
+  answeredAt: Date;
+};
+
 export type QuizRepository = {
   findByClassId(classId: number): Promise<QuestionView[]>;
   /** Questions with answer keys + owning skillId, for server-side scoring. */
@@ -82,4 +104,11 @@ export type QuizRepository = {
       questionId: number;
     }>
   >;
+  /**
+   * Review rows for one user's skill: the LATEST attempt per question wins,
+   * and only questions whose latest attempt is graded-wrong appear — a
+   * correct retake heals the question, a pending (ungraded) latest attempt
+   * is not a mistake yet. Newest first.
+   */
+  findWrongAnswersBySkill(skillId: number, userId: number): Promise<WrongAnswerRow[]>;
 };

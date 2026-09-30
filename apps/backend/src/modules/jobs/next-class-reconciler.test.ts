@@ -57,6 +57,7 @@ const makeDeps = ({
       findById: async () => notUsed("findById"),
     } satisfies ClassRepository,
     quizRepo: {
+      findWrongAnswersBySkill: async () => notUsed("findWrongAnswersBySkill"),
       findAnswerActivityByUser: async () => notUsed("findAnswerActivityByUser"),
       findByClassId: async () => notUsed("findByClassId"),
       findScoreableByClassId: async () => notUsed("findScoreableByClassId"),

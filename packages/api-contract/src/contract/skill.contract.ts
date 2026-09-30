@@ -63,6 +63,16 @@ const updateStatus = oc
   .input(schema.UpdateSkillStatusInput)
   .output(schema.StatusOnly);
 
+const mistakes = oc
+  .route({
+    method: "GET",
+    path: `${BASE_PATH}/:id/mistakes`,
+    summary: "Latest wrong answers per question, for review",
+    tags: ["Skill", "Mistakes"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.SkillMistakesOutput);
+
 const list = oc
   .route({
     method: "GET",
@@ -80,7 +90,8 @@ export const skillContract = {
   list,
   progress,
   updateStatus,
-  retry
+  retry,
+  mistakes
 }
 
 export type SkillContractType = typeof skillContract;

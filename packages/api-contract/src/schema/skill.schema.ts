@@ -1,4 +1,5 @@
 import z from 'zod';
+import { QuestionType } from './quiz.schema.js';
 
 export const CreateSkillInput = z.object({
   topic: z.string(),
@@ -74,3 +75,21 @@ export const SkillProgressOutput = z.object({
   }),
   classes: z.array(SkillProgressClass),
 });
+
+export const SkillMistake = z.object({
+  questionId: z.number(),
+  type: QuestionType,
+  questionText: z.string(),
+  choices: z.array(z.string()),
+  yourAnswer: z.string(),
+  /** MC/TF only — the OPEN_ENDED model answer never leaves the server. */
+  correctAnswer: z.string().nullable(),
+  feedback: z.string().nullable(),
+  score: z.number().nullable(),
+  classId: z.number().nullable(),
+  classIndex: z.number().int().nullable(),
+  answeredAt: z.date(),
+});
+
+/** Latest wrong answer per question, newest first; healed questions absent. */
+export const SkillMistakesOutput = z.array(SkillMistake);

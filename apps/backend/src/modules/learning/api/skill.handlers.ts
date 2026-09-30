@@ -11,6 +11,7 @@ import { makeEditSkill, type EditSkillDeps } from "@/modules/learning/applicatio
 import { makeGetSkillById, type GetSkillByIdDeps } from "@/modules/learning/application/queries/get-skill-by-id";
 import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/application/queries/get-skills-list";
 import { makeGetSkillProgress, type GetSkillProgressDeps } from "@/modules/learning/application/queries/get-skill-progress";
+import { makeGetSkillMistakes, type GetSkillMistakesDeps } from "@/modules/learning/application/queries/get-skill-mistakes";
 
 export type SkillApiDeps = CreateSkillDeps &
   EditSkillDeps &
@@ -18,7 +19,8 @@ export type SkillApiDeps = CreateSkillDeps &
   GetSkillsListDeps &
   RetrySkillDeps &
   SetSkillStatusDeps &
-  GetSkillProgressDeps;
+  GetSkillProgressDeps &
+  GetSkillMistakesDeps;
 
 export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const createSkill = makeCreateSkill(deps);
@@ -28,6 +30,7 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const retrySkill = makeRetrySkill(deps);
   const setSkillStatus = makeSetSkillStatus(deps);
   const getSkillProgress = makeGetSkillProgress(deps);
+  const getSkillMistakes = makeGetSkillMistakes(deps);
 
   return {
     create: (async ({ input, context }) => {
@@ -111,6 +114,17 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
     }) satisfies OrpcHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.SkillProgressOutput>
+    >,
+
+    mistakes: (async ({ input, context }) => {
+      const result = await getSkillMistakes({
+        skillId: input.id,
+        userId: context.user.id,
+      });
+      return unwrapOrThrow(result, toORPCError);
+    }) satisfies OrpcHandler<
+      z.infer<typeof schema.skill.SkillIdInput>,
+      z.infer<typeof schema.skill.SkillMistakesOutput>
     >,
   };
 };

@@ -132,6 +132,9 @@ const makeDeps = (
       },
     },
     quizRepo: {
+      findWrongAnswersBySkill: async () => {
+        throw new Error("not used in next-class tests");
+      },
       findByClassId: async () => {
         throw new Error("not used in next-class tests");
       },

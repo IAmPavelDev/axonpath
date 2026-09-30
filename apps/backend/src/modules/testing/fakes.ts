@@ -10,6 +10,7 @@ import type {
   AnswerReview,
   QuizRepository,
 } from "@/modules/learning/domain/quiz/quiz.repository";
+import { latestWrongPerQuestion } from "@/modules/learning/domain/quiz/latest-wrong";
 import type {
   DomainEvent,
   EventRepository,
@@ -330,6 +331,47 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     state.questions.get(questionId)?.classId ?? null;
 
   const quizRepo: QuizRepository = {
+    findWrongAnswersBySkill: async (skillId, userId) => {
+      // Recency desc: the harness stores answers in insertion (ascending) order.
+      const attempts = [...state.answers]
+        .reverse()
+        .filter((answer) => answer.userId === userId)
+        .map((answer) => ({
+          id: answer.id,
+          questionId: answer.questionId,
+          content: answer.content,
+          score: answer.score,
+          isCorrect: answer.isCorrect,
+          createdAt: new Date(0),
+        }));
+      const wrong = latestWrongPerQuestion(attempts);
+      return wrong.flatMap((answer) => {
+        const question = state.questions.get(answer.questionId);
+        if (!question || question.skillId !== skillId) {
+          return [];
+        }
+        const classIndex =
+          question.classId === null
+            ? null
+            : (state.classes.get(question.classId)?.index ?? null);
+        return [
+          {
+            answerId: answer.id,
+            questionId: answer.questionId,
+            questionType: question.type,
+            questionText: question.text,
+            choices: question.choices,
+            answerKey: question.answerKey,
+            userAnswer: answer.content.answer,
+            feedback: answer.content.feedback ?? null,
+            score: answer.score,
+            classId: question.classId,
+            classIndex,
+            answeredAt: answer.createdAt,
+          },
+        ];
+      });
+    },
     findAnswerActivityByUser: async (userId) =>
       state.answers
         .filter((answer) => answer.userId === userId)
