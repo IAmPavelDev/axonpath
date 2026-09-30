@@ -43,6 +43,16 @@ const retry = oc
   .input(schema.SkillIdInput)
   .output(schema.StatusOnly);
 
+const progress = oc
+  .route({
+    method: "GET",
+    path: `${BASE_PATH}/:id/progress`,
+    summary: "Per-lesson progress for a skill",
+    tags: ["Skill", "Progress"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.SkillProgressOutput);
+
 const list = oc
   .route({
     method: "GET",
@@ -57,6 +67,7 @@ export const skillContract = {
   edit,
   get,
   list,
+  progress,
   retry
 }
 

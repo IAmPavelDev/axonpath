@@ -76,6 +76,9 @@ const makeDeps = (
     listBySkill: async () => {
       throw new Error("not used in qa tests");
     },
+    listBySkillByIndex: async () => {
+      throw new Error("not used in qa tests");
+    },
     findTopBySkill: async () => {
       throw new Error("not used in qa tests");
     },

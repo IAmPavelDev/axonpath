@@ -5,6 +5,7 @@ import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
 import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
+import { ProgressPanel } from '@components/skill/ProgressPanel';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -41,6 +42,15 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     refetchIntervalInBackground: false,
   });
 
+  const { data: progress } = useQuery({
+    queryKey: ['skillProgress', skillId],
+    queryFn: () => rpc.skill.progress({ id: skillId }),
+    // Progress moves with submits and newly generated lessons; same cadence
+    // as the sibling queries so all three stay consistent on screen.
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
+  });
+
   useEffect(() => {
     if (skill) {
       setTopic(skill.topic);
@@ -50,6 +60,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ['skill', skillId] });
+    await queryClient.invalidateQueries({ queryKey: ['skillProgress', skillId] });
     await queryClient.invalidateQueries({ queryKey: ['skillList'] });
   };
 
@@ -247,6 +258,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 )}
               </View>
             )}
+            {progress ? <ProgressPanel progress={progress} /> : null}
             <View className="border-hairline border-border px-6 pb-2 pt-1">
               <Text variant="label">Lessons</Text>
             </View>

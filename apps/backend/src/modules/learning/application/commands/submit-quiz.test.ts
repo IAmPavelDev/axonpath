@@ -60,6 +60,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     findHighestAnsweredClassIndex: async () => {
       throw new Error("not used in submit tests");
     },
+    findAnswerStatsBySkill: async () => {
+      throw new Error("not used in submit tests");
+    },
   };
 
   const skillRepo: SkillRepository = {

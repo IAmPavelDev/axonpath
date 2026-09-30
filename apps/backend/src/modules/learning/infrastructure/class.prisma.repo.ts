@@ -70,6 +70,31 @@ export const makePrismaClassRepository = (): ClassRepository => ({
     }));
   },
 
+  listBySkillByIndex: async (skillId) => {
+    const classes = await prisma.class.findMany({
+      where: { skillId },
+      select: { id: true, index: true, title: true },
+      orderBy: { index: "asc" },
+    });
+    const classIds = classes.map((c) => c.id);
+
+    const questionCounts = await prisma.question.groupBy({
+      by: ["classId"],
+      where: { classId: { in: classIds } },
+      _count: { _all: true },
+    });
+    const questionCountByClass = new Map(
+      questionCounts.map((row) => [row.classId, row._count._all]),
+    );
+
+    return classes.map((c) => ({
+      id: c.id,
+      index: c.index,
+      title: c.title,
+      questionCount: questionCountByClass.get(c.id) ?? 0,
+    }));
+  },
+
   findTopBySkill: async (skillId) =>
     prisma.class.findFirst({
       where: { skillId },

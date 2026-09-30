@@ -252,6 +252,18 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       return { id };
     },
     listBySkill: async () => [],
+    listBySkillByIndex: async (skillId) =>
+      [...state.classes.values()]
+        .filter((cls) => cls.skillId === skillId)
+        .sort((a, b) => a.index - b.index)
+        .map((cls) => ({
+          id: cls.id,
+          index: cls.index,
+          title: cls.title,
+          questionCount: [...state.questions.values()].filter(
+            (question) => question.classId === cls.id,
+          ).length,
+        })),
     findTopBySkill: async (skillId) => {
       let top: { id: number; index: number; title: string } | null = null;
       for (const row of state.classes.values()) {
@@ -332,6 +344,27 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         if (cls && (highest === null || cls.index > highest)) highest = cls.index;
       }
       return highest;
+    },
+    findAnswerStatsBySkill: async (skillId, userId) => {
+      // Distinct-question semantics: retakes must not inflate the totals.
+      const answered = new Set<number>();
+      const correct = new Set<number>();
+      for (const answer of state.answers) {
+        if (answer.userId !== userId || answer.skillId !== skillId) continue;
+        if (classIdByQuestion(answer.questionId) === null) continue;
+        answered.add(answer.questionId);
+        if (answer.isCorrect === true) correct.add(answer.questionId);
+      }
+      const statsByClass = new Map<number, { answeredCount: number; correctCount: number }>();
+      for (const questionId of answered) {
+        const classId = classIdByQuestion(questionId);
+        if (classId === null) continue;
+        const stat = statsByClass.get(classId) ?? { answeredCount: 0, correctCount: 0 };
+        stat.answeredCount += 1;
+        if (correct.has(questionId)) stat.correctCount += 1;
+        statsByClass.set(classId, stat);
+      }
+      return [...statsByClass].map(([classId, stat]) => ({ classId, ...stat }));
     },
   };
 

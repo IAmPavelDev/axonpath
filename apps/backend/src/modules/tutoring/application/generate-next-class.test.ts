@@ -103,6 +103,9 @@ const makeDeps = (
       listBySkill: async () => {
         throw new Error("not used in next-class tests");
       },
+      listBySkillByIndex: async () => {
+        throw new Error("not used in next-class tests");
+      },
       findTopBySkill: async () =>
         overrides.last === undefined
           ? { id: 5, index: 2, title: "Previous lesson" }
@@ -137,6 +140,9 @@ const makeDeps = (
             ? { id: 5, index: 2, title: "Previous lesson" }
             : overrides.last;
         return last?.index ?? null;
+      },
+      findAnswerStatsBySkill: async () => {
+        throw new Error("not used in next-class tests");
       },
     },
     eventRepo: {

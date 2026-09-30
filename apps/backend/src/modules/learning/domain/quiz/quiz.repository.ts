@@ -21,4 +21,14 @@ export type QuizRepository = {
   findAnswersByClassAndUser(classId: number, userId: number): Promise<AnswerReview[]>;
   /** Highest Class.index the user has any recorded answer for; null = no attempts. */
   findHighestAnsweredClassIndex(skillId: number, userId: number): Promise<number | null>;
+  /**
+   * Per-lesson answer aggregates for one user in a skill: distinct questions
+   * answered, and of those, distinct questions answered correctly at least
+   * once (retakes must not inflate the totals). Only classes that have at
+   * least one answered question appear.
+   */
+  findAnswerStatsBySkill(
+    skillId: number,
+    userId: number,
+  ): Promise<Array<{ classId: number; answeredCount: number; correctCount: number }>>;
 };

@@ -186,7 +186,7 @@ exists with data to fit it against.
 
 ## 3. Implementation steps
 
-### S1 — `skill.progress` route + progress UI (D1)
+### S1 — ✅ DONE (2026-09-30) — `skill.progress` route + progress UI (D1)
 - Backend: `get-skill-progress.ts` + repo methods (`listBySkill` if needed,
   `findAnswerStatsBySkill`); contract `progress` entry (`SkillIdInput` → new
   `SkillProgressOutput` schema in `schema/skill.schema.ts`); handler + router wiring

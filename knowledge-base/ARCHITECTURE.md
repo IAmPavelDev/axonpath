@@ -1,10 +1,10 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-30** (verified at `48c484b`: backend 19 files / 108 tests
-> green, mobile `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A /
-> Ask-AI shipped). Execution authority for what is next: `knowledge-base/PHASE7_POST_BETA.md`
-> (post-beta, PLANNED — none of S1–S7 started). Beta history: `knowledge-base/BETA_PLAN.md`
-> and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
+> Status: **CURRENT as of 2026-09-30** (backend 20 files / 114 tests green, mobile
+> `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A / Ask-AI and
+> skill.progress per-lesson progress shipped). Execution authority for what is next:
+> `knowledge-base/PHASE7_POST_BETA.md` (post-beta — S1 DONE, S2–S7 pending). Beta history:
+> `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
 > (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
@@ -124,6 +124,7 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `skill.create` | persist skill with status `GENERATING` + enqueue `skill-init` |
 | `skill.edit` | edit topic/description (status transitions deliberately excluded — own command later) |
 | `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt |
+| `skill.progress` | per-lesson progress: totals + per-class answered/correct/accuracy (live derived query, no snapshots) |
 | `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
 | `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock`, enqueues the in-process answer job → `{blockId, status}` |
@@ -254,8 +255,8 @@ surfaces as the preparing state above.
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (19 files / 108 tests, all green 2026-09-30 at `48c484b`): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill, retry-skill, generate-initial-skill (incl. retry-guard cases),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (20 files / 114 tests, all green 2026-09-30): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
 stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list

@@ -36,3 +36,28 @@ export const GetSkillByIdOutput = z.object({
 });
 
 export const StatusOnly = z.object({ status: z.string() });
+
+export const SkillProgressClass = z.object({
+  classId: z.number(),
+  index: z.number().int(),
+  title: z.string(),
+  questionCount: z.number().int(),
+  answeredCount: z.number().int(),
+  correctCount: z.number().int(),
+  completed: z.boolean(),
+  /** correct / answered; null until the learner has answered anything. */
+  accuracy: z.number().nullable(),
+});
+
+export const SkillProgressOutput = z.object({
+  skillId: z.number(),
+  topic: z.string(),
+  status: z.string(),
+  totals: z.object({
+    lessonCount: z.number().int(),
+    completedLessons: z.number().int(),
+    learnedPoints: z.number().int(),
+    accuracy: z.number().nullable(),
+  }),
+  classes: z.array(SkillProgressClass),
+});

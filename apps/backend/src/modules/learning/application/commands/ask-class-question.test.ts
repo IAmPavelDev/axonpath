@@ -41,6 +41,9 @@ const makeDeps = (
     listBySkill: async () => {
       throw new Error("not used in ask tests");
     },
+    listBySkillByIndex: async () => {
+      throw new Error("not used in ask tests");
+    },
     findTopBySkill: async () => {
       throw new Error("not used in ask tests");
     },

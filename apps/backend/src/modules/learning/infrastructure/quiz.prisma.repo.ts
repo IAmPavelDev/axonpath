@@ -127,4 +127,37 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
     }
     return highest;
   },
+
+  findAnswerStatsBySkill: async (skillId, userId) => {
+    // Distinct-question semantics, the same rule SkillRepository.listByUser
+    // applies to its per-class counts: grouping questions (not answers) with
+    // an answers.some filter counts each answered question once no matter how
+    // many retake attempts it has; "correct" is answered correctly at least
+    // once. Class-less questions are excluded, as in listByUser.
+    const [answered, correct] = await Promise.all([
+      prisma.question.groupBy({
+        by: ["classId"],
+        where: { skillId, classId: { not: null }, answers: { some: { userId } } },
+        _count: { _all: true },
+      }),
+      prisma.question.groupBy({
+        by: ["classId"],
+        where: {
+          skillId,
+          classId: { not: null },
+          answers: { some: { userId, isCorrect: true } },
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const correctByClass = new Map<number, number>(
+      correct.map((row) => [row.classId!, row._count._all]),
+    );
+    return answered.map((row) => ({
+      classId: row.classId!,
+      answeredCount: row._count._all,
+      correctCount: correctByClass.get(row.classId!) ?? 0,
+    }));
+  },
 });
