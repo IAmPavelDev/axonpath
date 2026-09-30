@@ -1,6 +1,7 @@
 import { ok, type Result } from "@/modules/platform/result";
 import { VectorSource } from "@/prisma/generated";
 import type { AiPort } from "@/modules/tutoring/ports";
+import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
 import type {
   NewVector,
   VectorMetadataRepository,
@@ -99,10 +100,14 @@ export const makeMineAnswerVectors =
       const embeddings = await ai.generateEmbeddings(
         snippets.map((snippet) => snippet.textSnippet),
       );
-      if (!embeddings.ok || embeddings.value.length !== snippets.length) {
+      if (!embeddings.ok || embeddings.value.embeddings.length !== snippets.length) {
         return ok(undefined);
       }
 
+      const tokenCounts = embeddingTokenCounts(
+        embeddings.value.usage,
+        embeddings.value.embeddings.length,
+      );
       const vectors = snippets.map((snippet, i) => ({
         skillId: input.skillId,
         userId: input.userId,
@@ -110,7 +115,8 @@ export const makeMineAnswerVectors =
         classIndex: snippet.classIndex,
         source: VectorSource.ANSWER_DERIVED,
         textSnippet: snippet.textSnippet,
-        embedding: embeddings.value[i],
+        embedding: embeddings.value.embeddings[i],
+        tokenCount: tokenCounts[i],
         answerId: snippet.answerId,
       })) satisfies NewVector[];
 

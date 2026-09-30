@@ -99,6 +99,7 @@ export const makeAnswerClassQuestion =
         system: QA_TUTOR_SYSTEM,
         model: chatModel,
         response: answer,
+        usage: generation.value.usage,
       },
     });
 

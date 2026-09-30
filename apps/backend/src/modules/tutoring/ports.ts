@@ -25,14 +25,38 @@ export type TextGenerationInput = {
   prompt: string;
 };
 
+/**
+ * Token usage as reported by the OpenAI-compatible endpoints. Optional:
+ * degrade-never-hang means an adapter that cannot read usage simply omits it.
+ */
+export type AiUsage = {
+  promptTokens: number;
+  completionTokens: number;
+};
+
+/** One batched embedding call reports a single prompt-token count. */
+export type AiEmbeddingUsage = {
+  tokens: number;
+};
+
 export type TextGenerationResult = {
   /** Raw model output, whitespace-trimmed by the adapter. */
   raw: string;
+  /** Billed token usage for this call, when the endpoint reports it. */
+  usage?: AiUsage;
 };
 
 export type JsonGenerationResult = {
   /** Raw model output, post JSON-extraction. */
   raw: string;
+  /** Billed token usage for this call, when the endpoint reports it. */
+  usage?: AiUsage;
+};
+
+export type EmbeddingGenerationResult = {
+  embeddings: number[][];
+  /** Billed token usage for the whole batch, when the endpoint reports it. */
+  usage?: AiEmbeddingUsage;
 };
 
 export type AiError = {
@@ -53,5 +77,5 @@ export type AiPort = {
   ): Promise<Result<TextGenerationResult, AiError>>;
   generateEmbeddings(
     content: string[],
-  ): Promise<Result<number[][], AiError>>;
+  ): Promise<Result<EmbeddingGenerationResult, AiError>>;
 };

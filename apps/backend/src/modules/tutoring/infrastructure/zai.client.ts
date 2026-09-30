@@ -6,8 +6,11 @@ import type {
 import { config } from "@/modules/platform/config";
 import { err, ok, type Result } from "@/modules/platform/result";
 import type {
+  AiEmbeddingUsage,
   AiError,
   AiPort,
+  AiUsage,
+  JsonGenerationResult,
 } from "@/modules/tutoring/ports";
 
 const CHAT_MODEL = config.ai.models.chat;
@@ -40,11 +43,19 @@ const asAiError = (error: unknown): AiError => ({
   detail: error instanceof Error ? error.message : String(error),
 });
 
+/** The OpenAI-compatible usage block, mapped to the port shape; absent stays absent. */
+const toAiUsage = (usage: ChatCompletion["usage"]): AiUsage | undefined =>
+  usage &&
+  typeof usage.prompt_tokens === "number" &&
+  typeof usage.completion_tokens === "number"
+    ? { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens }
+    : undefined;
+
 export const makeZaiAi = (): AiPort => ({
   generateJson: async (
     input,
     request,
-  ): Promise<Result<{ raw: string }, AiError>> => {
+  ): Promise<Result<JsonGenerationResult, AiError>> => {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         // glm-5.3-flash treats json_schema as guidance, not a hard contract;
@@ -79,7 +90,7 @@ export const makeZaiAi = (): AiPort => ({
         if (!choice?.message?.content || choice.finish_reason === "length")
           continue;
 
-        return ok({ raw: extractJson(choice.message.content) });
+        return ok({ raw: extractJson(choice.message.content), usage: toAiUsage(completion.usage) });
       } catch (error) {
         // Transport failure: return immediately, the use case decides on retry.
         return err(asAiError(error));
@@ -113,8 +124,9 @@ export const makeZaiAi = (): AiPort => ({
         if (!choice?.message?.content || choice.finish_reason === "length")
           continue;
 
-        return ok({ raw: choice.message.content.trim() });
+        return ok({ raw: choice.message.content.trim(), usage: toAiUsage(completion.usage) });
       } catch (error) {
+        // Transport failure: return immediately, the use case decides on retry.
         return err(asAiError(error));
       }
     }
@@ -131,7 +143,15 @@ export const makeZaiAi = (): AiPort => ({
         model: EMBEDDING_MODEL,
         input: content,
       });
-      return ok(response.data.map((item) => item.embedding));
+      // One prompt-token count covers the whole batch input.
+      const usage: AiEmbeddingUsage | undefined =
+        response.usage && typeof response.usage.prompt_tokens === "number"
+          ? { tokens: response.usage.prompt_tokens }
+          : undefined;
+      return ok({
+        embeddings: response.data.map((item) => item.embedding),
+        usage,
+      });
     } catch (error) {
       return err(asAiError(error));
     }

@@ -3,7 +3,7 @@ import {
   makeGenerateInitialSkill,
   type GenerateInitialSkillDeps,
 } from "./generate-initial-skill";
-import type { AiError } from "@/modules/tutoring/ports";
+import type { AiError, AiUsage } from "@/modules/tutoring/ports";
 import type { DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { NewVector } from "@/modules/memory/ports";
 import { ok } from "@/modules/platform/result";
@@ -30,6 +30,10 @@ const makeDeps = (
   overrides: {
     initRaw?: string;
     initError?: AiError;
+    /** Chat usage the fake init_skill call reports (default: none — degrade). */
+    initUsage?: AiUsage;
+    /** Prompt tokens the fake embedding endpoint reports (default: none). */
+    embeddingTokens?: number;
     existingClass?: { id: number; index: number; title: string } | null;
   } = {},
 ) => {
@@ -52,9 +56,16 @@ const makeDeps = (
         if (overrides.initError) {
           return { ok: false, error: overrides.initError };
         }
-        return ok({ raw: overrides.initRaw ?? INIT_JSON });
+        return ok({ raw: overrides.initRaw ?? INIT_JSON, usage: overrides.initUsage });
       },
-      generateEmbeddings: async (content) => ok(content.map(() => [0.5])),
+      generateEmbeddings: async (content) =>
+        ok({
+          embeddings: content.map(() => [0.5]),
+          usage:
+            overrides.embeddingTokens !== undefined
+              ? { tokens: overrides.embeddingTokens }
+              : undefined,
+        }),
       generateText: async () => {
         throw new Error("generateText not used in init tests");
       },
@@ -296,5 +307,31 @@ describe("makeGenerateInitialSkill", () => {
     ]);
     expect(state.createdClasses[0]).toMatchObject({ index: 0 });
     expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
+  });
+  it("audits chat usage on SKILL_CREATED and attributes embedding tokens to vectors", async () => {
+    const { deps, state } = makeDeps({
+      initUsage: { promptTokens: 500, completionTokens: 900 },
+      embeddingTokens: 100,
+    });
+
+    const result = await makeGenerateInitialSkill(deps)(input);
+
+    expect(result.ok).toBe(true);
+    const payload = state.events[0]?.payload as { usage?: unknown };
+    // The init_skill call's billed usage rides the audit row.
+    expect(payload.usage).toEqual({ promptTokens: 500, completionTokens: 900 });
+    // The batch total splits across summary + snippet vectors, sum preserved.
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([50, 50]);
+  });
+
+  it("omits usage when the adapter reports none (tokenCount stays null)", async () => {
+    const { deps, state } = makeDeps();
+
+    const result = await makeGenerateInitialSkill(deps)(input);
+
+    expect(result.ok).toBe(true);
+    const payload = state.events[0]?.payload as { usage?: unknown };
+    expect(payload.usage).toBeUndefined();
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([null, null]);
   });
 });

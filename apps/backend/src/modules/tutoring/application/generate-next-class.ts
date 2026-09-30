@@ -6,6 +6,7 @@ import {
   NEXT_CLASS_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
 import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
+import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
 import {
   extractJsonObject,
   toGeneratedQuestion,
@@ -240,7 +241,7 @@ export const makeGenerateNextClass =
         action: "next_class",
         prompt,
         system: TUTOR_SYSTEM,
-        model: chatModel,
+        usage: generation.value.usage,
         response: generation.value.raw,
       },
     });
@@ -285,8 +286,12 @@ export const makeGenerateNextClass =
         await settlePhase();
         return { ok: false, error: embeddings.error };
       }
+      const tokenCounts = embeddingTokenCounts(
+        embeddings.value.usage,
+        embeddings.value.embeddings.length,
+      );
       const recorded = await recordVectors(
-        embeddings.value.map((embedding, i) => ({
+        embeddings.value.embeddings.map((embedding, i) => ({
           skillId: input.skillId,
           userId: input.userId,
           classId: createdClass.id,
@@ -294,6 +299,7 @@ export const makeGenerateNextClass =
           source: vectorInputs[i].source,
           textSnippet: vectorInputs[i].text,
           classIndex,
+          tokenCount: tokenCounts[i],
         })),
       );
       if (!recorded.ok) {

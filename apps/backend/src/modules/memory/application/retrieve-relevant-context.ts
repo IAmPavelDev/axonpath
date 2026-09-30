@@ -23,13 +23,13 @@ export const makeRetrieveRelevantContext =
   }): Promise<SearchSimilarHit[]> => {
     const embeddings = await ai.generateEmbeddings([input.query]);
 
-    if (!embeddings.ok || embeddings.value.length === 0) {
+    if (!embeddings.ok || embeddings.value.embeddings.length === 0) {
       return [];
     }
 
     const hits = await vectorStore.searchSimilar({
       userId: input.userId,
-      embedding: embeddings.value[0],
+      embedding: embeddings.value.embeddings[0],
       topK: input.topK ?? 5,
       excludeSkillId: input.excludeSkillId,
     });

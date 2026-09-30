@@ -12,6 +12,9 @@ import {
   TUTOR_SYSTEM,
 } from "@/modules/tutoring/domain/personas";
 import {
+  embeddingTokenCounts,
+} from "@/modules/tutoring/domain/embedding-tokens";
+import {
   extractJsonObject,
   toGeneratedQuestion,
   type GeneratedQuestion,
@@ -188,7 +191,7 @@ export const makeGenerateInitialSkill =
           prompt,
           system: TUTOR_SYSTEM,
           model: chatModel,
-          response: generation.value.raw,
+          usage: generation.value.usage,
         },
       });
 
@@ -228,15 +231,22 @@ export const makeGenerateInitialSkill =
         if (!embeddings.ok) {
           return { ok: false, error: embeddings.error };
         }
-        const vectors: NewVector[] = embeddings.value.map((embedding, i) => ({
-          skillId: input.skillId,
-          userId: input.userId,
-          classId: createdClass.id,
-          embedding,
-          source: vectorInputs[i].source,
-          textSnippet: vectorInputs[i].text,
-          classIndex: 0,
-        }));
+        const tokenCounts = embeddingTokenCounts(
+          embeddings.value.usage,
+          embeddings.value.embeddings.length,
+        );
+        const vectors: NewVector[] = embeddings.value.embeddings.map(
+          (embedding, i) => ({
+            skillId: input.skillId,
+            userId: input.userId,
+            classId: createdClass.id,
+            embedding,
+            source: vectorInputs[i].source,
+            textSnippet: vectorInputs[i].text,
+            classIndex: 0,
+            tokenCount: tokenCounts[i],
+          }),
+        );
         await recordVectors(vectors);
       }
 

@@ -49,6 +49,8 @@ export type AiScript = {
   failOnceOn?: string;
   /** Fail the FIRST generateEmbeddings call, then succeed. */
   failEmbeddingsOnce?: boolean;
+  /** Prompt-token count the fake embedding endpoint reports (default: none). */
+  embeddingTokens?: number;
 };
 
 /** Default grading response: an empty results array — the degrade path. */
@@ -171,7 +173,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       if (raw === null) {
         throw new Error(`unexpected schema ${request.schemaName}`);
       }
-      return ok({ raw });
+      return ok({ raw, usage: { promptTokens: 120, completionTokens: 80 } });
     },
     generateEmbeddings: async (content) => {
       if (script.failEmbeddingsOnce && !embeddingsFailConsumed) {
@@ -179,7 +181,13 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         const error: AiError = { kind: "AiGenerationFailed", detail: "embeddings down" };
         return { ok: false, error };
       }
-      return ok(content.map(() => [0.1, 0.2, 0.3]));
+      return ok({
+        embeddings: content.map(() => [0.1, 0.2, 0.3]),
+        usage:
+          script.embeddingTokens !== undefined
+            ? { tokens: script.embeddingTokens }
+            : undefined,
+      });
     },
     generateText: async () => {
       throw new Error("generateText not scripted in loop harness");

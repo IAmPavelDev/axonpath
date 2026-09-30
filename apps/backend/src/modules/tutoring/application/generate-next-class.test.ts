@@ -5,7 +5,7 @@ import {
 } from "./generate-next-class";
 import type { AnswerReview } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { DomainEvent } from "@/modules/learning/domain/event/event.repository";
-import type { AiError } from "@/modules/tutoring/ports";
+import type { AiError, AiUsage } from "@/modules/tutoring/ports";
 import type { NewVector } from "@/modules/memory/ports";
 import { ok } from "@/modules/platform/result";
 
@@ -47,6 +47,10 @@ const makeDeps = (
     history?: { textSnippet: string; source: string; classIndex: number | null }[];
     initRaw?: string;
     initError?: AiError;
+    /** Chat usage the fake next_class call reports (default: none — degrade). */
+    nextUsage?: AiUsage;
+    /** Prompt tokens the fake embedding endpoint reports (default: none). */
+    embeddingTokens?: number;
     answeredIndex?: number | null;
   } = {},
 ) => {
@@ -67,12 +71,18 @@ const makeDeps = (
             return { ok: false, error: overrides.initError };
           }
           state.prompts.push(_input.prompt);
-          return ok({ raw: overrides.initRaw ?? LESSON_JSON });
+          return ok({ raw: overrides.initRaw ?? LESSON_JSON, usage: overrides.nextUsage });
         }
         throw new Error(`unexpected schema ${request.schemaName}`);
       },
       generateEmbeddings: async (content) =>
-        ok(content.map(() => [0.1, 0.2, 0.3])),
+        ok({
+          embeddings: content.map(() => [0.1, 0.2, 0.3]),
+          usage:
+            overrides.embeddingTokens !== undefined
+              ? { tokens: overrides.embeddingTokens }
+              : undefined,
+        }),
       generateText: async () => {
         throw new Error("generateText not used in next-class tests");
       },
@@ -562,5 +572,30 @@ describe("makeGenerateNextClass", () => {
 
     expect(result.ok).toBe(true);
     expect(state.skillUpdates).toEqual([]);
+  });
+  it("audits chat usage on CLASS_GENERATED and attributes embedding tokens to vectors", async () => {
+    const { deps, state } = makeDeps({
+      nextUsage: { promptTokens: 700, completionTokens: 1100 },
+      embeddingTokens: 90,
+    });
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    expect(result.ok).toBe(true);
+    const payload = state.events[0]?.payload as { usage?: unknown };
+    expect(payload.usage).toEqual({ promptTokens: 700, completionTokens: 1100 });
+    // Summary + two snippet vectors split the batch total, sum preserved.
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([30, 30, 30]);
+  });
+
+  it("omits usage when the adapter reports none (tokenCount stays null)", async () => {
+    const { deps, state } = makeDeps();
+
+    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    expect(result.ok).toBe(true);
+    const payload = state.events[0]?.payload as { usage?: unknown };
+    expect(payload.usage).toBeUndefined();
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([null, null, null]);
   });
 });

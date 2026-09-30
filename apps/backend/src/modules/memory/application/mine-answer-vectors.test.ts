@@ -76,7 +76,7 @@ const makeFakeDeps = (options: {
     generateEmbeddings: async (content: string[]) =>
       options.embeddingsFail
         ? err({ kind: "AiGenerationFailed", detail: "embeddings down" })
-        : ok(content.map(() => [0.1, 0.2, 0.3])),
+        : ok({ embeddings: content.map(() => [0.1, 0.2, 0.3]) }),
     generateJson: unused,
     generateText: unused,
   } satisfies AiPort;
@@ -117,6 +117,7 @@ describe("makeMineAnswerVectors", () => {
         textSnippet:
           'Struggled with: What does question 101 test?. Answered "B"; correct: "A" (Outer joins).',
         embedding: [0.1, 0.2, 0.3],
+        tokenCount: null,
         answerId: 101,
       },
     ]);

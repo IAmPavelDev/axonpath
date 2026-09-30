@@ -3,7 +3,7 @@ import {
   makeAnswerClassQuestion,
   type AnswerClassQuestionDeps,
 } from "./answer-class-question";
-import type { AiPort } from "@/modules/tutoring/ports";
+import type { AiPort, TextGenerationResult } from "@/modules/tutoring/ports";
 import type { AiError } from "@/modules/tutoring/ports";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type {
@@ -46,7 +46,7 @@ const makeDeps = (
   overrides: {
     block?: ClassQaEntity | null;
     klass?: typeof CLASS | null;
-    textResult?: Result<{ raw: string }, AiError>;
+    textResult?: Result<TextGenerationResult, AiError>;
   } = {},
 ) => {
   const state: AnswerState = {
@@ -234,5 +234,30 @@ describe("answerClassQuestion", () => {
     expect(result).toEqual({ ok: true, value: undefined });
     expect(state.generateTextInputs).toHaveLength(0);
     expect(state.failed).toHaveLength(0);
+  });
+  it("audits the answer call's token usage on QA_ANSWERED", async () => {
+    const { deps, state } = makeDeps({
+      textResult: ok({
+        raw: "  Left joins drop rows when the right side has no match.  ",
+        usage: { promptTokens: 40, completionTokens: 25 },
+      }),
+    });
+
+    const result = await makeAnswerClassQuestion(deps)({ blockId: 101 });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    expect(state.events[0]?.payload).toMatchObject({
+      usage: { promptTokens: 40, completionTokens: 25 },
+    });
+  });
+
+  it("omits usage when the adapter reports none", async () => {
+    const { deps, state } = makeDeps();
+
+    const result = await makeAnswerClassQuestion(deps)({ blockId: 101 });
+
+    expect(result).toEqual({ ok: true, value: undefined });
+    const payload = state.events[0]?.payload as { usage?: unknown };
+    expect(payload.usage).toBeUndefined();
   });
 });
