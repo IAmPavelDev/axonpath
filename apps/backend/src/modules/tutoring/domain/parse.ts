@@ -29,10 +29,22 @@ export const toGeneratedQuestion = (value: unknown): GeneratedQuestion | null =>
   if (typeof value !== "object" || value === null) return null;
   // Named cast: untrusted model output, every field re-validated below.
   const q = value as Record<string, unknown>;
-  if (q.type !== "MULTIPLE_CHOICE" && q.type !== "TRUE_FALSE") return null;
+  if (
+    q.type !== "MULTIPLE_CHOICE" &&
+    q.type !== "TRUE_FALSE" &&
+    q.type !== "OPEN_ENDED"
+  ) {
+    return null;
+  }
   // The model tends to emit `question` for the schema's `text` field.
   const text = q.text ?? q.question;
   if (typeof text !== "string" || text.length === 0) return null;
+  if (typeof q.answerKey !== "string" || q.answerKey.length === 0) return null;
+  // OPEN_ENDED drift guard: the model sometimes echoes example choices even
+  // though an open-ended question carries none — force the empty list.
+  if (q.type === "OPEN_ENDED") {
+    return { type: q.type, text, choices: [], answerKey: q.answerKey };
+  }
   const rawChoices = Array.isArray(q.choices) ? q.choices : [];
   const choices: string[] = [];
   for (const choice of rawChoices) {
@@ -40,6 +52,5 @@ export const toGeneratedQuestion = (value: unknown): GeneratedQuestion | null =>
     choices.push(choice);
   }
   if (choices.length === 0) return null;
-  if (typeof q.answerKey !== "string" || q.answerKey.length === 0) return null;
   return { type: q.type, text, choices, answerKey: q.answerKey };
 };

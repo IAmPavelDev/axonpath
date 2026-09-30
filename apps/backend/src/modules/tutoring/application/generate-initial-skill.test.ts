@@ -186,6 +186,49 @@ describe("makeGenerateInitialSkill", () => {
     });
   });
 
+  it("generates and normalizes OPEN_ENDED questions, and instructs the model to include them", async () => {
+    // The scripted model drifts: it echoes example choices on an open-ended
+    // question. The normalizer must force choices: [] and keep the model
+    // answer.
+    const initRaw = JSON.stringify({
+      classTitle: "SQL joins from zero",
+      classContentMd: "## Introduction\nMeet the join.",
+      lessonSummary: "This lesson introduced inner and left joins.",
+      questions: [
+        {
+          type: "TRUE_FALSE",
+          text: "An INNER JOIN drops unmatched rows.",
+          choices: ["True", "False"],
+          answerKey: "True",
+        },
+        {
+          type: "OPEN_ENDED",
+          text: "Explain why an INNER JOIN drops unmatched rows.",
+          choices: ["Left Join", "Right Join"],
+          answerKey: "Rows without a match in the other table fail the join predicate.",
+        },
+      ],
+      contextSnippets: ["First exposure to SQL joins"],
+    });
+    const { deps, state } = makeDeps({ initRaw });
+
+    const result = await makeGenerateInitialSkill(deps)(input);
+
+    expect(result.ok).toBe(true);
+    expect(state.createdQuestions[1]).toEqual({
+      type: "OPEN_ENDED",
+      text: "Explain why an INNER JOIN drops unmatched rows.",
+      choices: [],
+      answerKey: "Rows without a match in the other table fail the join predicate.",
+      aiModel: "glm-5.3-flash",
+    });
+    // The unlock instruction reaches the model in the init prompt.
+    const initPrompt = state.aiCalls.find((call) => call.schemaName === "init_skill");
+    expect(initPrompt?.prompt).toContain(
+      "Include 1–2 open-ended questions per lesson (type OPEN_ENDED, choices: [], answerKey: a model answer)",
+    );
+  });
+
   it("flips FAILED and audits ERROR_OCCURRED when generation fails", async () => {
     const { deps, state } = makeDeps({
       initError: { kind: "AiGenerationFailed", detail: "timeout" },

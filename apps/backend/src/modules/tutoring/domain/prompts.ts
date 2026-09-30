@@ -19,7 +19,7 @@ const lessonJsonInstructions = `Return JSON with:
 - classTitle: short lesson title.
 - classContentMd: the lesson markdown (see format rules in your instructions).
 - lessonSummary: 2-4 self-contained sentences describing what this lesson covered and at what depth.
-- questions: 5-10 quiz questions per your instructions.
+- questions: 5-10 quiz questions per your instructions. Include 1–2 open-ended questions per lesson (type OPEN_ENDED, choices: [], answerKey: a model answer).
 - contextSnippets: 5-10 atomic facts about this learner per your instructions.`;
 
 export const buildInitSkillPrompt = (input: {
@@ -62,7 +62,7 @@ export const INIT_SKILL_SCHEMA = {
       items: {
         type: "object",
         properties: {
-          type: { type: "string", enum: ["MULTIPLE_CHOICE", "TRUE_FALSE"] },
+          type: { type: "string", enum: ["MULTIPLE_CHOICE", "TRUE_FALSE", "OPEN_ENDED"] },
           text: { type: "string" },
           choices: { type: "array", items: { type: "string" } },
           answerKey: { type: "string" },
