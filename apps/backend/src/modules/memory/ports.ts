@@ -26,6 +26,15 @@ export type NewVector = {
 export type VectorMetadataRepository = {
   /** Which of the given answer ids already have at least one vector. */
   findAnswerIdsWithVectors(answerIds: number[]): Promise<Result<number[], VectorStoreError>>;
+  /**
+   * Embedding-spend aggregate behind usage.report: SUM(Vector.tokenCount)
+   * for one user (optionally one skill). tokenCount is null on capture-degrade
+   * paths; those vectors are counted in nullCount, never guessed.
+   */
+  sumTokenCountsByUser(
+    userId: number,
+    skillId?: number,
+  ): Promise<{ totalTokens: number; nullCount: number }>;
 };
 
 export type SearchSimilarHit = {

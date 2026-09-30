@@ -45,6 +45,7 @@ const makeFakeDeps = (options: {
   const recorded: NewVector[] = [];
 
   const vectorMetadata: VectorMetadataRepository = {
+    sumTokenCountsByUser: async () => ({ totalTokens: 0, nullCount: 0 }),
     findAnswerIdsWithVectors: async () =>
       options.metadataFails
         ? err({ kind: "VectorStoreUnavailable", detail: "metadata down" })

@@ -52,6 +52,7 @@ export const buildStatsRouter = (deps: StatsApiDeps) => {
   const handlers = makeStatsHandlers(deps);
   return {
     overview: rpc.stats.overview.handler(handlers.overview),
+    report: rpc.stats.report.handler(handlers.report),
   };
 };
 

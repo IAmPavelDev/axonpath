@@ -490,6 +490,8 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   };
 
   const eventRepo: EventRepository = {
+    // usage.report is not exercised in loop scenarios; the read stays inert.
+    findUsageEvents: async () => [],
     record: async (event) => {
       state.events.push(event);
     },
@@ -611,6 +613,19 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           )
           .map((vector) => vector.answerId as number),
       ),
+    sumTokenCountsByUser: async () => {
+      // Embedding spend isn't asserted in loop scenarios; aggregate honestly.
+      let totalTokens = 0;
+      let nullCount = 0;
+      for (const vector of state.vectors) {
+        if (vector.tokenCount == null) {
+          nullCount += 1;
+        } else {
+          totalTokens += vector.tokenCount;
+        }
+      }
+      return { totalTokens, nullCount };
+    },
   };
   const mineAnswerVectors = makeMineAnswerVectors({
     ai,

@@ -178,4 +178,19 @@ export const makeVectorMetadataRepository = (): VectorMetadataRepository => ({
       });
     }
   },
+
+  sumTokenCountsByUser: async (userId, skillId) => {
+    const agg = await prisma.vector.aggregate({
+      where: {
+        userId,
+        ...(skillId !== undefined ? { skillId } : {}),
+      },
+      _sum: { tokenCount: true },
+      _count: { _all: true, tokenCount: true },
+    });
+    return {
+      totalTokens: agg._sum.tokenCount ?? 0,
+      nullCount: agg._count._all - agg._count.tokenCount,
+    };
+  },
 });

@@ -1,4 +1,4 @@
-import { Prisma } from "@/prisma/generated";
+import { EventType, Prisma } from "@/prisma/generated";
 import { prisma } from "@/modules/platform/infrastructure/prisma";
 import type {
   DomainEvent,
@@ -20,5 +20,26 @@ export const makePrismaEventRepository = (): EventRepository => ({
       // Audit events must never gate the flow that produced them.
       console.error({ err, eventType: event.type, skillId: event.skillId }, "Failed to record event");
     }
+  },
+
+  findUsageEvents: async (userId, skillId) => {
+    const rows = await prisma.event.findMany({
+      where: {
+        userId,
+        type: {
+          in: [EventType.SKILL_CREATED, EventType.CLASS_GENERATED, EventType.QA_ANSWERED],
+        },
+        ...(skillId !== undefined ? { skillId } : {}),
+      },
+      select: { id: true, type: true, payload: true, skillId: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      type: row.type,
+      payload: (row.payload ?? {}) as Record<string, unknown>,
+      skillId: row.skillId,
+      createdAt: row.createdAt,
+    }));
   },
 });

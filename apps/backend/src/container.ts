@@ -11,8 +11,12 @@ import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrie
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
 import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
-import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
+import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
+import {
+  makeGetUsageReport,
+  type GetUsageReport,
+} from "@/modules/learning/application/queries/get-usage-report";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeJobHandlers } from "@/modules/jobs/registry";
@@ -31,16 +35,12 @@ import {
 } from "@/modules/jobs/class-qa-sweeper";
 import type { LearningApiDeps } from "@/router";
 
-/**
- * Composition root: the only place adapters are constructed and use cases are
- * bound to them. Each `make*` deps object is the future Effect Layer seam; job
- * wiring lives in modules/jobs/registry.ts. main.ts consumes this and stays
- * HTTP-only (Fastify bootstrap).
- */
 export type Container = LearningApiDeps & {
   /** Started by main.ts after listen; stopped on shutdown. */
   nextClassSweeper: NextClassSweeper;
   classQaSweeper: ClassQaSweeper;
+  /** Bound for the stats router; stats deps carry it into the API surface. */
+  getUsageReport: GetUsageReport;
 };
 
 export const configureContainer = (): Container => {
@@ -85,12 +85,22 @@ export const configureContainer = (): Container => {
     chatModel: config.ai.models.chat,
   });
 
+  const vectorMetadata = makeVectorMetadataRepository();
+
   const mineAnswerVectors = makeMineAnswerVectors({
     ai,
-    vectorMetadata: makeVectorMetadataRepository(),
+    vectorMetadata,
     recordVectors,
     quizRepo,
     classRepo,
+  });
+
+  const getUsageReport = makeGetUsageReport({
+    skillRepo,
+    eventRepo,
+    vectorMetadata,
+    chatModel: config.ai.models.chat,
+    embeddingModel: config.ai.models.embedding,
   });
 
   const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
@@ -132,6 +142,10 @@ export const configureContainer = (): Container => {
     qaRepo,
     quizRepo,
     eventRepo,
+    vectorMetadata,
+    chatModel: config.ai.models.chat,
+    embeddingModel: config.ai.models.embedding,
+    getUsageReport,
     jobs,
     nextClassJobs,
     nextClassSweeper,

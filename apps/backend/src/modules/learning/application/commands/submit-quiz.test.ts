@@ -100,6 +100,7 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
   };
 
   const eventRepo: EventRepository = {
+    findUsageEvents: async () => [],
     record: async (event) => {
       events.push(event);
     },

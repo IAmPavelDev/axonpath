@@ -26,3 +26,41 @@ export const StatsOverviewOutput = z.object({
   lessonsCompletedThisWeek: z.number().int(),
   skills: z.array(StatsSkillSummary),
 });
+
+/** One AI-kind bucket of the usage report. */
+export const UsageKindSummary = z.object({
+  events: z.number().int(),
+  promptTokens: z.number().int(),
+  completionTokens: z.number().int(),
+  estimatedCostUsd: z.number(),
+});
+
+export const UsageReportInput = z
+  .object({
+    skillId: z.number().int().positive().min(1).optional(),
+  })
+  .optional();
+
+/** Token usage and estimated cost for the authenticated user (no admin surface). */
+export const UsageReportOutput = z.object({
+  totals: z.object({
+    promptTokens: z.number().int(),
+    completionTokens: z.number().int(),
+    embeddingTokens: z.number().int(),
+    estimatedCostUsd: z.number(),
+  }),
+  byKind: z.object({
+    skillInit: UsageKindSummary,
+    nextClass: UsageKindSummary,
+    qa: UsageKindSummary,
+  }),
+  /** Chat events whose payload lacks usage — counted, never costed. */
+  eventsWithoutUsage: z.number().int(),
+  /** Vectors without a tokenCount (capture degrade) — counted, never guessed. */
+  vectorsWithoutTokenCount: z.number().int(),
+  /** Oldest/newest chat event in scope; nulls when empty. */
+  window: z.object({
+    from: z.date().nullable(),
+    to: z.date().nullable(),
+  }),
+});

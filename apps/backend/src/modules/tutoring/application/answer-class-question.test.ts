@@ -114,6 +114,7 @@ const makeDeps = (
   };
 
   const eventRepo: EventRepository = {
+    findUsageEvents: async () => [],
     record: async (event) => {
       state.events.push(event);
     },
