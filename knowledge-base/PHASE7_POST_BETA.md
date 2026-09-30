@@ -1,17 +1,21 @@
 # Axon — Phase 7: Post-beta (progress, memory depth, richer quizzes, platform hygiene)
 
-> Written 2026-09-22 from a verified code audit; re-verified 2026-09-22 at `d6508e8` on `dev`
-> (TS 7.0.2 upgrade committed in `d974bd2`; durable next-class job queue in `5902e68`/`d6508e8`).
-> Status: **PLANNED** — this file is
-> the execution authority for everything after beta. Background: `BETA_PLAN.md` (beta, DONE),
-> `ARCHITECTURE.md` (current state), `GAPS.md` (gap ledger, closed items).
+> Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 at `48c484b`
+> (backend 19 files / 108 tests green, mobile `tsc --noEmit` clean).
+> Status: **PLANNED — not started** — this file is the execution authority for everything
+> after beta. Since 2026-09-22, out-of-plan work landed WITHOUT consuming S1–S7 scope:
+> class Q&A / Ask-AI (`6c1efeb`, `e4ea158`, `457b740`), quiz-exit redirect to the lessons
+> list (`e988e6e`), 10 s skill-status polling (`7dd5af7`), Source Sans 3 + blue-tinted
+> theme (`fc4babc`, `734d264`), prod-image fix (`71a9643`), universal-APK EAS builds
+> (`8029e7d`). Background: `BETA_PLAN.md` (beta, DONE), `ARCHITECTURE.md` (current state),
+> `GAPS.md` (gap ledger, closed items), `BUSINESS_DECISIONS.md` (decision record).
 
 ## 0. Verified current state (2026-09-22)
 
-Beta (Phases 1–6 + Firebase auth) is DONE. Backend suite **86/86 green** (vitest, 15 files
-incl. `loop.integration.test.ts` and the next-class worker/sweeper/reconciler tests); mobile
-`pnpm --filter @axon/mobile exec tsc --noEmit` clean — both re-verified 2026-09-22 at
-`d6508e8`. The TS 5.9→7.0.2 upgrade is **committed** (`d974bd2`; ts-node dropped;
+Beta (Phases 1–6 + Firebase auth) is DONE. Backend suite **108/108 green** (vitest, 19 files
+incl. `loop.integration.test.ts`, the next-class worker/sweeper/reconciler tests, and the
+class-Q&A tests); mobile `pnpm --filter @axon/mobile exec tsc --noEmit` clean — both
+re-verified 2026-09-30 at `48c484b`. The TS 5.9→7.0.2 upgrade is **committed** (`d974bd2`; ts-node dropped;
 `@axon/api-contract` build now also emits `.d.ts` via `tsup && tsc --emitDeclarationOnly`).
 
 What actually remains, with evidence:

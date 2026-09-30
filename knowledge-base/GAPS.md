@@ -1,6 +1,7 @@
 # Axon — Gap Ledger
 
-> **Status 2026-09-22.** This file was the 2026-09 gap analysis (pre-refactor file
+> **Status 2026-09-30** (re-verified at `48c484b`: 8, 10, 13 remain open; Phase 7 still
+> pending). This file was the 2026-09 gap analysis (pre-refactor file
 > references). All beta gaps are closed; the open/partial items (8, 10, 13) are planned as
 > **Phase 7** — execution authority `knowledge-base/PHASE7_POST_BETA.md`. Current-state
 > detail: `knowledge-base/ARCHITECTURE.md`; beta history: `knowledge-base/BETA_PLAN.md`.

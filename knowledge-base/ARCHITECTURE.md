@@ -1,12 +1,14 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-09-22** (verified at `d6508e8`: TS 7.0.2 committed, durable
-> next-class job queue landed; backend 86/86, mobile tsc clean). Execution authority for what is
-> next: `knowledge-base/PHASE7_POST_BETA.md` (post-beta, PLANNED). Beta history:
-> `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
-> Background: `CONCEPT.md` (vision), `GAPS.md` (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
+> Status: **CURRENT as of 2026-09-30** (verified at `48c484b`: backend 19 files / 108 tests
+> green, mobile `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A /
+> Ask-AI shipped). Execution authority for what is next: `knowledge-base/PHASE7_POST_BETA.md`
+> (post-beta, PLANNED — none of S1–S7 started). Beta history: `knowledge-base/BETA_PLAN.md`
+> and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
+> Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
+> (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
-> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, t3.micro
+> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, t2.micro
 > free tier, plain HTTP :3001 on the auto-assigned public IP, full stack incl.
 > Postgres/Qdrant/RabbitMQ; image built on the dev machine and shipped).
 
@@ -158,7 +160,10 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
    (`QuizRepository.findHighestAnsweredClassIndex`) is behind the newest class — a consecutive
    retake of the newest lesson no longer spawns variants. With no recorded answers the use case
    generates (safe default); retaking an older class still regenerates from the latest one.
-5. **Observe**: mobile polls `class.list`; the class screen auto-navigates into the new lesson.
+5. **Observe**: after submit the client routes back to the skill's lesson list; SkillDetail
+   shows a "Preparing your next lesson…" line while the skill is `GENERATING` — no
+   client-side polling of generation. The home skill list polls `skill.list` every 10 s
+   while visible.
 
 ### 4.3 Skill status lifecycle
 
@@ -213,19 +218,23 @@ Gemini OpenAI-compatible endpoint; chat: `glm-5.3-flash` via `https://api.z.ai/a
 
 ## 6. Mobile (apps/mobile)
 
-Flow: Firebase auth → skill list (home; `GENERATING` rows show a preparing state, pull-to-
-refresh, pinning; `FAILED` rows show a "Failed to prepare" chip with a retry affordance) →
-create-skill (topic input) → description/skill detail (FAILED shows error copy + retry button)
-→ class list (newest first) → class screen (themed Markdown conspect + quiz tabs) → quiz
-(MC/TF/Open) → result → **generating phase**: pulse + copy, polls `class.list` every 2.5 s
-(90 s timeout), auto-navigates into the new lesson.
+Flow: Firebase auth → skill list (home; polls `skill.list` every 10 s while visible;
+`GENERATING` rows show a preparing state, pull-to-refresh, pinning; `FAILED` rows show a
+"Failed to prepare" chip with a retry affordance) → create-skill (topic input) →
+description/skill detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows
+error copy + retry button) → class list (newest first) → class screen (Markdown conspect +
+quiz tabs; native text selection "Ask AI" creates an anchored Q&A block via `class.qa.ask`,
+and the screen polls `class.qa.list` while any block is `PENDING`) → quiz (MC/TF/Open) →
+result → "continue" returns to the skill's lesson list; generation completes server-side and
+surfaces as the preparing state above.
 
 - **RPC client** (`utils/rpc.ts`): typed oRPC client; bearer Firebase ID token attached per call
   (transparent refresh). `EXPO_PUBLIC_API_URL` overrides the base URL; defaults stay
   `localhost` (web) / `10.0.2.2` (emulator).
 - **State**: TanStack Query for server data; Zustand (`quiz.store`) for in-screen answers.
-- **Theme**: atomics kit + light/dark monochrome system (`lib/theme.ts`); markdown theme for
-  lessons (`components/class/`).
+- **Theme**: Source Sans 3 + blue-tinted light/dark palettes; `lib/theme.ts` (RN styles) and
+  `global.css` (NativeWind vars) kept in lockstep via the `theme:check` script. Conspects:
+  syntax-highlighted code, selectable text (`components/class/`, `lib/conspect-markdown.tsx`).
 
 ## 7. Environment & config
 
@@ -245,13 +254,12 @@ create-skill (topic input) → description/skill detail (FAILED shows error copy
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (18 files / 102 tests, all
-green 2026-09-29): scoring, skill state machine, Result, authenticate + Firebase verifier +
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (19 files / 108 tests, all green 2026-09-30 at `48c484b`): scoring, skill state machine, Result, authenticate + Firebase verifier +
 auth middleware, create-skill, retry-skill, generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
 stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list
-ordering/ownership, answer generation PENDING→ANSWERED/FAILED with replay no-ops), and the
+ordering/ownership, answer generation PENDING→ANSWERED/FAILED with replay no-ops, stranded-block requeue on boot), and the
 composed loop integration test (real use cases + in-memory
 fakes over `modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup →
 FAILED/retry heal, both failure shapes).
