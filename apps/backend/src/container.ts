@@ -6,8 +6,10 @@ import { makePrismaQuizRepository } from "@/modules/learning/infrastructure/quiz
 import { makePrismaEventRepository } from "@/modules/learning/infrastructure/event.prisma.repo";
 import { makeSetImmediateJobQueue } from "@/modules/platform/infrastructure/set-immediate-jobs";
 import { makeVectorStoreAdapter } from "@/modules/memory/infrastructure/vector.metadata.repo";
+import { makeVectorMetadataRepository } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrieve-relevant-context";
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
+import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
 import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
@@ -82,6 +84,14 @@ export const configureContainer = (): Container => {
     chatModel: config.ai.models.chat,
   });
 
+  const mineAnswerVectors = makeMineAnswerVectors({
+    ai,
+    vectorMetadata: makeVectorMetadataRepository(),
+    recordVectors,
+    quizRepo,
+    classRepo,
+  });
+
   const nextClassJobs = makePrismaNextClassJobRepository();
   const nextClassWorker = makeNextClassWorker({
     nextClassJobs,
@@ -89,7 +99,12 @@ export const configureContainer = (): Container => {
   });
 
   const jobs = makeSetImmediateJobQueue(
-    makeJobHandlers({ generateInitialSkill, nextClassWorker, answerClassQuestion }),
+    makeJobHandlers({
+      generateInitialSkill,
+      nextClassWorker,
+      answerClassQuestion,
+      mineAnswerVectors,
+    }),
   );
 
   const nextClassReconciler = makeNextClassReconciler({

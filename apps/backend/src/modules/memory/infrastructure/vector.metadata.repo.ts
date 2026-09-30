@@ -8,6 +8,7 @@ import {
 } from "@/modules/memory/infrastructure/qdrant.client";
 import type {
   SearchSimilarHit,
+  VectorMetadataRepository,
   VectorStoreError,
   VectorStorePort,
 } from "@/modules/memory/ports";
@@ -45,7 +46,8 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
           ${vector.source}::"VectorSource",
           ${vector.textSnippet},
           ${vector.classIndex ?? null},
-          ${vector.tokenCount ?? null}
+          ${vector.tokenCount ?? null},
+          ${vector.answerId ?? null}
         )`,
       );
 
@@ -56,7 +58,8 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
           "source",
           "textSnippet",
           "classIndex",
-          "tokenCount"
+          "tokenCount",
+          "answerId"
         ) VALUES ${Prisma.join(tuples)}
         RETURNING "id";
       `;
@@ -139,6 +142,34 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
             tokenCount: (payload?.tokenCount as number) ?? null,
           } satisfies SearchSimilarHit;
         }),
+      );
+    } catch (errLike) {
+      return err({
+        kind: "VectorStoreUnavailable",
+        detail: detailOf(errLike),
+      });
+    }
+  },
+});
+
+/**
+ * Metadata-only read side (relational Vector rows, no Qdrant round-trip).
+ * Backs the answer-memory dedup: a mined answer leaves a vector row keyed by
+ * its answerId, so this query is the "already mined" check.
+ */
+export const makeVectorMetadataRepository = (): VectorMetadataRepository => ({
+  findAnswerIdsWithVectors: async (answerIds) => {
+    if (answerIds.length === 0) {
+      return ok([]);
+    }
+    try {
+      const rows = await prisma.vector.findMany({
+        where: { answerId: { in: answerIds } },
+        select: { answerId: true },
+        distinct: ["answerId"],
+      });
+      return ok(
+        rows.map((row) => row.answerId).filter((id): id is number => id !== null),
       );
     } catch (errLike) {
       return err({

@@ -7,9 +7,14 @@ import {
 } from "@/modules/tutoring/application/answer-class-question";
 import type { GenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import type { NextClassWorker } from "@/modules/jobs/next-class-worker";
+import {
+  SKILL_ANSWER_VECTORS_JOB,
+  type MineAnswerVectors,
+} from "@/modules/memory/application/mine-answer-vectors";
 import { getGenerateInitialSkillJobHandler } from "./generateInitialSkillJobHandler";
 import { getGenerateNextClassJobHandler } from "./generateNextClassJobHandler";
 import { getAnswerClassQuestionJobHandler } from "./answerClassQuestionJobHandler";
+import { getMineAnswerVectorsJobHandler } from "./mineAnswerVectorsJobHandler";
 
 /**
  * Job configuration: maps job names to their handlers. The composition root
@@ -21,14 +26,17 @@ export type JobRegistryDeps = {
   generateInitialSkill: GenerateInitialSkill;
   nextClassWorker: NextClassWorker;
   answerClassQuestion: AnswerClassQuestion;
+  mineAnswerVectors: MineAnswerVectors;
 };
 
 export const makeJobHandlers = ({
   generateInitialSkill,
   nextClassWorker,
   answerClassQuestion,
+  mineAnswerVectors,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
   [CLASS_QA_ANSWER_JOB]: getAnswerClassQuestionJobHandler(answerClassQuestion),
+  [SKILL_ANSWER_VECTORS_JOB]: getMineAnswerVectorsJobHandler(mineAnswerVectors),
 });

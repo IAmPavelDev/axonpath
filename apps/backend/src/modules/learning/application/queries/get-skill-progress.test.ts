@@ -33,6 +33,7 @@ const makeFakeDeps = (options: {
     createWithQuestions: unused,
     listBySkill: unused,
     listBySkillByIndex: async () => options.classes ?? [],
+    listByIds: unused,
     findTopBySkill: unused,
     findById: unused,
   };
@@ -43,6 +44,7 @@ const makeFakeDeps = (options: {
     findAnswersByClassAndUser: unused,
     findHighestAnsweredClassIndex: unused,
     findAnswerStatsBySkill: async () => options.stats ?? [],
+    findAnswersWithQuestions: unused,
   };
 
   const deps: GetSkillProgressDeps = { skillRepo, classRepo, quizRepo };

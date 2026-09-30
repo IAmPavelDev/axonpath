@@ -90,6 +90,9 @@ const makeDeps = (
       listBySkillByIndex: async () => {
         throw new Error("not used in init tests");
       },
+      listByIds: async () => {
+        throw new Error("not used in init tests");
+      },
       findTopBySkill: async () => overrides.existingClass ?? null,
       findById: async () => {
         throw new Error("not used in init tests");
@@ -112,6 +115,9 @@ const makeDeps = (
         throw new Error("not used in init tests");
       },
       findAnswerStatsBySkill: async () => {
+        throw new Error("not used in init tests");
+      },
+      findAnswersWithQuestions: async () => {
         throw new Error("not used in init tests");
       },
     },

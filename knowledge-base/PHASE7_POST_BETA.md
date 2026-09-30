@@ -2,7 +2,7 @@
 
 > Written 2026-09-22 from a verified code audit; re-verified 2026-09-30 through S2 at `7dfb6b7`
 > and through M3 in this change (backend suite counts per ARCHITECTURE §8).
-> Status: **IN PROGRESS — S1, S2, S6, S7 DONE (2026-09-30); S3–S5 pending** — this file is the execution authority for everything
+> Status: **IN PROGRESS — S1, S2, S3, S6, S7 DONE (2026-09-30); S4–S5 pending** — this file is the execution authority for everything
 > after beta. Since 2026-09-22, out-of-plan work landed WITHOUT consuming S1–S7 scope:
 > class Q&A / Ask-AI (`6c1efeb`, `e4ea158`, `457b740`), quiz-exit redirect to the lessons
 > list (`e988e6e`), 10 s skill-status polling (`7dd5af7`), Source Sans 3 + blue-tinted
@@ -205,7 +205,7 @@ exists with data to fit it against.
 - Mobile: detail-screen menu — Pause/Resume, Mark completed, Archive (`useMutation` →
   invalidate skills query); status chip on detail; the FAILED/retry flow is untouched.
 
-### S3 — `ANSWER_DERIVED` answer memory (D3)
+### S3 — ✅ DONE (2026-09-30) — `ANSWER_DERIVED` answer memory (D3)
 - `mine-answer-vectors.ts` + `findAnswerIdsWithVectors` + `recordVectors` per-item `answerId`
   + registry entry `skill-answer-vectors` + submit-quiz enqueue (wrong MC/TF ids, cap 10).
 - `buildNextClassPrompt` third block; `parse.ts` untouched (sources are labels, not schema).

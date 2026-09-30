@@ -14,6 +14,18 @@ export type NewVector = {
   textSnippet: string;
   classIndex?: number | null;
   tokenCount?: number | null;
+  /** Set when the snippet was mined from a recorded answer (ANSWER_DERIVED). */
+  answerId?: number | null;
+};
+
+/**
+ * Read-side over the relational Vector metadata alone (no Qdrant). Exists so
+ * background memory jobs can consult "what is already stored" without
+ * touching the embedding store.
+ */
+export type VectorMetadataRepository = {
+  /** Which of the given answer ids already have at least one vector. */
+  findAnswerIdsWithVectors(answerIds: number[]): Promise<Result<number[], VectorStoreError>>;
 };
 
 export type SearchSimilarHit = {

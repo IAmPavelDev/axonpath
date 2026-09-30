@@ -121,4 +121,13 @@ export const makePrismaClassRepository = (): ClassRepository => ({
       where: { id },
       select: { id: true, skillId: true, title: true, contentMd: true },
     }),
+  listByIds: async (ids) => {
+    if (ids.length === 0) {
+      return [];
+    }
+    return prisma.class.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, index: true, title: true },
+    });
+  },
 });

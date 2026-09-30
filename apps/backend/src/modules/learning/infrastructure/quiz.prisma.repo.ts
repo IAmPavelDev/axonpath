@@ -17,6 +17,22 @@ const toQuestionView = (row: {
   const parsed = schema.quiz.GetQuizByClassIdOutput.element.parse(row);
   return parsed;
 };
+/**
+ * Answer.content follows the { answer: string } storage convention; a
+ * malformed value degrades to its string form instead of throwing.
+ */
+const answerTextOf = (content: unknown): string => {
+  if (
+    typeof content === "object" &&
+    content !== null &&
+    !Array.isArray(content) &&
+    "answer" in content &&
+    typeof content.answer === "string"
+  ) {
+    return content.answer;
+  }
+  return String(content ?? "");
+};
 
 export const makePrismaQuizRepository = (): QuizRepository => ({
   findByClassId: async (classId) => {
@@ -35,9 +51,9 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
 
   createAnswers: async (inputs) => {
     if (inputs.length === 0) {
-      return;
+      return [];
     }
-    await prisma.answer.createMany({
+    const created = await prisma.answer.createManyAndReturn({
       data: inputs.map((input) => ({
         questionId: input.questionId,
         userId: input.userId,
@@ -47,8 +63,11 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
         isCorrect: input.isCorrect,
         timeSpentMs: input.timeSpentMs,
       })),
+      select: { id: true },
     });
+    return created.map((row) => row.id);
   },
+
   findAnswersByClassAndUser: async (classId, userId) => {
     const rows = await prisma.answer.findMany({
       where: { userId, question: { classId } },
@@ -61,24 +80,13 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       },
     });
     return rows.map((row) => {
-      // content follows the { answer: string } storage convention; answerKey
-      // is a plain string for gradable types, an object only for open-ended.
-      const content: unknown = row.content;
+      // answerKey is a plain string for gradable types, an object only for
+      // open-ended — stringified for the AI-facing review either way.
       const answerKey: unknown = row.question.answerKey;
-      let userAnswer = String(content ?? "");
-      if (
-        typeof content === "object" &&
-        content !== null &&
-        !Array.isArray(content) &&
-        "answer" in content &&
-        typeof content.answer === "string"
-      ) {
-        userAnswer = content.answer;
-      }
       return {
         questionId: row.questionId,
         questionText: row.question.text,
-        userAnswer,
+        userAnswer: answerTextOf(row.content),
         correctAnswer:
           answerKey == null
             ? ""
@@ -89,6 +97,7 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       };
     });
   },
+
   findHighestAnsweredClassIndex: async (skillId, userId) => {
     const rows = await prisma.answer.findMany({
       where: { userId, question: { class: { skillId } } },
@@ -137,6 +146,34 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       classId: row.classId!,
       answeredCount: row._count._all,
       correctCount: correctByClass.get(row.classId!) ?? 0,
+    }));
+  },
+
+  findAnswersWithQuestions: async (answerIds) => {
+    if (answerIds.length === 0) {
+      return [];
+    }
+    const rows = await prisma.answer.findMany({
+      where: { id: { in: answerIds } },
+      select: {
+        id: true,
+        questionId: true,
+        content: true,
+        isCorrect: true,
+        question: {
+          select: { id: true, type: true, text: true, answerKey: true, classId: true },
+        },
+      },
+    });
+    return rows.map((row) => ({
+      answerId: row.id,
+      questionId: row.question.id,
+      questionType: row.question.type,
+      questionText: row.question.text,
+      answerKey: row.question.answerKey,
+      userAnswer: answerTextOf(row.content),
+      isCorrect: row.isCorrect,
+      classId: row.question.classId,
     }));
   },
 });

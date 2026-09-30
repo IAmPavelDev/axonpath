@@ -136,6 +136,18 @@ ${learnerContext}
 `;
   }
 
+  const knownGaps = input.history
+    .filter((hit) => hit.source === "ANSWER_DERIVED")
+    .map((hit) => `- ${hit.textSnippet}`)
+    .join("\n");
+  if (knownGaps.length > 0) {
+    prompt += `
+
+Known gaps — the learner has missed these before; weave in a re-test:
+${knownGaps}
+`;
+  }
+
   if (input.mistakes.length > 0) {
     const mistakeLines = input.mistakes
       .map(

@@ -51,6 +51,7 @@ const makeDeps = ({
       createWithQuestions: async () => notUsed("createWithQuestions"),
       listBySkill: async () => notUsed("listBySkill"),
       listBySkillByIndex: async () => notUsed("listBySkillByIndex"),
+      listByIds: async () => notUsed("listByIds"),
       findTopBySkill: async (skillId: number) => topBySkill[skillId] ?? null,
       findById: async () => notUsed("findById"),
     } satisfies ClassRepository,
@@ -60,6 +61,7 @@ const makeDeps = ({
       createAnswers: async () => notUsed("createAnswers"),
       findAnswersByClassAndUser: async () => notUsed("findAnswersByClassAndUser"),
       findAnswerStatsBySkill: async () => notUsed("findAnswerStatsBySkill"),
+      findAnswersWithQuestions: async () => notUsed("findAnswersWithQuestions"),
       findHighestAnsweredClassIndex: async (skillId: number) =>
         answeredIndex[skillId] ?? null,
     } satisfies QuizRepository,

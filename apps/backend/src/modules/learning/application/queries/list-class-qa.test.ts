@@ -43,6 +43,9 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
     listBySkillByIndex: async () => {
       throw new Error("not used in list tests");
     },
+    listByIds: async () => {
+      throw new Error("not used in list tests");
+    },
     findTopBySkill: async () => {
       throw new Error("not used in list tests");
     },

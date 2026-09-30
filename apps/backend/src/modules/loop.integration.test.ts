@@ -10,6 +10,7 @@ import { makeRetrySkill } from "@/modules/learning/application/commands/retry-sk
 import {
   SKILL_NEXT_CLASS_JOB,
 } from "@/modules/tutoring/application/generate-next-class";
+import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
 import {
   classesOfSkill,
   firstQuestionOfType,
@@ -86,6 +87,30 @@ describe("adaptive loop integration", () => {
     });
     // The submit flipped the skill into its generating phase.
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.GENERATING);
+
+    // 2b. Answer-memory mining (Phase 7 D3): the wrong submit answer becomes
+    // ONE ANSWER_DERIVED vector keyed by its answerId, then a replay of the
+    // same job records nothing (dedup is keyed on the metadata rows).
+    expect(h.state.vectors).toHaveLength(2);
+    await h.runJob(SKILL_ANSWER_VECTORS_JOB);
+    expect(h.state.vectors).toHaveLength(3);
+    expect(h.state.vectors[2]).toMatchObject({
+      source: VectorSource.ANSWER_DERIVED,
+      classIndex: 0,
+      skillId,
+      userId: 7,
+      answerId: 1,
+      textSnippet:
+        'Struggled with: An INNER JOIN drops unmatched rows. Answered "False"; correct: "True" (SQL joins from zero).',
+    });
+    // A retake re-enqueues the same answer ids (replay) — records nothing.
+    h.state.enqueued.push({
+      jobName: SKILL_ANSWER_VECTORS_JOB,
+      payload: { skillId, userId: 7, answerIds: [1] },
+    });
+    await h.runJob(SKILL_ANSWER_VECTORS_JOB);
+    expect(h.state.vectors).toHaveLength(3);
+
     // 3. Run the next-class handler → class 1 personalized on the miss.
     await h.runJob(SKILL_NEXT_CLASS_JOB);
 
@@ -99,6 +124,13 @@ describe("adaptive loop integration", () => {
     expect(nextCall?.prompt).toContain("True");
     // AI_NEXT lesson summary from class 0 surfaces as the lifted history block.
     expect(nextCall?.prompt).toContain("This lesson introduced inner and left joins");
+    // The mined gap surfaces in the dedicated ANSWER_DERIVED prompt block.
+    expect(nextCall?.prompt).toContain(
+      "Known gaps — the learner has missed these before; weave in a re-test",
+    );
+    expect(nextCall?.prompt).toContain(
+      'Struggled with: An INNER JOIN drops unmatched rows. Answered "False"; correct: "True"',
+    );
 
     const generated = h.state.events.filter(
       (event) => event.type === EventType.CLASS_GENERATED,

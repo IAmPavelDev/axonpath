@@ -107,6 +107,9 @@ const makeDeps = (
       listBySkillByIndex: async () => {
         throw new Error("not used in next-class tests");
       },
+      listByIds: async () => {
+        throw new Error("not used in next-class tests");
+      },
       findTopBySkill: async () =>
         overrides.last === undefined
           ? { id: 5, index: 2, title: "Previous lesson" }
@@ -139,6 +142,9 @@ const makeDeps = (
         return last?.index ?? null;
       },
       findAnswerStatsBySkill: async () => {
+        throw new Error("not used in next-class tests");
+      },
+      findAnswersWithQuestions: async () => {
         throw new Error("not used in next-class tests");
       },
     },
@@ -254,6 +260,47 @@ describe("makeGenerateNextClass", () => {
     expect(state.createdClasses).toHaveLength(0);
     expect(state.events).toHaveLength(0);
     expect(state.skillUpdates).toHaveLength(0);
+  });
+
+  it("renders the known-gaps block only from ANSWER_DERIVED hits", async () => {
+    const { deps, state } = makeDeps({
+      history: [
+        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
+        { textSnippet: "Struggled with: LEFT JOIN filters.", source: "ANSWER_DERIVED", classIndex: 0 },
+      ],
+      answers: [
+        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+      ],
+    });
+
+    await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    const prompt = state.prompts[0] ?? "";
+    expect(prompt).toContain(
+      "Known gaps — the learner has missed these before; weave in a re-test",
+    );
+    expect(prompt).toContain("- Struggled with: LEFT JOIN filters.");
+    // The pre-existing history blocks are unchanged by the third block.
+    expect(prompt).toContain("Lessons already covered — build on them; do not repeat them:");
+    expect(prompt).toContain("- Inner joins were covered last lesson");
+  });
+
+  it("omits the known-gaps block when retrieval has no ANSWER_DERIVED hits", async () => {
+    const { deps, state } = makeDeps({
+      history: [
+        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
+        { textSnippet: "First exposure to SQL joins", source: "AI_INITIAL", classIndex: 0 },
+      ],
+      answers: [
+        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+      ],
+    });
+
+    await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    const prompt = state.prompts[0] ?? "";
+    expect(prompt).not.toContain("Known gaps");
+    expect(prompt).toContain("The learner already knows these facts");
   });
 
   it("feeds missed questions with their correct answers into the prompt", async () => {

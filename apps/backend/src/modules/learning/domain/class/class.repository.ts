@@ -29,4 +29,6 @@ export type ClassRepository = {
   /** Latest lesson by (skillId, index); null before init has created class 0. */
   findTopBySkill(skillId: number): Promise<{ id: number; index: number; title: string } | null>;
   findById(id: number): Promise<Pick<Class, "id" | "skillId" | "title" | "contentMd"> | null>;
+  /** Titles + curriculum indexes for a set of class ids (answer-memory snippets). */
+  listByIds(ids: number[]): Promise<Array<{ id: number; index: number; title: string }>>;
 };

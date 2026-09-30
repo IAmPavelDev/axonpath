@@ -10,6 +10,11 @@ import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repo
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { QuizError, SubmittedAnswer } from "@/modules/learning/domain/quiz/question";
+import {
+  ANSWER_VECTORS_CAP,
+  SKILL_ANSWER_VECTORS_JOB,
+  type SkillAnswerVectorsJobPayload,
+} from "@/modules/memory/application/mine-answer-vectors";
 import { scoreAnswer } from "@/modules/learning/domain/quiz/scoring";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 export type SubmitQuizDeps = {
@@ -68,7 +73,7 @@ export const makeSubmitQuiz =
 
     const score = scored.reduce((sum, entry) => sum + entry.score, 0);
 
-    await quizRepo.createAnswers(
+    const answerIds = await quizRepo.createAnswers(
       scored.map(({ question, submitted, isCorrect, score }) => ({
         questionId: question.id,
         userId: input.userId,
@@ -79,6 +84,48 @@ export const makeSubmitQuiz =
         timeSpentMs: submitted.timeSpentMs ?? 0,
       })),
     );
+
+    if (scored.length > 0) {
+      const skillId = scored[0].question.skillId;
+      // Memory: wrong machine-gradable answers become ANSWER_DERIVED vectors
+      // (Phase 7 D3) — one background job per submit, capped so a disaster
+      // quiz cannot flood the embedder. Dedup is keyed by answerId, so
+      // retakes re-enqueue harmlessly.
+      const wrongAnswerIds = scored
+        .map((entry, i) => ({ entry, answerId: answerIds[i] }))
+        .filter(
+          ({ entry }) =>
+            entry.isCorrect === false &&
+            (entry.question.type === "MULTIPLE_CHOICE" ||
+              entry.question.type === "TRUE_FALSE"),
+        )
+        .map(({ answerId }) => answerId)
+        .slice(0, ANSWER_VECTORS_CAP);
+      if (wrongAnswerIds.length > 0) {
+        jobs.enqueue(SKILL_ANSWER_VECTORS_JOB, {
+          skillId,
+          userId: input.userId,
+          answerIds: wrongAnswerIds,
+        } satisfies SkillAnswerVectorsJobPayload);
+      }
+
+      // Durable row first: if the process dies before the flip or before the
+      // in-memory job fires, the sweeper still picks the skill up — an
+      // ACTIVE-or-GENERATING skill is never left with a lost signal.
+      await nextClassJobs.enqueue({ skillId, userId: input.userId });
+
+      // The user-visible phase change. Illegal from PAUSED/COMPLETED/
+      // ARCHIVED — the flip is only for learnable skills; generation itself
+      // is not gated here.
+      const skill = await skillRepo.findById(skillId);
+      if (skill && canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)) {
+        await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
+      }
+      jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
+        skillId,
+        userId: input.userId,
+      } satisfies SkillNextClassJobPayload);
+    }
 
     const perQuestion = scored.map(({ question, isCorrect }) => ({
       questionId: question.id,
@@ -93,25 +140,6 @@ export const makeSubmitQuiz =
       type: "ANSWER_SUBMITTED",
       payload: { classId: input.classId, score, total: scored.length },
     });
-
-    if (scored.length > 0) {
-      const skillId = scored[0].question.skillId;
-      // Durable row first: if the process dies before the flip or before the
-      // in-memory job fires, the sweeper still picks the skill up — an
-      // ACTIVE-or-GENERATING skill is never left with a lost signal.
-      await nextClassJobs.enqueue({ skillId, userId: input.userId });
-      // The user-visible phase change. Illegal from PAUSED/COMPLETED/
-      // ARCHIVED — the flip is only for learnable skills; generation itself
-      // is not gated here.
-      const skill = await skillRepo.findById(skillId);
-      if (skill && canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)) {
-        await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
-      }
-      jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
-        skillId,
-        userId: input.userId,
-      } satisfies SkillNextClassJobPayload);
-    }
 
     return ok({ score, total: scored.length, perQuestion });
   };

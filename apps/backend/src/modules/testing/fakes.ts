@@ -26,11 +26,12 @@ import type { NewVector, VectorStoreError } from "@/modules/memory/ports";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
+import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
+import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
 import type {
   NextClassJobClaim,
   NextClassJobRepository,
 } from "@/modules/jobs/next-class-job.repository";
-import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 
 /**
  * Deterministic in-memory backend for the composed loop integration test:
@@ -290,6 +291,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       const row = state.classes.get(id);
       return row ? { id: row.id, skillId: row.skillId, title: row.title, contentMd: row.contentMd } : null;
     },
+    listByIds: async (ids) =>
+      [...state.classes.values()]
+        .filter((cls) => ids.includes(cls.id))
+        .map((cls) => ({ id: cls.id, index: cls.index, title: cls.title })),
   };
 
   const classIdByQuestion = (questionId: number): number | null =>
@@ -320,9 +325,13 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       return scoreable;
     },
     createAnswers: async (inputs) => {
+      const ids: number[] = [];
       for (const input of inputs) {
-        state.answers.push({ ...input, id: ++answerIdSeq });
+        const id = ++answerIdSeq;
+        state.answers.push({ ...input, id });
+        ids.push(id);
       }
+      return ids;
     },
     findAnswersByClassAndUser: async (classId, userId): Promise<AnswerReview[]> =>
       state.answers
@@ -372,6 +381,22 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return [...statsByClass].map(([classId, stat]) => ({ classId, ...stat }));
     },
+    findAnswersWithQuestions: async (answerIds) =>
+      state.answers
+        .filter((answer) => answerIds.includes(answer.id))
+        .map((answer) => {
+          const question = state.questions.get(answer.questionId);
+          return {
+            answerId: answer.id,
+            questionId: answer.questionId,
+            questionType: question?.type ?? "MULTIPLE_CHOICE",
+            questionText: question?.text ?? "",
+            answerKey: question?.answerKey,
+            userAnswer: answer.content.answer,
+            isCorrect: answer.isCorrect,
+            classId: classIdByQuestion(answer.questionId),
+          };
+        }),
   };
 
   const eventRepo: EventRepository = {
@@ -484,6 +509,27 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     generateNextClass: makeGenerateNextClass(deps),
   });
 
+  // Answer-memory mining runs the REAL miner over the in-memory state; the
+  // dedup metadata is derived from state.vectors so a second run no-ops.
+  const vectorMetadata = {
+    findAnswerIdsWithVectors: async (answerIds: number[]) =>
+      ok(
+        state.vectors
+          .filter(
+            (vector) =>
+              vector.answerId != null && answerIds.includes(vector.answerId),
+          )
+          .map((vector) => vector.answerId as number),
+      ),
+  };
+  const mineAnswerVectors = makeMineAnswerVectors({
+    ai,
+    vectorMetadata,
+    recordVectors,
+    quizRepo,
+    classRepo,
+  });
+
   const handlers = makeJobHandlers({
     generateInitialSkill: makeGenerateInitialSkill(deps),
     nextClassWorker,
@@ -492,6 +538,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     answerClassQuestion: async () => {
       throw new Error("class-qa-answer not scripted in loop harness");
     },
+    mineAnswerVectors,
   });
 
   const runJob = async (jobName: string) => {
