@@ -70,7 +70,7 @@ const makeDeps = (
   };
 
   const classRepo: ClassRepository = {
-    create: async () => {
+    createWithQuestions: async () => {
       throw new Error("not used in qa tests");
     },
     listBySkill: async () => {

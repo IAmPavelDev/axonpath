@@ -19,27 +19,6 @@ const toQuestionView = (row: {
 };
 
 export const makePrismaQuizRepository = (): QuizRepository => ({
-  createQuestions: async (inputs) => {
-    if (inputs.length === 0) {
-      return [];
-    }
-
-    const created = await prisma.question.createManyAndReturn({
-      data: inputs.map((input) => ({
-        skillId: input.skillId,
-        classId: input.classId,
-        type: input.type,
-        text: input.text,
-        choices: input.choices,
-        answerKey: input.answerKey,
-        aiModel: input.aiModel,
-      })),
-      select: { id: true },
-    });
-
-    return created.map((row) => row.id);
-  },
-
   findByClassId: async (classId) => {
     const rows = await prisma.question.findMany({
       where: { classId },

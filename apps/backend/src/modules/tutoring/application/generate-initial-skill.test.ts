@@ -36,6 +36,7 @@ const makeDeps = (
   const state = {
     skillUpdates: [] as { id: number; patch: Record<string, unknown> }[],
     createdClasses: [] as { skillId: number; index: number }[],
+    createdQuestions: [] as unknown[],
     vectors: [] as NewVector[],
     events: [] as DomainEvent[],
     aiCalls: [] as { schemaName: string; prompt: string }[],
@@ -78,8 +79,9 @@ const makeDeps = (
       },
     },
     classRepo: {
-      create: async (input) => {
-        state.createdClasses.push(input);
+      createWithQuestions: async (cls, questions) => {
+        state.createdClasses.push(cls);
+        state.createdQuestions.push(...questions);
         return { id: 11 };
       },
       listBySkill: async () => {
@@ -94,7 +96,6 @@ const makeDeps = (
       },
     },
     quizRepo: {
-      createQuestions: async () => [1],
       findByClassId: async () => {
         throw new Error("not used in init tests");
       },
@@ -153,11 +154,21 @@ describe("makeGenerateInitialSkill", () => {
     expect(state.vectors[0]?.textSnippet).toContain("inner and left joins");
     expect(state.vectors[1]).toMatchObject({ source: "AI_INITIAL", classIndex: 0 });
 
+    // Composite persist: the class and its questions go out in one call.
     expect(state.createdClasses[0]).toMatchObject({
       skillId: 10,
       index: 0,
       aiModel: "glm-5.3-flash",
     });
+    expect(state.createdQuestions).toEqual([
+      {
+        type: "TRUE_FALSE",
+        text: "An INNER JOIN drops unmatched rows.",
+        choices: ["True", "False"],
+        answerKey: "True",
+        aiModel: "glm-5.3-flash",
+      },
+    ]);
     expect(state.events).toHaveLength(1);
     expect(state.events[0]).toMatchObject({
       skillId: 10,

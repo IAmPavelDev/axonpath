@@ -35,7 +35,7 @@ const makeDeps = (
   let blockSeq = 100;
 
   const classRepo: ClassRepository = {
-    create: async () => {
+    createWithQuestions: async () => {
       throw new Error("not used in ask tests");
     },
     listBySkill: async () => {

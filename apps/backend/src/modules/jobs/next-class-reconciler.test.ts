@@ -49,14 +49,13 @@ const makeDeps = ({
           })),
     } satisfies SkillRepository,
     classRepo: {
-      create: async () => notUsed("create"),
+      createWithQuestions: async () => notUsed("createWithQuestions"),
       listBySkill: async () => notUsed("listBySkill"),
       listBySkillByIndex: async () => notUsed("listBySkillByIndex"),
       findTopBySkill: async (skillId: number) => topBySkill[skillId] ?? null,
       findById: async () => notUsed("findById"),
     } satisfies ClassRepository,
     quizRepo: {
-      createQuestions: async () => notUsed("createQuestions"),
       findByClassId: async () => notUsed("findByClassId"),
       findScoreableByClassId: async () => notUsed("findScoreableByClassId"),
       createAnswers: async () => notUsed("createAnswers"),

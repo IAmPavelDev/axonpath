@@ -246,18 +246,15 @@ export const makeGenerateNextClass =
     });
 
     const classIndex = last.index + 1;
-    const createdClass = await classRepo.create({
-      skillId: input.skillId,
-      index: classIndex,
-      title: parsed.classTitle,
-      contentMd: parsed.classContentMd,
-      aiModel: chatModel,
-    });
-
-    await quizRepo.createQuestions(
-      parsed.questions.map((question) => ({
+    const createdClass = await classRepo.createWithQuestions(
+      {
         skillId: input.skillId,
-        classId: createdClass.id,
+        index: classIndex,
+        title: parsed.classTitle,
+        contentMd: parsed.classContentMd,
+        aiModel: chatModel,
+      },
+      parsed.questions.map((question) => ({
         type: question.type,
         text: question.text,
         choices: question.choices,

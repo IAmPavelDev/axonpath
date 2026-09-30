@@ -228,13 +228,14 @@ exists with data to fit it against.
 - `INIT_SKILL_SCHEMA` enum + `lessonJsonInstructions` line; `parse.ts` normalizer
   (OPEN_ENDED ⇒ `choices: []`); prompt-structure tests updated.
 
-### S6 — Compose cleanup + transactional persist (D6)
+### S6 — ✅ DONE (2026-09-30) — Compose cleanup + transactional persist (D6)
 - Delete `rabbitmq` service + volume from `docker-compose-dev.yaml`.
 - `createWithQuestions` transaction; rewire init + next-class; their existing tests assert
   the composite call (fakes updated).
-- Smoke: `docker compose -f docker-compose-dev.yaml up -d` → `/health` 200. (Tailscale
-  caveat: with the exit node active, `docker build`/`pull` can fail `EAI_AGAIN` — per
-  AGENTS.md, stop and let the user decide; do not touch Tailscale.)
+- Verified 2026-09-30: `docker compose -f docker-compose-dev.yaml config -q` passes (YAML
+  validity without daemon pulls). Live up → `/health` 200 smoke skipped: the Tailscale exit
+  node blocks image pulls (`EAI_AGAIN`), and the standing constraint is to leave Tailscale
+  alone.
 
 ### S7 — Delete lambda surface (D7)
 - Migration dropping `Skill.lambda`; remove from schema, `SkillListItem`, `listByUser`

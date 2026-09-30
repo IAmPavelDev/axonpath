@@ -1,13 +1,22 @@
+import type { NewQuestion } from "../quiz/question";
 import type { Class, ClassListItem } from "./class";
 
 export type ClassRepository = {
-  create(input: {
-    skillId: number;
-    index: number;
-    title: string;
-    contentMd: string;
-    aiModel?: string;
-  }): Promise<Pick<Class, "id">>;
+  /**
+   * Persist a class and its quiz questions in one transaction — a crash can
+   * never strand a class without questions. Vectors stay best-effort AFTER
+   * the relational commit (Qdrant cannot join a relational transaction).
+   */
+  createWithQuestions(
+    cls: {
+      skillId: number;
+      index: number;
+      title: string;
+      contentMd: string;
+      aiModel?: string;
+    },
+    questions: Array<Omit<NewQuestion, "skillId" | "classId">>,
+  ): Promise<Pick<Class, "id">>;
   listBySkill(skillId: number, userId: number): Promise<ClassListItem[]>;
   /**
    * Progress read: every lesson of a skill in curriculum order with its

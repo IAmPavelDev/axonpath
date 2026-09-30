@@ -63,8 +63,9 @@ flowchart LR
 ```
 
 Dev stack (`docker-compose-dev.yaml`): backend, `postgres:18` (5432), `qdrant/qdrant:v1.19.1`
-(6333 REST / 6334 gRPC), `rabbitmq:3.12-management` — **the RabbitMQ container is declared but
-unused** (no amqplib dependency or code; `JobQueuePort` is the seam for a broker later).
+(6333 REST / 6334 gRPC). RabbitMQ is **not** declared in dev anymore (removed as unused,
+Phase 7 S6) but stays deployed in prod per business decision M7; `JobQueuePort` remains the
+seam for a broker later.
 
 ## 3. Repo layout (pnpm monorepo)
 

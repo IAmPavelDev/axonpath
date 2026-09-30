@@ -31,7 +31,7 @@ const SKILL = { id: 10, userId: 7, topic: "SQL joins", description: "", status: 
 
 type NextClassState = {
   prompts: string[];
-  createdClasses: { skillId: number; index: number; title: string; contentMd: string }[];
+  createdClasses: { skillId: number; index: number; title: string; contentMd: string; aiModel?: string }[];
   questionInputs: unknown[];
   vectors: NewVector[];
   events: DomainEvent[];
@@ -96,8 +96,9 @@ const makeDeps = (
       },
     },
     classRepo: {
-      create: async (input) => {
-        state.createdClasses.push(input);
+      createWithQuestions: async (cls, questions) => {
+        state.createdClasses.push(cls);
+        state.questionInputs.push(...questions);
         return { id: 77 };
       },
       listBySkill: async () => {
@@ -115,10 +116,6 @@ const makeDeps = (
       },
     },
     quizRepo: {
-      createQuestions: async (inputs) => {
-        state.questionInputs.push(...inputs);
-        return inputs.map((_, i) => 100 + i);
-      },
       findByClassId: async () => {
         throw new Error("not used in next-class tests");
       },
@@ -181,12 +178,17 @@ describe("makeGenerateNextClass", () => {
         aiModel: "glm-5.3-flash",
       },
     ]);
-    expect(state.questionInputs).toHaveLength(1);
-    expect(state.questionInputs[0]).toMatchObject({
-      skillId: 10,
-      classId: 77,
-      answerKey: "LEFT JOIN",
-    });
+    // Composite persist: the questions ride in the same call as the class
+    // (classId 77 is assigned inside the fake, not carried in the input).
+    expect(state.questionInputs).toEqual([
+      {
+        type: "MULTIPLE_CHOICE",
+        text: "Which join keeps unmatched left rows?",
+        choices: ["LEFT JOIN", "INNER JOIN"],
+        answerKey: "LEFT JOIN",
+        aiModel: "glm-5.3-flash",
+      },
+    ]);
 
     // Memory: summary as AI_NEXT first, snippets as AI_INITIAL — all at the
     // new classIndex so the next generation can lift the summary.

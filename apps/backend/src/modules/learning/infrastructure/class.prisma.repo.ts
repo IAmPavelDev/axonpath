@@ -3,19 +3,33 @@ import type { ClassRepository } from "@/modules/learning/domain/class/class.repo
 import type { Class, ClassListItem } from "@/modules/learning/domain/class/class";
 
 export const makePrismaClassRepository = (): ClassRepository => ({
-  create: async (input): Promise<Pick<Class, "id">> => {
-    const created = await prisma.class.create({
-      data: {
-        skillId: input.skillId,
-        index: input.index,
-        title: input.title,
-        contentMd: input.contentMd,
-        aiModel: input.aiModel,
-      },
-      select: { id: true },
-    });
-    return created;
-  },
+  createWithQuestions: async (cls, questions): Promise<Pick<Class, "id">> =>
+    prisma.$transaction(async (tx) => {
+      const created = await tx.class.create({
+        data: {
+          skillId: cls.skillId,
+          index: cls.index,
+          title: cls.title,
+          contentMd: cls.contentMd,
+          aiModel: cls.aiModel,
+        },
+        select: { id: true },
+      });
+      if (questions.length > 0) {
+        await tx.question.createMany({
+          data: questions.map((question) => ({
+            skillId: cls.skillId,
+            classId: created.id,
+            type: question.type,
+            text: question.text,
+            choices: question.choices,
+            answerKey: question.answerKey,
+            aiModel: question.aiModel,
+          })),
+        });
+      }
+      return created;
+    }),
 
   listBySkill: async (skillId, userId): Promise<ClassListItem[]> => {
     const classes = await prisma.class.findMany({

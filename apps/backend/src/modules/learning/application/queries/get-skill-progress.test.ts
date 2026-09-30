@@ -30,14 +30,13 @@ const makeFakeDeps = (options: {
     listByStatus: unused,
   };
   const classRepo: ClassRepository = {
-    create: unused,
+    createWithQuestions: unused,
     listBySkill: unused,
     listBySkillByIndex: async () => options.classes ?? [],
     findTopBySkill: unused,
     findById: unused,
   };
   const quizRepo: QuizRepository = {
-    createQuestions: unused,
     findByClassId: unused,
     findScoreableByClassId: unused,
     createAnswers: unused,

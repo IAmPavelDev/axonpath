@@ -240,15 +240,28 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   };
 
   const classRepo: ClassRepository = {
-    create: async (input) => {
+    createWithQuestions: async (cls, questions) => {
       const id = ++classIdSeq;
       state.classes.set(id, {
         id,
-        skillId: input.skillId,
-        index: input.index,
-        title: input.title,
-        contentMd: input.contentMd,
+        skillId: cls.skillId,
+        index: cls.index,
+        title: cls.title,
+        contentMd: cls.contentMd,
       });
+      for (const question of questions) {
+        const questionId = ++questionIdSeq;
+        state.questions.set(questionId, {
+          id: questionId,
+          skillId: cls.skillId,
+          classId: id,
+          type: question.type,
+          text: question.text,
+          choices: question.choices,
+          answerKey: question.answerKey,
+          aiModel: question.aiModel,
+        });
+      }
       return { id };
     },
     listBySkill: async () => [],
@@ -284,12 +297,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     state.questions.get(questionId)?.classId ?? null;
 
   const quizRepo: QuizRepository = {
-    createQuestions: async (inputs) =>
-      inputs.map((input) => {
-        const id = ++questionIdSeq;
-        state.questions.set(id, { ...input, id });
-        return id;
-      }),
     findByClassId: async (classId): Promise<QuestionView[]> => {
       const views: QuestionView[] = [];
       for (const question of state.questions.values()) {

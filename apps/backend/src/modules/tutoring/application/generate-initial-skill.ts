@@ -192,19 +192,17 @@ export const makeGenerateInitialSkill =
         },
       });
 
-      // 5. Persist class, questions, vectors.
-      const createdClass = await classRepo.create({
-        skillId: input.skillId,
-        index: 0,
-        title: parsed.classTitle,
-        contentMd: parsed.classContentMd,
-        aiModel: chatModel,
-      });
-
-      await quizRepo.createQuestions(
-        parsed.questions.map((question) => ({
+      // 5. Persist class + questions in one transaction — a crash can never
+      // strand a class without questions. Vectors stay best-effort below.
+      const createdClass = await classRepo.createWithQuestions(
+        {
           skillId: input.skillId,
-          classId: createdClass.id,
+          index: 0,
+          title: parsed.classTitle,
+          contentMd: parsed.classContentMd,
+          aiModel: chatModel,
+        },
+        parsed.questions.map((question) => ({
           type: question.type,
           text: question.text,
           choices: question.choices,
