@@ -6,3 +6,4 @@ nodeLinker: hoisted
 
 patchedDependencies:
   '@rob117/react-native-selectable-text': patches/@rob117__react-native-selectable-text.patch
+allowNonAppliedPatches: true

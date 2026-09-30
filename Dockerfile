@@ -8,6 +8,7 @@ COPY package.json ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/api-contract/package.json ./packages/api-contract/
 COPY pnpm-lock.yaml ./
+COPY patches/ ./patches/
 
 RUN pnpm install
 
@@ -30,6 +31,7 @@ COPY package.json ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/api-contract/package.json ./packages/api-contract/
 COPY pnpm-lock.yaml ./
+COPY patches/ ./patches/
 
 RUN pnpm install --prod
 
