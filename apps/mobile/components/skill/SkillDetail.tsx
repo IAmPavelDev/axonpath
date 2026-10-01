@@ -1,5 +1,6 @@
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { ScreenHeader } from '@components/screen-header';
 import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
@@ -7,12 +8,31 @@ import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
 import { ProgressPanel } from '@components/skill/ProgressPanel';
 import { StatusControls } from '@components/skill/StatusControls';
+import { Class } from '@/types/class';
 import type { SettableSkillStatus } from '@/types/skill';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, View } from 'react-native';
+
+/** One list row while the next lesson generates: ClassListItem's exact
+ * geometry — two title lines (17px/24px), meta line (13px/18px), chevron —
+ * inert. */
+const ClassItemSkeleton = () => (
+  <View className="flex-row items-center gap-4 bg-background px-6 py-4">
+    <View className="flex-1">
+      <Skeleton className="h-6 w-11/12 rounded-sm" />
+      <Skeleton className="h-6 w-2/3 rounded-sm" />
+      <Skeleton className="mt-1 h-[18px] w-2/5 rounded-sm" />
+    </View>
+    <Skeleton className="size-4 rounded-sm" />
+  </View>
+);
+
+type ClassListRow =
+  | { kind: 'generating' }
+  | { kind: 'class'; classData: Class };
 
 export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const router = useRouter();
@@ -26,7 +46,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     isLoading,
     error,
     refetch,
-    isRefetching,
   } = useQuery({
     queryKey: ['skill', skillId],
     queryFn: () => rpc.skill.get({ id: skillId }),
@@ -55,6 +74,18 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
+
+  // Only a user-initiated pull may drive the native refresh spinner;
+  // background polls refresh silently.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([refetch(), refetchClasses()]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (skill) {
@@ -130,13 +161,38 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   }, [isSaving, topicError, descriptionError]);
 
   if (isLoading || !skill) {
+    // Mirrors the loaded layout block for block: header row (h-14, px-3),
+    // topic (28px/34px), description (17px/29px), count (13px/18px),
+    // status buttons (h-9), progress panel, LESSONS label bar — so nothing
+    // shifts when real content replaces the placeholder.
     return (
-      <View className="flex-1 px-6 pt-10">
-        <Skeleton className="mb-8 h-8 w-2/3 rounded-md" />
-        <View className="gap-2.5">
-          <Skeleton className="h-4 w-full rounded-sm" />
-          <Skeleton className="h-4 w-11/12 rounded-sm" />
-          <Skeleton className="h-4 w-3/5 rounded-sm" />
+      <View className="flex-1">
+        <View className="h-14 flex-row items-center px-3">
+          <Skeleton className="size-10 rounded-full" />
+        </View>
+        <View className="gap-3 px-6 pb-7 pt-1">
+          <Skeleton className="h-[34px] w-2/3 rounded-sm" />
+          <Skeleton className="h-[29px] w-full rounded-sm" />
+          <Skeleton className="h-[29px] w-11/12 rounded-sm" />
+          <Skeleton className="h-[29px] w-3/4 rounded-sm" />
+          <Skeleton className="h-[18px] w-16 rounded-sm" />
+          <View className="flex-row gap-2 pt-2">
+            <Skeleton className="h-9 w-20 rounded-md" />
+            <Skeleton className="h-9 w-36 rounded-md" />
+            <Skeleton className="h-9 w-24 rounded-md" />
+          </View>
+        </View>
+        <View className="gap-3 px-6 pb-6">
+          <Skeleton className="h-4 w-24 rounded-sm" />
+          <View className="gap-1.5">
+            <Skeleton className="h-5 w-3/5 rounded-sm" />
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </View>
+          <Skeleton className="h-[18px] w-28 rounded-sm" />
+          <Skeleton className="h-9 w-40 self-start rounded-md" />
+        </View>
+        <View className="border-hairline border-border px-6 pb-2 pt-1">
+          <Skeleton className="h-4 w-20 rounded-sm" />
         </View>
       </View>
     );
@@ -165,15 +221,30 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     }
   };
 
+  const classRows: ClassListRow[] = sortedClasses.map((classData) => ({ kind: 'class', classData }));
+  // While a lesson generates, a skeleton row holds its place at the top of
+  // the list (newest first) and is replaced by the real row on arrival.
+  const listData: ClassListRow[] =
+    skill.status === 'GENERATING' ? [{ kind: 'generating' }, ...classRows] : classRows;
+
   return (
-    <View className="flex-1">
+    <KeyboardAvoidingView className="flex-1">
       <FlatList
-        data={sortedClasses}
-        keyExtractor={(classData) => classData.id.toString()}
-        renderItem={({ item: classData }) => <ClassListItem classData={classData} />}
+        data={listData}
+        keyExtractor={(row) =>
+          row.kind === 'generating' ? 'generating' : row.classData.id.toString()
+        }
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item: row }) =>
+          row.kind === 'generating' ? (
+            <ClassItemSkeleton />
+          ) : (
+            <ClassListItem classData={row.classData} />
+          )
+        }
         ItemSeparatorComponent={() => <View className="border-hairline border-border" />}
         refreshControl={
-          <RefreshControl refreshing={isRefetching} onRefresh={() => { refetch(); refetchClasses(); }} tintColor="hsl(0 0% 45%)" />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="hsl(0 0% 45%)" />
         }
         ListHeaderComponent={
           <View>
@@ -255,11 +326,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 <Text variant="meta">
                   {sortedClasses.length} {sortedClasses.length === 1 ? 'lesson' : 'lessons'}
                 </Text>
-                {skill.status === 'GENERATING' && (
-                  <Text variant="body" className="text-muted-foreground">
-                    Preparing your next lesson…
-                  </Text>
-                )}
                 {skill.status === 'FAILED' && (
                   <View className="gap-2 pt-1">
                     <Text variant="body" className="text-destructive">
@@ -285,6 +351,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
           </View>
         }
       />
-    </View>
+    </KeyboardAvoidingView>
   );
 };

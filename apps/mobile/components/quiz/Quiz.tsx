@@ -1,6 +1,7 @@
 import { Button } from '@atomics/button';
 import { Icon } from '@atomics/icon';
 import { Text } from '@atomics/text';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Textarea } from '@atomics/textarea';
 import { QuestionType, Question as QuestionDataType, QuizSubmitResult } from '@/types/quiz';
 import { cn } from '@/lib/utils';
@@ -14,7 +15,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import {
   FlatList,
-  KeyboardAvoidingView,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -164,9 +164,7 @@ export const Quiz: FC<{
     answers.find((a) => a.questionId === questionId)?.answer ?? null;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
       <View className="h-1 bg-muted">
         <Animated.View
           style={[
@@ -190,7 +188,7 @@ export const Quiz: FC<{
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(question) => question.id.toString()}
+        keyboardShouldPersistTaps="handled"
         getItemLayout={(_, page) => ({ length: width, offset: width * page, index: page })}
         onMomentumScrollEnd={onMomentumScrollEnd}
         renderItem={({ item: question }) => (

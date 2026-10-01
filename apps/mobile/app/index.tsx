@@ -8,7 +8,7 @@ import { usePinnedSkills } from '@/lib/pins';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -21,13 +21,25 @@ export default function Screen() {
     hydratePins();
   }, [hydratePins]);
 
-  const { data: skills, isLoading, error, refetch, isRefetching } = useQuery<Skill[]>({
+  const { data: skills, isLoading, error, refetch } = useQuery<Skill[]>({
     queryKey: ['skillList'],
     queryFn: () => rpc.skill.list(),
     // Poll while the Library is on screen; paused when the app is backgrounded.
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
+
+  // Only a user-initiated pull may drive the native refresh spinner;
+  // background polls refresh silently.
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (isLoading) {
     return <SkillListSkeleton />;
@@ -79,8 +91,8 @@ export default function Screen() {
         skills={skills}
         onNewSkill={() => router.push('/skill/create')}
         onOpenSettings={() => router.push('/settings')}
-        refreshing={isRefetching}
-        onRefresh={refetch}
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
     </View>
   );

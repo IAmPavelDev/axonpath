@@ -1,7 +1,8 @@
 import { Button } from '@atomics/button';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Sparkles } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, TextInput, View } from 'react-native';
+import { Modal, Pressable, TextInput, View } from 'react-native';
 import { Text } from '@atomics/text';
 
 type Props = {
@@ -50,7 +51,7 @@ export function QaComposer({ visible, excerpt, onClose, onSubmit }: Props) {
           onPress={onClose}
           accessibilityLabel="Close question composer"
         />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView>
           <View className="rounded-t-2xl bg-card px-5 pb-8 pt-3">
             <View className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
 

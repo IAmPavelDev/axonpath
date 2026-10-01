@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   View,
@@ -16,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { firebaseAuth, firebaseConfigMissing } from '@/lib/firebase';
 import { getGoogleSignin, googleSignInConfigured } from '@/lib/google-signin';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
 import { Text } from '@atomics/text';
@@ -144,7 +143,6 @@ export default function LoginScreen() {
   return (
     <KeyboardAvoidingView
       className="flex-1 bg-background"
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={{ paddingBottom: insets.bottom }}>
       <ScrollView
         contentContainerClassName="flex-grow justify-center px-8"

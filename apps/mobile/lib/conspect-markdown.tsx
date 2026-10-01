@@ -1,11 +1,37 @@
 import { Markdown, type RenderFunction } from 'react-native-markdown-x';
-import { SelectableTextView } from '@rob117/react-native-selectable-text';
 import { highlightSpans, resolveLanguage, type Scheme } from '@/lib/code-highlight';
 import { FONTS, THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
-import { FC, useMemo } from 'react';
-import { Dimensions, Platform, StyleSheet, Text, View } from 'react-native';
+import { FC, useMemo, type ReactNode } from 'react';
+import { Dimensions, Platform, StyleSheet, Text, UIManager, View } from 'react-native';
 import FitImage from 'react-native-fit-image';
+
+type SelectableTextViewProps = {
+  menuOptions: string[];
+  onSelection: (event: { chosenOption: string; highlightedText: string }) => void;
+  style?: { width: string };
+  children?: ReactNode;
+};
+
+/*
+ * Ask-AI selection needs the library's legacy ViewManager, which RN 0.86's
+ * bridgeless Fabric cannot host — `requireNativeComponent` throws at module
+ * load there. Load it defensively and fall back to plain selectable Text;
+ * when the library ships a Fabric component this restores the full menu.
+ */
+let SelectableTextView: FC<SelectableTextViewProps> | null = null;
+try {
+  SelectableTextView = require('@rob117/react-native-selectable-text').SelectableTextView;
+} catch {
+  SelectableTextView = null;
+}
+const hasNativeSelectableText = (() => {
+  try {
+    return SelectableTextView !== null && !!UIManager.getViewManagerConfig('SelectableTextView');
+  } catch {
+    return false;
+  }
+})();
 
 const MONO = Platform.select({ ios: 'Courier New', default: 'monospace' });
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -209,26 +235,31 @@ export const makeRenderFunctions = (scheme: Scheme, ask?: SelectionAsk) => {
    * With `ask`, the paragraph is wrapped in a SelectableTextView whose native
    * hook targets exactly that one TextView, so the selection toolbar gains an
    * "Ask AI" item; the inner Text tree — rich spans included — is untouched.
+   * When the native view is unavailable (RN 0.86 bridgeless), fall back to a
+   * plain selectable Text without the Ask-AI menu item.
    */
-  const textgroup: RenderFunction = ({ Text, node, styles, children }) =>
-    ask ? (
-      <SelectableTextView
-        key={node.key}
-        menuOptions={ASK_MENU}
-        onSelection={({ chosenOption, highlightedText }) => {
-          if (chosenOption === ASK_MENU[0]) ask.onSelect(highlightedText);
-        }}
-        style={{ width: '100%' }}>
-        <Text selectable style={styles.textgroup}>
-          {children}
-        </Text>
-      </SelectableTextView>
-    ) : (
+  const textgroup: RenderFunction = ({ Text, node, styles, children }) => {
+    if (ask && hasNativeSelectableText && SelectableTextView) {
+      return (
+        <SelectableTextView
+          key={node.key}
+          menuOptions={ASK_MENU}
+          onSelection={({ chosenOption, highlightedText }) => {
+            if (chosenOption === ASK_MENU[0]) ask.onSelect(highlightedText);
+          }}
+          style={{ width: '100%' }}>
+          <Text selectable style={styles.textgroup}>
+            {children}
+          </Text>
+        </SelectableTextView>
+      );
+    }
+    return (
       <Text key={node.key} selectable style={styles.textgroup}>
         {children}
       </Text>
     );
-
+  };
   const codeBlock: RenderFunction = ({ Text, node, styles, inheritedStyles = {} }) => {
     // We trim new lines off the end of code blocks because the parser sends an extra one.
     const { content } = node;

@@ -93,7 +93,9 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: NAV_THEME[resolvedScheme].colors.background }}
+        edges={['top', 'bottom']}>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider value={NAV_THEME[resolvedScheme]}>
             <StatusBar style={resolvedScheme === 'dark' ? 'light' : 'dark'} />

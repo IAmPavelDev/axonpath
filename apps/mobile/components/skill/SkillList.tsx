@@ -91,17 +91,15 @@ const ListSeparator = () => <View className="border-hairline border-border" />;
 export const SkillListSkeleton: FC = () => (
   <View className="px-6 pt-2">
     <View className="gap-1 pb-5">
-      <Skeleton className="h-9 w-44 rounded-lg" />
-      <Skeleton className="h-3.5 w-20 rounded-sm" />
+      <Skeleton className="h-10 w-44 rounded-md" />
+      <Skeleton className="h-[18px] w-20 rounded-sm" />
     </View>
     {[0, 1, 2, 3].map((row) => (
       <View key={row}>
-        <View className="flex-row items-center gap-4 py-4">
-          <Skeleton className="size-4 rounded-sm" />
-          <View className="flex-1 gap-2">
-            <Skeleton className="h-5 w-3/5 rounded-sm" />
-            <Skeleton className="h-3.5 w-1/4 rounded-sm" />
-          </View>
+        <View className="gap-1 py-4">
+          <Skeleton className="h-[26px] w-3/5 rounded-sm" />
+          <Skeleton className="h-[18px] w-1/2 rounded-sm" />
+          <Skeleton className="h-[18px] w-2/5 rounded-sm" />
         </View>
         {row < 3 && <ListSeparator />}
       </View>

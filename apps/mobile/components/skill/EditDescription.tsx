@@ -2,13 +2,14 @@ import { Button } from '@atomics/button';
 import { PulseDot } from '@atomics/pulse-dot';
 import { ScreenHeader } from '@components/screen-header';
 import { Skeleton } from '@atomics/skeleton';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Text } from '@atomics/text';
 import { Textarea } from '@atomics/textarea';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { FC, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const POLL_INTERVAL_MS = 1000;
@@ -70,9 +71,7 @@ export const EditSkillDescription: FC = () => {
   const isPreparing = !touched && !data?.description;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
       <ScreenHeader onBack={() => router.back()} />
 
       {isPreparing ? (

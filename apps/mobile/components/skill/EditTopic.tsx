@@ -1,12 +1,13 @@
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
+import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { ScreenHeader } from '@components/screen-header';
 import { Text } from '@atomics/text';
 import rpc from '@/utils/rpc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FC, useState } from 'react';
-import { KeyboardAvoidingView, Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export const EditSkillTopic: FC = () => {
@@ -33,9 +34,7 @@ export const EditSkillTopic: FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }}>
       <ScreenHeader onBack={() => router.back()} />
 
       <View className="flex-1 justify-center gap-8 px-6" style={{ marginBottom: '20%' }}>
