@@ -192,6 +192,7 @@ export const makeGenerateInitialSkill =
           system: TUTOR_SYSTEM,
           model: chatModel,
           usage: generation.value.usage,
+          response: generation.value.raw,
         },
       });
 

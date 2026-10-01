@@ -327,9 +327,13 @@ describe("makeGenerateInitialSkill", () => {
     const result = await makeGenerateInitialSkill(deps)(input);
 
     expect(result.ok).toBe(true);
-    const payload = state.events[0]?.payload as { usage?: unknown };
-    // The init_skill call's billed usage rides the audit row.
+    const payload = state.events[0]?.payload as {
+      usage?: unknown;
+      response?: unknown;
+    };
+    // The init_skill call's billed usage and raw generation text ride the audit row.
     expect(payload.usage).toEqual({ promptTokens: 500, completionTokens: 900 });
+    expect(payload.response).toEqual(INIT_JSON);
     // The batch total splits across summary + snippet vectors, sum preserved.
     expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([50, 50]);
   });
