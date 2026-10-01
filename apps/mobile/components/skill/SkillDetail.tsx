@@ -7,10 +7,12 @@ import { Text } from '@atomics/text';
 import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
 import { ProgressPanel } from '@components/skill/ProgressPanel';
+import { MistakeList } from '@components/skill/MistakeList';
 import { StatusControls } from '@components/skill/StatusControls';
 import { Class } from '@/types/class';
 import type { SettableSkillStatus } from '@/types/skill';
 import rpc from '@/utils/rpc';
+import { useSkillMistakes } from '@/hooks/use-skill-mistakes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { FC, useEffect, useMemo, useRef, useState } from 'react';
@@ -74,6 +76,8 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
+
+  const { data: mistakes } = useSkillMistakes(skillId);
 
   // Only a user-initiated pull may drive the native refresh spinner;
   // background polls refresh silently.
@@ -340,6 +344,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
               </View>
             )}
             {progress ? <ProgressPanel progress={progress} /> : null}
+            {mistakes ? <MistakeList mistakes={mistakes} /> : null}
             <View className="border-hairline border-border px-6 pb-2 pt-1">
               <Text variant="label">Lessons</Text>
             </View>

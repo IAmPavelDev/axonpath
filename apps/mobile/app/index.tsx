@@ -1,10 +1,12 @@
 import { Button } from '@atomics/button';
 import { SkillList, SkillListSkeleton } from '@components/skill/SkillList';
+import { StatsCard } from '@components/stats/StatsCard';
 import { Icon } from '@atomics/icon';
 import { Settings } from 'lucide-react-native';
 import { Text } from '@atomics/text';
 import { Skill } from '@/types/skill';
 import { usePinnedSkills } from '@/lib/pins';
+import { useStatsOverview } from '@/hooks/use-stats';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -28,6 +30,8 @@ export default function Screen() {
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
+
+  const { data: stats } = useStatsOverview();
 
   // Only a user-initiated pull may drive the native refresh spinner;
   // background polls refresh silently.
@@ -87,6 +91,7 @@ export default function Screen() {
 
   return (
     <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
+      {stats ? <StatsCard stats={stats} /> : null}
       <SkillList
         skills={skills}
         onNewSkill={() => router.push('/skill/create')}
