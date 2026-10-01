@@ -283,6 +283,7 @@ surfaces as the preparing state above.
 | `APP_PORT` / `APP_HOST` / `NODE_ENV` | HTTP bind (compose maps 3001:3001) |
 
 `modules/platform/config.ts` is the single config module (env-over-default).
+Prisma upgraded 6.15.0 → 6.19.3 (2026-10-01) for Postgres 18 support (6.15.0 broke `$queryRaw`/`$transaction` with "Failed to obtain server version"); vectors/grading/auth raw+transaction channels live-verified against the PG18 dev DB — note the containerized backend still bundles 6.15.0 in its image and its boot regenerates the shared `src/prisma/generated` dir, so re-run `pnpm --filter @axon/backend run prisma:generate` on the host after container restarts.
 
 ## 8. Tests
 
