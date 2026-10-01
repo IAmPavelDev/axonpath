@@ -36,6 +36,7 @@ type NextClassState = {
   vectors: NewVector[];
   events: DomainEvent[];
   skillUpdates: { id: number; patch: Record<string, unknown> }[];
+  enqueued: { jobName: string; payload: unknown }[];
 };
 
 /** Test seam: in-memory deps capturing every interaction. */
@@ -61,6 +62,7 @@ const makeDeps = (
     vectors: [],
     events: [],
     skillUpdates: [],
+    enqueued: [],
   };
 
   const deps: GenerateNextClassDeps = {
@@ -181,6 +183,11 @@ const makeDeps = (
       return ok(vectors.map((_, i) => 900 + i));
     },
     chatModel: "glm-5.3-flash",
+    jobs: {
+      enqueue: (jobName, payload) => {
+        state.enqueued.push({ jobName, payload });
+      },
+    },
   };
 
   return { deps, state };
@@ -300,13 +307,53 @@ describe("makeGenerateNextClass", () => {
 
     const prompt = state.prompts[0] ?? "";
     expect(prompt).toContain(
-      "Known gaps — the learner has missed these before; weave in a re-test",
+      "Known gaps — from the learner's wrong quiz answers (notes written by Axon). The learner has missed these before; weave in a re-test",
     );
     expect(prompt).toContain("- Struggled with: LEFT JOIN filters.");
     // The pre-existing history blocks are unchanged by the third block.
-    expect(prompt).toContain("Lessons already covered — build on them; do not repeat them:");
+    expect(prompt).toContain(
+      "Lessons already covered (Axon's own summaries) — build on them; do not repeat them:",
+    );
     expect(prompt).toContain("- Inner joins were covered last lesson");
   });
+
+  it("renders the asked-questions block only from QA_DERIVED hits", async () => {
+    const { deps, state } = makeDeps({
+      history: [
+        {
+          textSnippet:
+            'The learner asked: """Why does a left join keep unmatched rows?""" while reading the lesson "Joins"; Axon\'s answer explained: Predicate semantics decide which rows survive.',
+          source: "QA_DERIVED",
+          classIndex: 0,
+        },
+      ],
+    });
+
+    await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    const prompt = state.prompts[0] ?? "";
+    expect(prompt).toContain(
+      "Questions the learner asked Axon in past lessons (the learner's typed questions with Axon's answers, mined by Axon) — weave the answers into the new material:",
+    );
+    expect(prompt).toContain("Why does a left join keep unmatched rows?");
+  });
+
+  it("omits the asked-questions block without QA_DERIVED hits", async () => {
+    const { deps, state } = makeDeps({
+      history: [
+        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
+      ],
+    });
+
+    await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+
+    const prompt = state.prompts[0] ?? "";
+    expect(prompt).not.toContain("Questions the learner asked Axon");
+    // The content-vectorization job is enqueued with the fresh class id.
+    expect(state.enqueued).toEqual([
+      { jobName: "class-content-vectors", payload: { classId: 77 } },
+    ]);
+   });
 
   it("omits the known-gaps block when retrieval has no ANSWER_DERIVED hits", async () => {
     const { deps, state } = makeDeps({
@@ -323,7 +370,9 @@ describe("makeGenerateNextClass", () => {
 
     const prompt = state.prompts[0] ?? "";
     expect(prompt).not.toContain("Known gaps");
-    expect(prompt).toContain("The learner already knows these facts");
+    expect(prompt).toContain(
+      "Notes Axon wrote about this learner (observations, not the learner's own claims)",
+    );
   });
 
   it("feeds missed questions with their correct answers into the prompt", async () => {
@@ -398,7 +447,7 @@ describe("makeGenerateNextClass", () => {
 
     const prompt = state.prompts[0] ?? "";
     expect(prompt).toContain(
-      "What the previous lesson covered: Lesson 2 covered inner joins at depth",
+      "What the previous lesson covered (Axon's summary): Lesson 2 covered inner joins at depth",
     );
     expect(prompt).toContain("Lessons already covered");
     expect(prompt).toContain("Lesson 0 introduced tables");

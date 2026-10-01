@@ -31,6 +31,8 @@ export const AskClassQuestionInput = z.object({
   classId: z.number(),
   /** Zero-based index of the top-level markdown block the question anchors after. */
   anchorParagraph: z.number().int().min(0),
+  /** Verbatim learner selection the question is about; null when anchored by tap. */
+  anchorText: z.string().trim().min(1).max(2000).optional(),
   question: z.string().trim().min(1).max(4000),
 });
 
@@ -43,12 +45,14 @@ export const ClassQaBlock = z.object({
   id: z.number(),
   classId: z.number(),
   anchorParagraph: z.number().int(),
+  /** Stored learner selection; null for tap-anchored or pre-Phase-8 blocks. */
+  anchorText: z.string().nullable(),
   question: z.string(),
   /** Null while status is PENDING or FAILED. */
   answer: z.string().nullable(),
   status: ClassQaStatus,
   createdAt: z.date(),
-});
+ });
 
 export const ListClassQaInput = z.object({
   classId: z.number(),

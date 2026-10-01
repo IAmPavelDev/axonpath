@@ -5,11 +5,18 @@ import {
   SKILL_INIT_JOB,
   makeCreateSkill,
 } from "@/modules/learning/application/commands/create-skill";
+import { makeAskClassQuestion } from "@/modules/learning/application/commands/ask-class-question";
 import { makeSubmitQuiz } from "@/modules/learning/application/commands/submit-quiz";
 import { makeRetrySkill } from "@/modules/learning/application/commands/retry-skill";
 import {
+  CLASS_QA_ANSWER_JOB,
+} from "@/modules/tutoring/application/answer-class-question";
+import {
   SKILL_NEXT_CLASS_JOB,
 } from "@/modules/tutoring/application/generate-next-class";
+import {
+  QA_BLOCK_VECTORS_JOB,
+} from "@/modules/memory/application/mine-qa-vectors";
 import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
 import { GRADE_OPEN_ENDED_JOB } from "@/modules/tutoring/application/grade-open-ended";
 import {
@@ -129,7 +136,7 @@ describe("adaptive loop integration", () => {
       userId: 7,
       answerId: 1,
       textSnippet:
-        'Struggled with: An INNER JOIN drops unmatched rows. Answered "False"; correct: "True" (SQL joins from zero).',
+        'Struggled with: An INNER JOIN drops unmatched rows. The learner answered "False"; the lesson\'s correct answer was "True" (SQL joins from zero).',
     });
     // A retake re-enqueues the same answer ids (replay) — records nothing.
     h.state.enqueued.push({
@@ -173,10 +180,10 @@ describe("adaptive loop integration", () => {
     expect(nextCall?.prompt).toContain("This lesson introduced inner and left joins");
     // The mined gap surfaces in the dedicated ANSWER_DERIVED prompt block.
     expect(nextCall?.prompt).toContain(
-      "Known gaps — the learner has missed these before; weave in a re-test",
+      "Known gaps — from the learner's wrong quiz answers (notes written by Axon). The learner has missed these before; weave in a re-test",
     );
     expect(nextCall?.prompt).toContain(
-      'Struggled with: An INNER JOIN drops unmatched rows. Answered "False"; correct: "True"',
+      'Struggled with: An INNER JOIN drops unmatched rows. The learner answered "False"; the lesson\'s correct answer was "True"',
     );
 
     const generated = h.state.events.filter(
@@ -285,5 +292,91 @@ describe("adaptive loop integration", () => {
       ok: false,
       error: { kind: "InvalidSkillTransition", from: SkillStatus.ACTIVE, to: SkillStatus.GENERATING },
     });
+  });
+  it("answers an anchored QA question through the layered pipeline and memory", async () => {
+    const h = makeLoopHarness();
+    const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const skillId = unwrapOrThrow(created).id;
+    await h.runJob(SKILL_INIT_JOB);
+    const class0 = classesOfSkill(h, skillId)[0];
+
+    // 1. Ask with a verbatim selection → PENDING block + answer job.
+    const ask = makeAskClassQuestion({
+      classRepo: h.deps.classRepo,
+      skillRepo: h.deps.skillRepo,
+      qaRepo: h.deps.qaRepo,
+      jobs: h.jobs,
+    });
+    const asked = await ask({
+      classId: class0?.id ?? 0,
+      userId: 7,
+      anchorParagraph: 0,
+      anchorText: "Meet the join.",
+      question: "What is a join?",
+    });
+    expect(asked).toEqual(ok({ blockId: 1, status: "PENDING" }));
+
+    // 2. The answer job assembles the layered prompt and settles ANSWERED.
+    await h.runJob(CLASS_QA_ANSWER_JOB);
+    const block = h.state.qaBlocks[0];
+    expect(block).toMatchObject({ status: "ANSWERED", anchorText: "Meet the join." });
+
+    const qaCall = h.state.aiCalls.find((call) => call.schemaName === "class_qa_answer");
+    expect(qaCall).toBeDefined();
+    expect(qaCall?.prompt).toContain("Document model:");
+    expect(qaCall?.prompt).toContain('"""Meet the join."""');
+    expect(qaCall?.prompt).toContain('The learner typed:\n"""What is a join?"""');
+    expect(qaCall?.prompt).toContain("## Introduction");
+
+    // Lazy CONTENT_CHUNK backfill: the pre-generation class is embedded once.
+    const contentChunks = h.state.vectors.filter(
+      (vector) => vector.source === VectorSource.CONTENT_CHUNK,
+    );
+    expect(contentChunks.length).toBeGreaterThanOrEqual(1);
+    expect(contentChunks[0]).toMatchObject({ classId: class0?.id, classIndex: 0 });
+
+    // 3. The answered block is mined into QA_DERIVED memory exactly once.
+    expect(h.state.enqueued.at(-1)).toEqual({
+      jobName: QA_BLOCK_VECTORS_JOB,
+      payload: { blockId: 1 },
+    });
+    await h.runJob(QA_BLOCK_VECTORS_JOB);
+    const qaVectors = h.state.vectors.filter(
+      (vector) => vector.source === VectorSource.QA_DERIVED,
+    );
+    expect(qaVectors).toHaveLength(1);
+    expect(qaVectors[0]).toMatchObject({ qaBlockId: 1, classId: class0?.id });
+    // A replay of the answer job no-ops (block settled) — no second mining.
+    h.state.enqueued.push({ jobName: QA_BLOCK_VECTORS_JOB, payload: { blockId: 1 } });
+    await h.runJob(QA_BLOCK_VECTORS_JOB);
+    expect(
+      h.state.vectors.filter((vector) => vector.source === VectorSource.QA_DERIVED),
+    ).toHaveLength(1);
+
+    // 4. A follow-up question sees the earlier exchange as an anchored
+    //    annotation (passage + learner-typed + you-answered), not a chat.
+    const followUp = await ask({
+      classId: class0?.id ?? 0,
+      userId: 7,
+      anchorParagraph: 0,
+      question: "And a right join?",
+    });
+    expect(followUp).toEqual(ok({ blockId: 2, status: "PENDING" }));
+    await h.runJob(CLASS_QA_ANSWER_JOB);
+
+    const followUpCall = h.state.aiCalls.filter(
+      (call) => call.schemaName === "class_qa_answer",
+    )[1];
+    expect(followUpCall?.prompt).toContain("Earlier questions the learner asked");
+    expect(followUpCall?.prompt).toContain('— Passage: "Meet the join."');
+    expect(followUpCall?.prompt).toContain('The learner typed: """What is a join?"""');
+    expect(followUpCall?.prompt).toContain(
+      'You answered: """A left join keeps every left row, matched or not."""',
+    );
+    // QA_ANSWERED audit captures the full prompt for the usage report.
+    expect(
+      h.state.events.filter((event) => event.type === EventType.QA_ANSWERED),
+    ).toHaveLength(2);
   });
 });

@@ -1,5 +1,7 @@
 import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
 import type { Result } from "@/modules/platform/result";
+import type { JobQueuePort } from "@/modules/platform/ports/jobs";
+import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectorize-class-content";
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
   buildInitSkillPrompt,
@@ -52,6 +54,8 @@ export type GenerateInitialSkillDeps = {
   eventRepo: EventRepository;
   recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
   chatModel: string;
+  /** Fire-and-forget queue: class-content vectorization rides it after the commit. */
+  jobs: JobQueuePort;
 };
 
 export type GenerateInitialSkillInput = {
@@ -91,6 +95,7 @@ export const makeGenerateInitialSkill =
     eventRepo,
     recordVectors,
     chatModel,
+    jobs,
   }: GenerateInitialSkillDeps) => {
     const attempt = async (
       input: GenerateInitialSkillInput,
@@ -214,6 +219,11 @@ export const makeGenerateInitialSkill =
           aiModel: chatModel,
         })),
       );
+
+      // Conspect memory (Phase 8 D3): the class's top-level markdown blocks
+      // become CONTENT_CHUNK vectors via the background vectorizer —
+      // best-effort, dedup keyed per class, never load-bearing.
+      jobs.enqueue(CLASS_CONTENT_VECTORS_JOB, { classId: createdClass.id });
 
       // Lesson summary (AI_NEXT — the per-lesson memory unit) and the
       // learner-facing snippets (AI_INITIAL) share one embedding call.

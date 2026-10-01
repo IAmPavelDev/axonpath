@@ -50,6 +50,8 @@ const makeFakeDeps = (options: {
       options.metadataFails
         ? err({ kind: "VectorStoreUnavailable", detail: "metadata down" })
         : ok(options.minedAnswerIds ?? []),
+    findClassIdsWithVectors: async () => ok([]),
+    findBlockIdsWithVectors: async () => ok([]),
   };
   const recordVectors = async (vectors: NewVector[]) => {
     recorded.push(...vectors);
@@ -119,7 +121,7 @@ describe("makeMineAnswerVectors", () => {
         classIndex: 2,
         source: "ANSWER_DERIVED",
         textSnippet:
-          'Struggled with: What does question 101 test?. Answered "B"; correct: "A" (Outer joins).',
+          'Struggled with: What does question 101 test?. The learner answered "B"; the lesson\'s correct answer was "A" (Outer joins).',
         embedding: [0.1, 0.2, 0.3],
         tokenCount: null,
         answerId: 101,

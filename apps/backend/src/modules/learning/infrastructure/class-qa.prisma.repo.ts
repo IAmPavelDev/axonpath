@@ -10,6 +10,7 @@ export const makePrismaClassQaRepository = (): ClassQaRepository => ({
         classId: input.classId,
         userId: input.userId,
         anchorParagraph: input.anchorParagraph,
+        anchorText: input.anchorText ?? null,
         question: input.question,
       },
       select: { id: true, status: true },
@@ -21,6 +22,13 @@ export const makePrismaClassQaRepository = (): ClassQaRepository => ({
     prisma.classQaBlock.findMany({
       where: { classId },
       orderBy: [{ anchorParagraph: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+    }),
+
+  listAnsweredByClass: async (classId, limit) =>
+    prisma.classQaBlock.findMany({
+      where: { classId, status: ClassQaStatus.ANSWERED },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit,
     }),
 
   findById: async (id) => prisma.classQaBlock.findUnique({ where: { id } }),

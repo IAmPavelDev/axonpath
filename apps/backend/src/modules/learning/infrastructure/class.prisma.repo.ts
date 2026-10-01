@@ -119,7 +119,7 @@ export const makePrismaClassRepository = (): ClassRepository => ({
   findById: async (id) =>
     prisma.class.findUnique({
       where: { id },
-      select: { id: true, skillId: true, title: true, contentMd: true },
+      select: { id: true, skillId: true, index: true, title: true, contentMd: true },
     }),
   listByIds: async (ids) => {
     if (ids.length === 0) {

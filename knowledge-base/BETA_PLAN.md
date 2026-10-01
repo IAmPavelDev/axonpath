@@ -10,6 +10,13 @@
 >
 > ---
 >
+## Status update (2026-10-01, Phase 8)
+- **Phase 8 QA context layering + skill-scoped vector memory COMPLETE** — layered QA
+  answers (verbatim selection → lesson → anchored Q&A history → skill frame → retrieval),
+  `CONTENT_CHUNK`/`QA_DERIVED` vector sources, author attribution across every prompt.
+  35 files / 247 backend tests green; mobile `tsc --noEmit` clean; live dev-stack smoke
+  (`e2e-qa-context.mts`) passed. Record: `knowledge-base/PHASE8_QA_CONTEXT.md`.
+
 ## Status update (2026-10-01)
 - **Post-beta COMPLETE; post-backlog first levers landed through `16be97a`** — AI token
   capture + `usage.report`, `stats.overview` (streak/weekly activity), `skill.mistakes`

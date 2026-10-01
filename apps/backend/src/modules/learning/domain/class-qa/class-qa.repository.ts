@@ -5,6 +5,8 @@ export type NewClassQaBlock = {
   classId: number;
   userId: number;
   anchorParagraph: number;
+  /** Verbatim learner selection; null when anchored by tap only. */
+  anchorText?: string | null;
   question: string;
 };
 
@@ -12,6 +14,11 @@ export type ClassQaRepository = {
   create(input: NewClassQaBlock): Promise<Pick<ClassQaEntity, "id" | "status">>;
   /** Ascending (anchorParagraph, createdAt, id): document order, then ask order. */
   listByClass(classId: number): Promise<ClassQaEntity[]>;
+  /**
+   * Most recent ANSWERED blocks first (createdAt desc, id desc), capped at
+   * `limit` — the QA answer prompt's history layer (Phase 8 L3).
+   */
+  listAnsweredByClass(classId: number, limit: number): Promise<ClassQaEntity[]>;
   findById(id: number): Promise<ClassQaEntity | null>;
   /** Terminal transition PENDING → ANSWERED; the answer arrives fully formed. */
   answer(id: number, input: { answer: string; aiModel: string }): Promise<void>;

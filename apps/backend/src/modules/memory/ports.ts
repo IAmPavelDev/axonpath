@@ -16,6 +16,8 @@ export type NewVector = {
   tokenCount?: number | null;
   /** Set when the snippet was mined from a recorded answer (ANSWER_DERIVED). */
   answerId?: number | null;
+  /** Set when the snippet was mined from an answered Q&A block (QA_DERIVED). */
+  qaBlockId?: number | null;
 };
 
 /**
@@ -26,6 +28,13 @@ export type NewVector = {
 export type VectorMetadataRepository = {
   /** Which of the given answer ids already have at least one vector. */
   findAnswerIdsWithVectors(answerIds: number[]): Promise<Result<number[], VectorStoreError>>;
+  /** Which of the given class ids already have a vector of the given source. */
+  findClassIdsWithVectors(
+    classIds: number[],
+    source: VectorSource,
+  ): Promise<Result<number[], VectorStoreError>>;
+  /** Which of the given Q&A block ids already have at least one vector. */
+  findBlockIdsWithVectors(blockIds: number[]): Promise<Result<number[], VectorStoreError>>;
   /**
    * Embedding-spend aggregate behind usage.report: SUM(Vector.tokenCount)
    * for one user (optionally one skill). tokenCount is null on capture-degrade
@@ -57,12 +66,16 @@ export type VectorStoreError = {
 export type VectorStorePort = {
   /** Persist Vector metadata rows + upsert embeddings; returns row ids in input order. */
   upsert(vectors: NewVector[]): Promise<Result<number[], VectorStoreError>>;
-  /** Semantic search over a user's vectors, filtered to that user. */
+  /**
+   * Semantic search over a user's vectors, filtered to that user. `skillId`
+   * narrows to one skill's memory; `excludeSkillId` keeps a skill from
+   * retrieving its own vectors back. The two are mutually exclusive.
+   */
   searchSimilar(input: {
     userId: number;
     embedding: number[];
     topK?: number;
+    skillId?: number;
     excludeSkillId?: number;
   }): Promise<Result<SearchSimilarHit[], VectorStoreError>>;
 };
-

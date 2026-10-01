@@ -44,6 +44,7 @@ const makeDeps = (
     vectors: [] as NewVector[],
     events: [] as DomainEvent[],
     aiCalls: [] as { schemaName: string; prompt: string }[],
+    enqueued: [] as { jobName: string; payload: unknown }[],
   };
 
   const deps: GenerateInitialSkillDeps = {
@@ -155,6 +156,11 @@ const makeDeps = (
       return ok(vectors.map((_, i) => i));
     },
     chatModel: "glm-5.3-flash",
+    jobs: {
+      enqueue: (jobName, payload) => {
+        state.enqueued.push({ jobName, payload });
+      },
+    },
   };
 
   return { deps, state };
@@ -205,6 +211,10 @@ describe("makeGenerateInitialSkill", () => {
       userId: 1,
       type: "SKILL_CREATED",
     });
+    // Conspect memory rides the fire-and-forget queue with the fresh class id.
+    expect(state.enqueued).toEqual([
+      { jobName: "class-content-vectors", payload: { classId: 11 } },
+    ]);
   });
 
   it("generates and normalizes OPEN_ENDED questions, and instructs the model to include them", async () => {

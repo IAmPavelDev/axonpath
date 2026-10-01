@@ -1,7 +1,9 @@
 import { ok, type Result } from "@/modules/platform/result";
 import {
+  ClassQaStatus,
   NextClassJobStatus,
   SkillStatus,
+  VectorSource,
   type QuestionType,
 } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
@@ -23,12 +25,28 @@ import type {
 } from "@/modules/learning/domain/quiz/question";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import type { AiError, AiPort } from "@/modules/tutoring/ports";
-import type { NewVector, VectorStoreError } from "@/modules/memory/ports";
+import type {
+  NewVector,
+  SearchSimilarHit,
+  VectorStoreError,
+  VectorStorePort,
+} from "@/modules/memory/ports";
+import type {
+  ClassQaEntity,
+} from "@/modules/learning/domain/class-qa/class-qa";
+import type {
+  ClassQaRepository,
+  NewClassQaBlock,
+} from "@/modules/learning/domain/class-qa/class-qa.repository";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
+import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
+import { makeMineQaVectors } from "@/modules/memory/application/mine-qa-vectors";
+import { makeVectorizeClassContent } from "@/modules/memory/application/vectorize-class-content";
+import { makeRetrieveQaContext } from "@/modules/memory/application/retrieve-qa-context";
 import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
 import type {
   NextClassJobClaim,
@@ -46,6 +64,8 @@ export type AiScript = {
   nextRaw?: string;
   /** Grading response for open-ended submits; default grades nothing (degrade). */
   gradingRaw?: string;
+  /** Plain-text answer for class Q&A; default is a one-liner. */
+  qaAnswerRaw?: string;
   /** Fail the FIRST generateJson call with this schema name, then succeed. */
   failOnceOn?: string;
   /** Fail the FIRST generateEmbeddings call, then succeed. */
@@ -56,6 +76,10 @@ export type AiScript = {
 
 /** Default grading response: an empty results array — the degrade path. */
 const GRADING_RAW_DEFAULT = JSON.stringify({ results: [] });
+
+/** Default scripted Q&A answer. */
+const QA_ANSWER_RAW_DEFAULT = "A left join keeps every left row, matched or not.";
+
 
 export type LoopHarness = {
   state: {
@@ -69,6 +93,7 @@ export type LoopHarness = {
     >;
     questions: Map<number, NewQuestion & { id: number }>;
     answers: (NewAnswer & { id: number })[];
+    qaBlocks: ClassQaEntity[];
     events: DomainEvent[];
     vectors: NewVector[];
     enqueued: { jobName: string; payload: unknown }[];
@@ -85,9 +110,11 @@ export type LoopHarness = {
     skillRepo: SkillRepository;
     classRepo: ClassRepository;
     quizRepo: QuizRepository;
+    qaRepo: ClassQaRepository;
     eventRepo: EventRepository;
     recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
     chatModel: string;
+    jobs: JobQueuePort;
   };
   jobs: JobQueuePort;
   nextClassJobs: NextClassJobRepository;
@@ -135,6 +162,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   let classIdSeq = 0;
   let questionIdSeq = 0;
   let answerIdSeq = 0;
+  let qaBlockIdSeq = 0;
 
   const state = {
     skills: new Map<
@@ -147,6 +175,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     >(),
     questions: new Map<number, NewQuestion & { id: number }>(),
     answers: [] as (NewAnswer & { id: number })[],
+    qaBlocks: [] as ClassQaEntity[],
     events: [] as DomainEvent[],
     vectors: [] as NewVector[],
     enqueued: [] as { jobName: string; payload: unknown }[],
@@ -190,8 +219,12 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
             : undefined,
       });
     },
-    generateText: async () => {
-      throw new Error("generateText not scripted in loop harness");
+    generateText: async (input) => {
+      state.aiCalls.push({ schemaName: "class_qa_answer", prompt: input.prompt });
+      return ok({
+        raw: script.qaAnswerRaw ?? QA_ANSWER_RAW_DEFAULT,
+        usage: { promptTokens: 120, completionTokens: 80 },
+      });
     },
   };
 
@@ -319,7 +352,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     },
     findById: async (id) => {
       const row = state.classes.get(id);
-      return row ? { id: row.id, skillId: row.skillId, title: row.title, contentMd: row.contentMd } : null;
+      return row
+        ? {
+            id: row.id,
+            skillId: row.skillId,
+            index: row.index,
+            title: row.title,
+            contentMd: row.contentMd,
+          }
+        : null;
     },
     listByIds: async (ids) =>
       [...state.classes.values()]
@@ -489,6 +530,49 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     },
   };
 
+  const qaRepo: ClassQaRepository = {
+    create: async (input: NewClassQaBlock) => {
+      const id = ++qaBlockIdSeq;
+      state.qaBlocks.push({
+        id,
+        classId: input.classId,
+        userId: input.userId,
+        anchorParagraph: input.anchorParagraph,
+        anchorText: input.anchorText ?? null,
+        question: input.question,
+        answer: null,
+        status: ClassQaStatus.PENDING,
+        aiModel: null,
+        createdAt: new Date(0),
+      });
+      return { id, status: ClassQaStatus.PENDING };
+    },
+    listByClass: async (classId) =>
+      state.qaBlocks
+        .filter((block) => block.classId === classId)
+        .sort((a, b) => a.anchorParagraph - b.anchorParagraph || a.id - b.id),
+    listAnsweredByClass: async (classId, limit) =>
+      state.qaBlocks
+        .filter((block) => block.classId === classId && block.status === ClassQaStatus.ANSWERED)
+        .sort((a, b) => b.id - a.id)
+        .slice(0, limit),
+    findById: async (id) => state.qaBlocks.find((block) => block.id === id) ?? null,
+    answer: async (id, input) => {
+      const block = state.qaBlocks.find((row) => row.id === id);
+      if (block) {
+        block.answer = input.answer;
+        block.aiModel = input.aiModel;
+        block.status = ClassQaStatus.ANSWERED;
+      }
+    },
+    markFailed: async (id) => {
+      const block = state.qaBlocks.find((row) => row.id === id);
+      if (block) block.status = ClassQaStatus.FAILED;
+    },
+    claimStranded: async () => [],
+    failExhausted: async () => 0,
+  };
+
   const eventRepo: EventRepository = {
     // usage.report is not exercised in loop scenarios; the read stays inert.
     findUsageEvents: async () => [],
@@ -497,9 +581,41 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     },
   };
 
-  const recordVectors = async (vectors: NewVector[]) => {
-    state.vectors.push(...vectors);
-    return ok(vectors.map((_, i) => i));
+  // In-memory VectorStorePort: search filters state.vectors exactly like the
+  // Qdrant adapter's payload filters (userId + optional skillId/excludeSkillId).
+  const vectorStore: VectorStorePort = {
+    upsert: async (vectors) => {
+      state.vectors.push(...vectors);
+      return ok(vectors.map((_, i) => i + 1));
+    },
+    searchSimilar: async (input) => {
+      const hits: SearchSimilarHit[] = state.vectors
+        .filter(
+          (vector) =>
+            vector.userId === input.userId &&
+            (input.skillId === undefined || vector.skillId === input.skillId) &&
+            (input.excludeSkillId === undefined || vector.skillId !== input.excludeSkillId),
+        )
+        .map((vector, i) => ({
+          vectorId: i + 1,
+          score: 1,
+          textSnippet: vector.textSnippet,
+          source: vector.source,
+          classIndex: vector.classIndex ?? null,
+          tokenCount: vector.tokenCount ?? null,
+        }));
+      return ok(hits.slice(0, input.topK ?? 5));
+    },
+  };
+
+  const recordVectors: LoopHarness["deps"]["recordVectors"] = (vectors) =>
+    vectorStore.upsert(vectors);
+
+
+  const jobs: JobQueuePort = {
+    enqueue: (jobName, payload) => {
+      state.enqueued.push({ jobName, payload });
+    },
   };
 
   const deps: LoopHarness["deps"] = {
@@ -508,9 +624,11 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     skillRepo,
     classRepo,
     quizRepo,
+    qaRepo,
     eventRepo,
     recordVectors,
     chatModel: "glm-5.3-flash",
+    jobs,
   };
 
   const nextClassJobRows = new Map<
@@ -590,19 +708,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     existsPending: async (skillId) => nextClassJobRows.has(skillId),
   };
 
-  const jobs: JobQueuePort = {
-    enqueue: (jobName, payload) => {
-      state.enqueued.push({ jobName, payload });
-    },
-  };
-
   const nextClassWorker = makeNextClassWorker({
     nextClassJobs,
     generateNextClass: makeGenerateNextClass(deps),
   });
 
-  // Answer-memory mining runs the REAL miner over the in-memory state; the
-  // dedup metadata is derived from state.vectors so a second run no-ops.
+  // Answer/QA-memory mining and content vectorization runand content vectorization run the REAL use cases
+  //use cases
+  // over the in-memory state; the dedup metadata is derived from state.vectors
+  // so a second run no-ops.
   const vectorMetadata = {
     findAnswerIdsWithVectors: async (answerIds: number[]) =>
       ok(
@@ -612,6 +726,26 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
               vector.answerId != null && answerIds.includes(vector.answerId),
           )
           .map((vector) => vector.answerId as number),
+      ),
+    findClassIdsWithVectors: async (classIds: number[], source: VectorSource) =>
+      ok(
+        state.vectors
+          .filter(
+            (vector) =>
+              vector.classId != null &&
+              classIds.includes(vector.classId) &&
+              vector.source === source,
+          )
+          .map((vector) => vector.classId as number),
+      ),
+    findBlockIdsWithVectors: async (blockIds: number[]) =>
+      ok(
+        state.vectors
+          .filter(
+            (vector) =>
+              vector.qaBlockId != null && blockIds.includes(vector.qaBlockId),
+          )
+          .map((vector) => vector.qaBlockId as number),
       ),
     sumTokenCountsByUser: async () => {
       // Embedding spend isn't asserted in loop scenarios; aggregate honestly.
@@ -634,17 +768,41 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     quizRepo,
     classRepo,
   });
+  const mineQaVectors = makeMineQaVectors({
+    ai,
+    vectorMetadata,
+    recordVectors,
+    qaRepo,
+    classRepo,
+  });
+  const vectorizeClassContent = makeVectorizeClassContent({
+    ai,
+    vectorMetadata,
+    recordVectors,
+    classRepo,
+    skillRepo,
+  });
+  const retrieveQaContext = makeRetrieveQaContext({ ai, vectorStore });
   const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
+  const answerClassQuestion = makeAnswerClassQuestion({
+    ai,
+    qaRepo,
+    classRepo,
+    skillRepo,
+    eventRepo,
+    chatModel: "glm-5.3-flash",
+    retrieveQaContext,
+    vectorizeClassContent,
+    jobs,
+  });
 
   const handlers = makeJobHandlers({
     generateInitialSkill: makeGenerateInitialSkill(deps),
     nextClassWorker,
-    // The loop harness scripts the lesson pipeline only; Q&A jobs are
-    // exercised by their own module tests.
-    answerClassQuestion: async () => {
-      throw new Error("class-qa-answer not scripted in loop harness");
-    },
+    answerClassQuestion,
     mineAnswerVectors,
+    mineQaVectors,
+    vectorizeClassContent,
     gradeOpenEnded,
   });
 
@@ -675,5 +833,3 @@ export const classesOfSkill = (harness: LoopHarness, skillId: number) =>
   [...harness.state.classes.values()]
     .filter((cls) => cls.skillId === skillId)
     .sort((a, b) => a.index - b.index);
-
-

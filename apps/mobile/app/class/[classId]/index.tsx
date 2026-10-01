@@ -213,7 +213,12 @@ function ConspectView({
   // Anchor mode: pill → banner → every chunk is tap-to-anchor; the composer
   // opens on the chosen chunk. Follow-ups reuse the composer without mode.
   const [anchorMode, setAnchorMode] = useState(false);
-  const [composer, setComposer] = useState<{ anchor: number; excerpt: string } | null>(null);
+  const [composer, setComposer] = useState<{
+    anchor: number;
+    excerpt: string;
+    /** True when the excerpt is the learner's verbatim selection (long-press Ask AI). */
+    selected: boolean;
+  } | null>(null);
 
   /** Top-level y offsets, keyed by chunk index — targets for scroll-into-view. */
   const groupYs = useRef(new Map<number, { chunk?: number; qa?: number }>());
@@ -250,8 +255,8 @@ function ConspectView({
 
   const submitQuestion = (question: string) => {
     if (!composer) return;
-    const { anchor } = composer;
-    qa.ask(anchor, question);
+    const { anchor, excerpt, selected } = composer;
+    qa.ask(anchor, question, selected ? excerpt : null);
     setComposer(null);
     setAnchorMode(false);
     scrollToAnchor(anchor);
@@ -284,12 +289,12 @@ function ConspectView({
         <ClassConspect
           contentMd={classData.contentMd}
           anchorMode={anchorMode}
-          onAnchorChunk={(index, excerpt) => setComposer({ anchor: index, excerpt })}
+          onAnchorChunk={(index, excerpt) => setComposer({ anchor: index, excerpt, selected: false })}
           qaByAnchor={qa.blocksByAnchor}
-          onAskSelection={(index, text) => setComposer({ anchor: index, excerpt: text })}
+          onAskSelection={(index, text) => setComposer({ anchor: index, excerpt: text, selected: true })}
           onRegisterChunkLayout={registerLayout('chunk')}
           onRegisterQaLayout={registerLayout('qa')}
-          onFollowUp={(index, excerpt) => setComposer({ anchor: index, excerpt })}
+          onFollowUp={(index, excerpt) => setComposer({ anchor: index, excerpt, selected: false })}
           onRetryTemp={qa.retryTemp}
           onAskAgain={(index, question) => {
             qa.ask(index, question);

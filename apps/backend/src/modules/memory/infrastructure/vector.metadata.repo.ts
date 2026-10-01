@@ -1,4 +1,4 @@
-import { Prisma } from "@/prisma/generated";
+import { Prisma, VectorSource } from "@/prisma/generated";
 import { prisma } from "@/modules/platform/infrastructure/prisma";
 import { err, ok, type Result } from "@/modules/platform/result";
 import {
@@ -12,7 +12,6 @@ import type {
   VectorStoreError,
   VectorStorePort,
 } from "@/modules/memory/ports";
-import type { VectorSource } from "@/prisma/generated";
 
 const detailOf = (errLike: unknown): string =>
   errLike instanceof Error ? errLike.message : String(errLike);
@@ -47,7 +46,8 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
           ${vector.textSnippet},
           ${vector.classIndex ?? null},
           ${vector.tokenCount ?? null},
-          ${vector.answerId ?? null}
+          ${vector.answerId ?? null},
+          ${vector.qaBlockId ?? null}
         )`,
       );
 
@@ -59,7 +59,8 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
           "textSnippet",
           "classIndex",
           "tokenCount",
-          "answerId"
+          "answerId",
+          "qaBlockId"
         ) VALUES ${Prisma.join(tuples)}
         RETURNING "id";
       `;
@@ -100,8 +101,10 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
   },
 
   /**
-   * Semantic search over a user's vectors, filtered to that user. Returns
-   * top-K context snippets ordered by similarity score.
+   * Semantic search over a user's vectors, filtered to that user. `skillId`
+   * narrows to one skill's memory; `excludeSkillId` keeps a skill from
+   * retrieving its own vectors back (the payload index on `skillId` already
+   * exists — Phase 8 D4 adds the positive filter).
    */
   searchSimilar: async (input): Promise<Result<SearchSimilarHit[], VectorStoreError>> => {
     try {
@@ -114,6 +117,9 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
     }
 
     const must: unknown[] = [{ key: "userId", match: { value: input.userId } }];
+    if (input.skillId !== undefined) {
+      must.push({ key: "skillId", match: { value: input.skillId } });
+    }
     const filter: { must: unknown[]; must_not?: unknown[] } = { must };
     if (input.excludeSkillId !== undefined) {
       filter.must_not = [
@@ -154,8 +160,9 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
 
 /**
  * Metadata-only read side (relational Vector rows, no Qdrant round-trip).
- * Backs the answer-memory dedup: a mined answer leaves a vector row keyed by
- * its answerId, so this query is the "already mined" check.
+ * Backs the memory-mining dedup checks: a mined answer / Q&A block / class
+ * leaves a vector row keyed by its id, so these queries are the
+ * "already mined" checks.
  */
 export const makeVectorMetadataRepository = (): VectorMetadataRepository => ({
   findAnswerIdsWithVectors: async (answerIds) => {
@@ -170,6 +177,48 @@ export const makeVectorMetadataRepository = (): VectorMetadataRepository => ({
       });
       return ok(
         rows.map((row) => row.answerId).filter((id): id is number => id !== null),
+      );
+    } catch (errLike) {
+      return err({
+        kind: "VectorStoreUnavailable",
+        detail: detailOf(errLike),
+      });
+    }
+  },
+
+  findClassIdsWithVectors: async (classIds, source) => {
+    if (classIds.length === 0) {
+      return ok([]);
+    }
+    try {
+      const rows = await prisma.vector.findMany({
+        where: { classId: { in: classIds }, source },
+        select: { classId: true },
+        distinct: ["classId"],
+      });
+      return ok(
+        rows.map((row) => row.classId).filter((id): id is number => id !== null),
+      );
+    } catch (errLike) {
+      return err({
+        kind: "VectorStoreUnavailable",
+        detail: detailOf(errLike),
+      });
+    }
+  },
+
+  findBlockIdsWithVectors: async (blockIds) => {
+    if (blockIds.length === 0) {
+      return ok([]);
+    }
+    try {
+      const rows = await prisma.vector.findMany({
+        where: { qaBlockId: { in: blockIds } },
+        select: { qaBlockId: true },
+        distinct: ["qaBlockId"],
+      });
+      return ok(
+        rows.map((row) => row.qaBlockId).filter((id): id is number => id !== null),
       );
     } catch (errLike) {
       return err({

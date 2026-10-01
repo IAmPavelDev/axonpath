@@ -1,4 +1,6 @@
 import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
+import type { JobQueuePort } from "@/modules/platform/ports/jobs";
+import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectorize-class-content";
 import { err, ok, type Result } from "@/modules/platform/result";
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
@@ -66,6 +68,8 @@ export type GenerateNextClassDeps = {
   eventRepo: EventRepository;
   recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
   chatModel: string;
+  /** Fire-and-forget queue: class-content vectorization rides it after the commit. */
+  jobs: JobQueuePort;
 };
 
 export type GenerateNextClassInput = {
@@ -106,6 +110,7 @@ export const makeGenerateNextClass =
     eventRepo,
     recordVectors,
     chatModel,
+    jobs,
   }: GenerateNextClassDeps) =>
   async (
     input: GenerateNextClassInput,
@@ -263,6 +268,11 @@ export const makeGenerateNextClass =
         aiModel: chatModel,
       })),
     );
+
+    // Conspect memory (Phase 8 D3): the class's top-level markdown blocks
+    // become CONTENT_CHUNK vectors via the background vectorizer —
+    // best-effort, dedup keyed per class, never load-bearing.
+    jobs.enqueue(CLASS_CONTENT_VECTORS_JOB, { classId: createdClass.id });
 
     // Memory compounding: the lesson summary is the AI_NEXT memory unit, the
     // learner-facing snippets continue the AI_INITIAL series. One embedding

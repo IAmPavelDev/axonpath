@@ -89,6 +89,10 @@ enum VectorSource {
   AI_INITIAL
   AI_NEXT
   ANSWER_DERIVED
+  /** One top-level conspect block of a generated class (Phase 8). */
+  CONTENT_CHUNK
+  /** One answered learner Q&A block, mined into memory (Phase 8). */
+  QA_DERIVED
 }
 
 enum EventType {
@@ -216,6 +220,8 @@ model Vector {
   classId     Int?
   Answer      Answer?                     @relation(fields: [answerId], references: [id])
   answerId    Int?
+  ClassQaBlock ClassQaBlock?              @relation(fields: [qaBlockId], references: [id])
+  qaBlockId   Int?
 
   @@index([skillId])
   @@index([classIndex])
@@ -244,6 +250,8 @@ model ClassQaBlock {
   user            User          @relation(fields: [userId], references: [id])
   userId          Int
   anchorParagraph Int
+  /** Verbatim learner selection at ask time; null when anchored by tap only. */
+  anchorText      String?       @db.Text
   question        String        @db.Text
   answer          String?       @db.Text
   status          ClassQaStatus @default(PENDING)
@@ -251,6 +259,7 @@ model ClassQaBlock {
   aiModel         String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  vectors         Vector[]
 
   @@index([classId, anchorParagraph])
   @@index([userId])

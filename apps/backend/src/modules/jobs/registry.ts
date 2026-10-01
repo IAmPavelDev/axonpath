@@ -12,6 +12,14 @@ import {
   type MineAnswerVectors,
 } from "@/modules/memory/application/mine-answer-vectors";
 import {
+  QA_BLOCK_VECTORS_JOB,
+  type MineQaVectors,
+} from "@/modules/memory/application/mine-qa-vectors";
+import {
+  CLASS_CONTENT_VECTORS_JOB,
+  type VectorizeClassContent,
+} from "@/modules/memory/application/vectorize-class-content";
+import {
   GRADE_OPEN_ENDED_JOB,
   type GradeOpenEnded,
 } from "@/modules/tutoring/application/grade-open-ended";
@@ -19,6 +27,8 @@ import { getGenerateInitialSkillJobHandler } from "./generateInitialSkillJobHand
 import { getGenerateNextClassJobHandler } from "./generateNextClassJobHandler";
 import { getAnswerClassQuestionJobHandler } from "./answerClassQuestionJobHandler";
 import { getMineAnswerVectorsJobHandler } from "./mineAnswerVectorsJobHandler";
+import { getMineQaVectorsJobHandler } from "./mineQaVectorsJobHandler";
+import { getVectorizeClassContentJobHandler } from "./vectorizeClassContentJobHandler";
 import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
 
 /**
@@ -32,6 +42,8 @@ export type JobRegistryDeps = {
   nextClassWorker: NextClassWorker;
   answerClassQuestion: AnswerClassQuestion;
   mineAnswerVectors: MineAnswerVectors;
+  mineQaVectors: MineQaVectors;
+  vectorizeClassContent: VectorizeClassContent;
   gradeOpenEnded: GradeOpenEnded;
 };
 
@@ -40,11 +52,15 @@ export const makeJobHandlers = ({
   nextClassWorker,
   answerClassQuestion,
   mineAnswerVectors,
+  mineQaVectors,
+  vectorizeClassContent,
   gradeOpenEnded,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
   [CLASS_QA_ANSWER_JOB]: getAnswerClassQuestionJobHandler(answerClassQuestion),
   [SKILL_ANSWER_VECTORS_JOB]: getMineAnswerVectorsJobHandler(mineAnswerVectors),
+  [QA_BLOCK_VECTORS_JOB]: getMineQaVectorsJobHandler(mineQaVectors),
+  [CLASS_CONTENT_VECTORS_JOB]: getVectorizeClassContentJobHandler(vectorizeClassContent),
   [GRADE_OPEN_ENDED_JOB]: getGradeOpenEndedJobHandler(gradeOpenEnded),
 });

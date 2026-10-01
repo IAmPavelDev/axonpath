@@ -12,6 +12,8 @@ export type ClassQaEntity = {
   classId: number;
   userId: number;
   anchorParagraph: number;
+  /** Verbatim learner selection at ask time; null when anchored by tap only. */
+  anchorText: string | null;
   question: string;
   /** Null while the answer has not been generated (PENDING / FAILED). */
   answer: string | null;

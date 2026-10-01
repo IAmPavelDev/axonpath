@@ -30,6 +30,10 @@ export const QaBlock: FC<Props> = ({ item, excerpt, onFollowUp, onRetryTemp, onA
   const pending = item.kind === 'temp' ? !item.temp.failed : item.block.status === 'PENDING';
   const question = item.kind === 'temp' ? item.temp.question : item.block.question;
   const anchor = item.kind === 'temp' ? item.temp.anchorParagraph : item.block.anchorParagraph;
+  // The stored verbatim selection wins over the chunk preview (Phase 8): the
+  // card quotes exactly what the learner selected at ask time.
+  const quote =
+    (item.kind === 'temp' ? item.temp.anchorText : item.block.anchorText) ?? excerpt;
 
   const failedServer = item.kind === 'server' && item.block.status === 'FAILED';
   const failedTemp = item.kind === 'temp' && item.temp.failed;
@@ -38,14 +42,14 @@ export const QaBlock: FC<Props> = ({ item, excerpt, onFollowUp, onRetryTemp, onA
   return (
     <View
       className={`mb-4 rounded-lg border-hairline border-border bg-card p-4 ${dimmed ? 'opacity-60' : ''}`}
-      accessibilityLabel={`Question about the passage: ${excerpt}`}>
+      accessibilityLabel={`Question about the passage: ${quote}`}>
       {/* Anchored quote: which passage this conversation belongs to. */}
       <View className="mb-2 flex-row items-start gap-1.5">
         <Sparkles size={13} color={dark ? 'hsl(213 94% 68%)' : 'hsl(221 83% 47%)'} />
         <Text
           numberOfLines={2}
           className="flex-1 font-sans-medium text-[13px] leading-[18px] text-muted-foreground">
-          “{excerpt}”
+          “{quote}”
         </Text>
       </View>
 

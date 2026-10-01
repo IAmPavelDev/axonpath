@@ -8,8 +8,11 @@ import { makeSetImmediateJobQueue } from "@/modules/platform/infrastructure/set-
 import { makeVectorStoreAdapter } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeVectorMetadataRepository } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrieve-relevant-context";
+import { makeRetrieveQaContext } from "@/modules/memory/application/retrieve-qa-context";
 import { makeRecordVectors } from "@/modules/memory/application/record-vectors";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
+import { makeMineQaVectors } from "@/modules/memory/application/mine-qa-vectors";
+import { makeVectorizeClassContent } from "@/modules/memory/application/vectorize-class-content";
 import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
 import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
@@ -20,6 +23,7 @@ import {
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeJobHandlers } from "@/modules/jobs/registry";
+import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
 import {
   makePrismaNextClassJobRepository,
 } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
@@ -53,7 +57,24 @@ export const configureContainer = (): Container => {
   const ai = makeZaiAi();
 
   const retrieveContext = makeRetrieveRelevantContext({ ai, vectorStore });
+  const retrieveQaContext = makeRetrieveQaContext({ ai, vectorStore });
   const recordVectors = makeRecordVectors({ vectorStore });
+  const vectorMetadata = makeVectorMetadataRepository();
+
+  // The generation/QA pipelines enqueue follow-up memory jobs, and the job
+  // handlers wrap those same pipelines — the cycle resolves through the
+  // handlers record, which is filled in after the use cases are built
+  // (enqueue only dereferences it at call time, never during construction).
+  const jobHandlers: Record<string, JobHandler> = {};
+  const jobs: JobQueuePort = makeSetImmediateJobQueue(jobHandlers);
+
+  const vectorizeClassContent = makeVectorizeClassContent({
+    ai,
+    vectorMetadata,
+    recordVectors,
+    classRepo,
+    skillRepo,
+  });
 
   const generateInitialSkill = makeGenerateInitialSkill({
     ai,
@@ -64,6 +85,7 @@ export const configureContainer = (): Container => {
     eventRepo,
     recordVectors,
     chatModel: config.ai.models.chat,
+    jobs,
   });
 
   const generateNextClass = makeGenerateNextClass({
@@ -75,23 +97,34 @@ export const configureContainer = (): Container => {
     eventRepo,
     recordVectors,
     chatModel: config.ai.models.chat,
+    jobs,
   });
 
   const answerClassQuestion = makeAnswerClassQuestion({
     ai,
     qaRepo,
     classRepo,
+    skillRepo,
     eventRepo,
     chatModel: config.ai.models.chat,
+    retrieveQaContext,
+    vectorizeClassContent,
+    jobs,
   });
-
-  const vectorMetadata = makeVectorMetadataRepository();
 
   const mineAnswerVectors = makeMineAnswerVectors({
     ai,
     vectorMetadata,
     recordVectors,
     quizRepo,
+    classRepo,
+  });
+
+  const mineQaVectors = makeMineQaVectors({
+    ai,
+    vectorMetadata,
+    recordVectors,
+    qaRepo,
     classRepo,
   });
 
@@ -111,12 +144,15 @@ export const configureContainer = (): Container => {
     generateNextClass,
   });
 
-  const jobs = makeSetImmediateJobQueue(
+  Object.assign(
+    jobHandlers,
     makeJobHandlers({
       generateInitialSkill,
       nextClassWorker,
       answerClassQuestion,
       mineAnswerVectors,
+      mineQaVectors,
+      vectorizeClassContent,
       gradeOpenEnded,
     }),
   );

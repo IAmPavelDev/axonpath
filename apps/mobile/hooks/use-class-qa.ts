@@ -8,6 +8,8 @@ export type TempQaBlock = {
   tempId: number;
   anchorParagraph: number;
   question: string;
+  /** Verbatim selection at ask time; null when anchored by tap only. */
+  anchorText: string | null;
   /** Server id once ask() resolves; null until then. */
   blockId: number | null;
   /** ask() itself failed (network/offline) — the temp offers retry. */
@@ -25,6 +27,8 @@ const POLL_MS = 1600;
  * global queryClient config in this app); polling is enabled only while any
  * block is PENDING, per the backend contract. Optimistic temp blocks make the
  * new card appear at t=0 and are retired by server id on the next list tick.
+ * The verbatim selection rides along (Phase 8) so the backend can ground the
+ * answer on exactly the passage the learner selected.
  */
 export function useClassQa(classId: number) {
   const queryClient = useQueryClient();
@@ -52,9 +56,14 @@ export function useClassQa(classId: number) {
   }, [listQuery.data]);
 
   const askRequest = useCallback(
-    (anchorParagraph: number, question: string, tempId: number) =>
+    (anchorParagraph: number, question: string, anchorText: string | null, tempId: number) =>
       rpc.class.qa
-        .ask({ classId, anchorParagraph, question })
+        .ask({
+          classId,
+          anchorParagraph,
+          question,
+          ...(anchorText !== null && anchorText.length > 0 ? { anchorText } : {}),
+        })
         .then((res: ClassQaAskResult) => {
           setTempBlocks((t) =>
             t.map((x) => (x.tempId === tempId ? { ...x, blockId: res.blockId } : x))
@@ -69,13 +78,13 @@ export function useClassQa(classId: number) {
   );
 
   const ask = useCallback(
-    (anchorParagraph: number, question: string): number => {
+    (anchorParagraph: number, question: string, anchorText: string | null = null): number => {
       const tempId = ++tempSeq.current;
       setTempBlocks((t) => [
         ...t,
-        { tempId, anchorParagraph, question, blockId: null, failed: false },
+        { tempId, anchorParagraph, question, anchorText, blockId: null, failed: false },
       ]);
-      void askRequest(anchorParagraph, question, tempId);
+      void askRequest(anchorParagraph, question, anchorText, tempId);
       return tempId;
     },
     [askRequest]
@@ -87,14 +96,14 @@ export function useClassQa(classId: number) {
       const temp = tempBlocks.find((t) => t.tempId === tempId);
       if (!temp) return;
       setTempBlocks((t) => t.map((x) => (x.tempId === tempId ? { ...x, failed: false } : x)));
-      void askRequest(temp.anchorParagraph, temp.question, tempId);
+      void askRequest(temp.anchorParagraph, temp.question, temp.anchorText, tempId);
     },
     [askRequest, tempBlocks]
   );
 
   /** Re-ask after a terminal FAILED server block: new request, new block. */
   const askAgain = useCallback(
-    (block: ClassQaBlock) => ask(block.anchorParagraph, block.question),
+    (block: ClassQaBlock) => ask(block.anchorParagraph, block.question, block.anchorText),
     [ask]
   );
 

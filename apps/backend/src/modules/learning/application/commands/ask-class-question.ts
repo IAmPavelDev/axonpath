@@ -17,6 +17,8 @@ export type AskClassQuestionInput = {
   classId: number;
   userId: number;
   anchorParagraph: number;
+  /** Verbatim learner selection (contract-capped at 2000); null when anchored by tap. */
+  anchorText?: string | null;
   question: string;
 };
 
@@ -29,7 +31,9 @@ export type AskClassQuestionOutput = {
  * Anchor a learner question into a class conspect: persist a PENDING block
  * (the client renders it immediately with a skeleton answer) and fire the
  * in-process answer job. Ownership rides the class → skill chain, NotOwned
- * hidden behind 404 like every other command.
+ * hidden behind 404 like every other command. The verbatim selection is
+ * stored with the block (Phase 8 D2) — it is the L1 grounding quote of the
+ * answer prompt and the card quote after reload.
  */
 export const makeAskClassQuestion =
   ({ classRepo, skillRepo, qaRepo, jobs }: AskClassQuestionDeps) =>
@@ -53,6 +57,7 @@ export const makeAskClassQuestion =
       classId: input.classId,
       userId: input.userId,
       anchorParagraph: input.anchorParagraph,
+      anchorText: input.anchorText ?? null,
       question: input.question,
     });
 

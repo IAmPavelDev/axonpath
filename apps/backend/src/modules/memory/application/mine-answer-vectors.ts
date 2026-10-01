@@ -92,8 +92,10 @@ export const makeMineAnswerVectors =
           classId: answer.classId as number,
           classIndex: cls?.index ?? null,
           // One trailing period belongs to the template, not the question —
-          // generated texts often end in "." themselves.
-          textSnippet: `Struggled with: ${answer.questionText.replace(/\.$/, "")}. Answered "${answer.userAnswer}"; correct: "${answerKeyText(answer.answerKey)}" (${cls?.title ?? "lesson"}).`,
+          // generated texts often end in "." themselves. Attribution is
+          // embedded (Phase 8 D6-R5): the typed answer is the learner's, the
+          // correct answer is the lesson's.
+          textSnippet: `Struggled with: ${answer.questionText.replace(/\.$/, "")}. The learner answered "${answer.userAnswer}"; the lesson's correct answer was "${answerKeyText(answer.answerKey)}" (${cls?.title ?? "lesson"}).`,
         };
       });
 

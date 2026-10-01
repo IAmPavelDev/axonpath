@@ -54,6 +54,7 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
           classId: input.classId,
           userId: context.user.id,
           anchorParagraph: input.anchorParagraph,
+          anchorText: input.anchorText ?? null,
           question: input.question,
         });
         if (isErr(result)) {
@@ -77,6 +78,7 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
           id: block.id,
           classId: block.classId,
           anchorParagraph: block.anchorParagraph,
+          anchorText: block.anchorText,
           question: block.question,
           answer: block.answer,
           status: block.status,

@@ -33,6 +33,9 @@ const makeDeps = (blocks: Block[]) => {
     listByClass: async () => {
       throw new Error("not used in sweeper tests");
     },
+    listAnsweredByClass: async () => {
+      throw new Error("not used in sweeper tests");
+    },
     findById: async () => {
       throw new Error("not used in sweeper tests");
     },

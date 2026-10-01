@@ -6,7 +6,7 @@ import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa"
 import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class-qa.repository";
 import { ClassQaStatus } from "@/prisma/generated";
 
-const CLASS = { id: 5, skillId: 10, title: "Joins", contentMd: "## Intro" };
+const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
 const SKILL = { id: 10, userId: 7, topic: "SQL", description: "", status: "ACTIVE" };
 
 const block = (
@@ -14,6 +14,7 @@ const block = (
 ): ClassQaEntity => ({
   classId: 5,
   userId: 7,
+  anchorText: null,
   question: `question ${overrides.id}`,
   answer: null,
   status: ClassQaStatus.PENDING,
@@ -78,6 +79,9 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
     listByClass: async (classId) => {
       listedWith = classId;
       return ORDERED;
+    },
+    listAnsweredByClass: async () => {
+      throw new Error("not used in list tests");
     },
     findById: async () => {
       throw new Error("not used in list tests");

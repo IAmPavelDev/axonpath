@@ -16,7 +16,7 @@ import type {
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { ClassQaStatus } from "@/prisma/generated";
 
-const CLASS = { id: 5, skillId: 10, title: "Joins", contentMd: "## Intro" };
+const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
 const SKILL = { id: 10, userId: 7, topic: "SQL", description: "", status: "ACTIVE" };
 
 type AskState = {
@@ -78,6 +78,7 @@ const makeDeps = (
       const entity: ClassQaEntity = {
         id: ++blockSeq,
         ...input,
+        anchorText: input.anchorText ?? null,
         answer: null,
         status: ClassQaStatus.PENDING,
         aiModel: null,
@@ -86,6 +87,9 @@ const makeDeps = (
       return { id: entity.id, status: entity.status };
     },
     listByClass: async () => {
+      throw new Error("not used in ask tests");
+    },
+    listAnsweredByClass: async () => {
       throw new Error("not used in ask tests");
     },
     findById: async () => {
@@ -135,11 +139,38 @@ describe("askClassQuestion", () => {
         classId: 5,
         userId: 7,
         anchorParagraph: 3,
+        anchorText: null,
         question: "What is a left join?",
       },
     ]);
     expect(state.enqueued).toEqual([
       { jobName: "class-qa-answer", payload: { blockId: 101 } },
+    ]);
+  });
+
+  it("stores the verbatim selection as the anchor text", async () => {
+    const { deps, state } = makeDeps();
+
+    const result = await makeAskClassQuestion(deps)({
+      classId: 5,
+      userId: 7,
+      anchorParagraph: 2,
+      anchorText: "a left join keeps every left row",
+      question: "Why keep unmatched rows?",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      value: { blockId: 101, status: "PENDING" },
+    });
+    expect(state.created).toEqual([
+      {
+        classId: 5,
+        userId: 7,
+        anchorParagraph: 2,
+        anchorText: "a left join keeps every left row",
+        question: "Why keep unmatched rows?",
+      },
     ]);
   });
 
@@ -229,5 +260,50 @@ describe("AskClassQuestionInput contract", () => {
         question: "q",
       }).success,
     ).toBe(false);
+  });
+
+  it("treats anchorText as optional and trims it when present", () => {
+    const without = schema.class.AskClassQuestionInput.safeParse({
+      ...base,
+      question: "q",
+    });
+    expect(without.success).toBe(true);
+    if (without.success) {
+      expect(without.data.anchorText).toBeUndefined();
+    }
+
+    const withText = schema.class.AskClassQuestionInput.safeParse({
+      ...base,
+      anchorText: "  selected passage  ",
+      question: "q",
+    });
+    expect(withText.success).toBe(true);
+    if (withText.success) {
+      expect(withText.data.anchorText).toBe("selected passage");
+    }
+  });
+
+  it("rejects an empty or oversized anchorText", () => {
+    expect(
+      schema.class.AskClassQuestionInput.safeParse({
+        ...base,
+        anchorText: "",
+        question: "q",
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.class.AskClassQuestionInput.safeParse({
+        ...base,
+        anchorText: "a".repeat(2001),
+        question: "q",
+      }).success,
+    ).toBe(false);
+    expect(
+      schema.class.AskClassQuestionInput.safeParse({
+        ...base,
+        anchorText: "a".repeat(2000),
+        question: "q",
+      }).success,
+    ).toBe(true);
   });
 });

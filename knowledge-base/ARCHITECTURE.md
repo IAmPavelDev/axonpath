@@ -132,7 +132,7 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
 | `skill.mistakes` | latest wrong answer per question, newest first (correct retakes heal the question; pending open-ended excluded; OPEN_ENDED `correctAnswer` stays null server-side) |
 | `class.list` / `class.get` | classes per skill (`skillId` included) / class by id |
-| `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock`, enqueues the in-process answer job → `{blockId, status}` |
+| `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock` (with the verbatim `anchorText` selection when the learner long-press-selected, Phase 8) and enqueues the in-process answer job → `{blockId, status}` |
 | `class.qa.list` | Q&A blocks for a class, ascending `(anchorParagraph, createdAt, id)` — the client polls while any block is `PENDING` |
 | `quiz.get` | questions for a class (answerKey stripped) |
 | `stats.overview` | learning stats: 8-week weekly active skills, day streak, lessons completed this week, per-skill totals (ISO weeks Mon 00:00 UTC, live derived) |
@@ -210,6 +210,31 @@ Gaps are counted, never estimated: `eventsWithoutUsage` (payload lacks usage) an
 event) and retrieval query embeddings (no persisted vectors). Per-user scope only —
 optional `skillId` filter, ownership-checked; no admin surface.
 
+### 4.5 Class Q&A pipeline (Phase 8)
+
+`ask-class-question` persists a `PENDING` `ClassQaBlock` (question, `anchorParagraph`,
+verbatim `anchorText` when the learner selected text) and enqueues `class-qa-answer`. The
+answer job assembles a **priority-layered prompt** (`buildQaAnswerPrompt`, D1): L1 the
+learner's verbatim selection (fallback: the anchored block's excerpt via the backend splitter
+`memory/domain/split-conspect.ts`) + typed question → L2 the whole current lesson → L3 the
+class's last 5 ANSWERED blocks as **anchored annotations** (passage → learner-typed →
+you-answered; the header forbids chat-mode continuation) → L4 skill title/description +
+sibling lesson outline → L5 skill-scoped + cross-skill similarity hits labeled "background,
+lower trust". Layers degrade silently (empty history, retrieval failure = skipped layer).
+Author attribution is structural (D6): every learner-typed string is fenced under "The
+learner typed", Axon-authored content is labeled as Axon's, and a shared `ATTRIBUTION_RULE`
+fragment is appended verbatim to all five personas.
+
+Memory: after the relational commit both generation paths enqueue `class-content-vectors`
+(one `CONTENT_CHUNK` vector per top-level conspect block, deduped per class); the answer job
+lazily backfills pre-Phase-8 classes inline before answering; after a successful answer,
+`qa-block-vectors` mines the exchange into a `QA_DERIVED` vector keyed by `qaBlockId`
+(attributed snippet, "Questions the learner asked" block in `buildNextClassPrompt`).
+Retrieval (`retrieve-qa-context`) embeds question+selection once and runs two filtered
+searches: `searchSimilar({skillId, topK 6})` and `searchSimilar({excludeSkillId, topK 4})` —
+the `VectorStorePort.searchSimilar` input gained the positive `skillId` filter. Failures
+degrade to empty hit lists, never an error.
+
 ## 5. Data model
 
 ```mermaid
@@ -236,14 +261,15 @@ SKILL_CREATED, CLASS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED, ERROR_OCCURR
 QA_ANSWERED — payloads include the full AI prompt+response; generation/QA payloads also
 carry token `usage`. The `VECTOR_UPSERTED` enum value exists but nothing records it),
 `Vector` (relational metadata only:
-skillId/classId/answerId/source/textSnippet/classIndex/tokenCount), `ClassQaBlock` (learner
-question anchored at `anchorParagraph` in a class conspect; flat blocks, `question`/nullable
+skillId/classId/answerId/qaBlockId/source/textSnippet/classIndex/tokenCount), `ClassQaBlock` (learner
+question anchored at `anchorParagraph` in a class conspect, with the verbatim `anchorText`
+selection when provided; flat blocks, `question`/nullable
 `answer`, status `PENDING|ANSWERED|FAILED`, answered asynchronously by the `class-qa-answer`
 job; `contentMd` itself stays untouched),
 `SkillProgress` (snapshot json — **unused**).
 
 Enums: **SkillStatus** `DRAFT(legacy) | GENERATING | ACTIVE | FAILED | PAUSED | COMPLETED |
-ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (all three types generated since S5; MC/TF graded synchronously, open-ended async via grade-open-ended) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED` · **ClassQaStatus**
+ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED` (all three types generated since S5; MC/TF graded synchronously, open-ended async via grade-open-ended) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED | CONTENT_CHUNK | QA_DERIVED` (Phase 8: conspect blocks + mined Q&A) · **ClassQaStatus**
 `PENDING | ANSWERED | FAILED`.
 
 Embeddings live only in Qdrant (`axon_vectors`, 3072-dim Cosine, payload indexes userId/skillId,
@@ -257,8 +283,10 @@ Flow: Firebase auth → skill list (home; polls `skill.list` every 10 s while vi
 "Failed to prepare" chip with a retry affordance) → create-skill (topic input) →
 description/skill detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows
 error copy + retry button), status chip + lifecycle actions (pause/resume/complete/archive) via `StatusControls` → class list (newest first) → class screen (Markdown conspect +
-quiz tabs; native text selection "Ask AI" creates an anchored Q&A block via `class.qa.ask`,
-and the screen polls `class.qa.list` while any block is `PENDING`) → quiz (MC/TF/Open) →
+quiz tabs; native text selection "Ask AI" creates an anchored Q&A block via `class.qa.ask`
+(the verbatim selection rides along as `anchorText`, and the card quotes the stored
+selection over the chunk preview), and the screen polls `class.qa.list` while any block is
+`PENDING`) → quiz (MC/TF/Open) →
 result → "continue" returns to the skill's lesson list; generation completes server-side and
 surfaces as the preparing state above.
 
@@ -287,20 +315,32 @@ Prisma upgraded 6.15.0 → 6.19.3 (2026-10-01) for Postgres 18 support (6.15.0 b
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (30 files / 201 tests, all green 2026-10-01 at `16be97a`): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade), grade-open-ended (batch/degrade/partial), open-ended generation unlock (enum/instruction/drift guard), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (35 files / 247 tests, all
+green 2026-10-01): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill, retry-skill, mine-answer-vectors (dedup/cap/degrade),
+grade-open-ended (batch/degrade/partial), open-ended generation unlock (enum/instruction/drift guard), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard, get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill (incl. retry-guard cases),
 generate-next-class (incl. retake-dedup cases), submit-quiz (8 cases incl. enqueue trigger),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
-stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation, list
-ordering/ownership, answer generation PENDING→ANSWERED/FAILED with replay no-ops, stranded-block requeue on boot), and the
+stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract validation incl.
+`anchorText` bounds, list ordering/ownership, answer generation PENDING→ANSWERED/FAILED with
+replay no-ops, stranded-block requeue on boot), and the
 composed loop integration test (real use cases + in-memory
 fakes over `modules/testing/fakes.ts`: create → init → submit → next-class → retake dedup →
-FAILED/retry heal, both failure shapes). Post-backlog additions: AiPort usage capture
+FAILED/retry heal, both failure shapes, plus the Phase 8 QA scenario — anchored ask → layered
+prompt evidence → CONTENT_CHUNK backfill → QA_DERIVED mining dedup → follow-up annotation
+block). Post-backlog additions: AiPort usage capture
 (payload `usage` / `Vector.tokenCount` persisted; absent-usage degrade), `embeddingTokenCounts`
 (exact-sum batch split), `stats.overview` + its calendar domain (ISO weeks / streak / lesson
 coverage), `skill.mistakes` (wrong-only, retake heals, open-ended feedback without the model
-answer), `latestWrongPerQuestion` (latest-wins then wrong-filter), and `usage.report` +
-`pricing` (per-kind sums, gap counters, rate math).
+answer), `latestWrongPerQuestion` (latest-wins then wrong-filter), `usage.report` +
+`pricing` (per-kind sums, gap counters, rate math). Phase 8 additions: `split-conspect`
+(backend splitter mirroring the client's block rules), `vectorize-class-content` (one-shot
+per-class chunk embedding, dedup + full degrade), `retrieve-qa-context` (one embedding, two
+filtered searches, per-group degrade), `mine-qa-vectors` (block-keyed dedup + degrade), the
+attribution contract (`prompts.test.ts`: author labels in every builder + persona rule), and
+the layered `buildQaAnswerPrompt` structure tests (order, caps, optional-layer omission).
+Live verification: `e2e-qa-context.mts` on the dev stack (real Postgres/Qdrant/AI) —
+SMOKE_PASS 2026-10-01.
 
 ## 9. Known gaps → post-beta backlog
 
