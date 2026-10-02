@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeCreateSkill, SKILL_INIT_JOB } from "./create-skill";
-import { SkillStatus } from "@/prisma/generated";
+import { SkillMode, SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { ok } from "@/modules/platform/result";
@@ -43,11 +43,20 @@ describe("makeCreateSkill", () => {
     const { deps, createInputs, enqueued } = makeFakeDeps();
     const createSkill = makeCreateSkill(deps);
 
-    const result = await createSkill({ userId: 1, topic: "SQL joins" });
+    const result = await createSkill({
+      userId: 1,
+      topic: "SQL joins",
+      mode: SkillMode.AUTOMATIC,
+    });
 
     expect(result).toEqual(ok({ id: 42, status: SkillStatus.GENERATING }));
     expect(createInputs).toEqual([
-      { userId: 1, topic: "SQL joins", status: SkillStatus.GENERATING },
+      {
+        userId: 1,
+        topic: "SQL joins",
+        status: SkillStatus.GENERATING,
+        mode: SkillMode.AUTOMATIC,
+      },
     ]);
     expect(enqueued).toEqual([
       {

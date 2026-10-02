@@ -18,7 +18,7 @@ export type GetUsageReportInput = {
   skillId?: number;
 };
 
-export type UsageKind = "skillInit" | "nextClass" | "qa";
+export type UsageKind = "skillInit" | "nextClass" | "qa" | "classOptions";
 
 export type UsageKindSummary = {
   events: number;
@@ -53,6 +53,7 @@ export type GetUsageReport = (
 const KIND_BY_EVENT: Partial<Record<EventType, UsageKind>> = {
   SKILL_CREATED: "skillInit",
   CLASS_GENERATED: "nextClass",
+  CLASS_OPTIONS_GENERATED: "classOptions",
   QA_ANSWERED: "qa",
 };
 
@@ -126,6 +127,7 @@ export const makeGetUsageReport =
       skillInit: emptyKind(),
       nextClass: emptyKind(),
       qa: emptyKind(),
+      classOptions: emptyKind(),
     };
     let promptTokens = 0;
     let completionTokens = 0;

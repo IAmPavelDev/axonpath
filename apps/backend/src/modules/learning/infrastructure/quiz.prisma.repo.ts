@@ -2,6 +2,7 @@ import { prisma } from "@/modules/platform/infrastructure/prisma";
 import { schema } from "@axon/api-contract";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import { latestWrongPerQuestion } from "@/modules/learning/domain/quiz/latest-wrong";
+import type { ReviewCandidate } from "@/modules/learning/domain/quiz/review-schedule";
 import type { QuestionView } from "@/modules/learning/domain/quiz/question";
 
 /**
@@ -249,6 +250,40 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
         },
       ];
     });
+  },
+
+  findReviewCandidatesBySkill: async (skillId, userId) => {
+    // One pass over the user's attempts in the skill, oldest first; grouped
+    // per question in TS (a skill's history is small — beta scale — and the
+    // grouping must preserve attempt order for the scheduler's recency logic).
+    const rows = await prisma.answer.findMany({
+      where: { userId, question: { skillId } },
+      select: {
+        questionId: true,
+        isCorrect: true,
+        createdAt: true,
+        question: {
+          select: { type: true, text: true, class: { select: { index: true } } },
+        },
+      },
+      orderBy: { id: "asc" },
+    });
+    const byQuestion = new Map<number, ReviewCandidate>();
+    for (const row of rows) {
+      let candidate = byQuestion.get(row.questionId);
+      if (!candidate) {
+        candidate = {
+          questionId: row.questionId,
+          questionText: row.question.text,
+          questionType: row.question.type,
+          classIndex: row.question.class?.index ?? null,
+          attempts: [],
+        };
+        byQuestion.set(row.questionId, candidate);
+      }
+      candidate.attempts.push({ isCorrect: row.isCorrect, createdAt: row.createdAt });
+    }
+    return [...byQuestion.values()];
   },
 
   updateGrades: async (rows) => {

@@ -6,6 +6,7 @@ import {
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { VectorMetadataRepository } from "@/modules/memory/ports";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const SKILL = {
@@ -13,6 +14,9 @@ const SKILL = {
   topic: "SQL joins",
   description: "",
   status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
   userId: 7,
 };
 const CHAT = "glm-5.3-flash";
@@ -93,6 +97,7 @@ describe("makeGetUsageReport", () => {
           skillInit: { events: 0, promptTokens: 0, completionTokens: 0, estimatedCostUsd: 0 },
           nextClass: { events: 0, promptTokens: 0, completionTokens: 0, estimatedCostUsd: 0 },
           qa: { events: 0, promptTokens: 0, completionTokens: 0, estimatedCostUsd: 0 },
+          classOptions: { events: 0, promptTokens: 0, completionTokens: 0, estimatedCostUsd: 0 },
         },
         eventsWithoutUsage: 0,
         vectorsWithoutTokenCount: 0,

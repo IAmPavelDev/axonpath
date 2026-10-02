@@ -5,6 +5,7 @@ import {
 } from "./get-skill-mistakes";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { QuizRepository, WrongAnswerRow } from "@/modules/learning/domain/quiz/quiz.repository";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const SKILL = {
@@ -12,6 +13,9 @@ const SKILL = {
   topic: "SQL joins",
   description: "",
   status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
   userId: 7,
 };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { makeRetrySkill, type RetrySkillDeps } from "./retry-skill";
 import { SKILL_INIT_JOB } from "./create-skill";
-import { SkillStatus } from "@/prisma/generated";
+import { NextClassOptionsState, SkillMode, SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { ok } from "@/modules/platform/result";
@@ -17,7 +17,15 @@ const makeFakeDeps = (skill: { userId: number; topic: string; status: string } |
     },
     update: async (id, patch) => {
       updates.push({ id, patch: { ...patch } });
-      return { id, topic: "SQL joins", description: "d", status: "GENERATING" };
+      return {
+        id,
+        topic: "SQL joins",
+        description: "d",
+        status: "GENERATING",
+        mode: SkillMode.AUTOMATIC,
+        optionsState: NextClassOptionsState.NONE,
+        optionsStateAt: null,
+      };
     },
     findById: async () =>
       skill
@@ -27,6 +35,9 @@ const makeFakeDeps = (skill: { userId: number; topic: string; status: string } |
             description: "d",
             status: skill.status,
             userId: skill.userId,
+            mode: SkillMode.AUTOMATIC,
+            optionsState: NextClassOptionsState.NONE,
+            optionsStateAt: null,
           }
         : null,
     listByUser: async () => {

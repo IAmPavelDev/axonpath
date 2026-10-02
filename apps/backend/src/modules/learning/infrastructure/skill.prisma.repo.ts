@@ -1,5 +1,6 @@
 import { prisma } from "@/modules/platform/infrastructure/prisma";
 import { SkillStatus } from "@/prisma/generated";
+import type { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 
 export const makePrismaSkillRepository = (): SkillRepository => ({
@@ -9,6 +10,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         topic: input.topic,
         userId: input.userId,
         status: input.status,
+        mode: input.mode,
       },
       select: { id: true, status: true },
     }),
@@ -18,22 +20,45 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       topic?: string;
       description?: string;
       status?: SkillStatus;
+      mode?: SkillMode;
+      optionsState?: NextClassOptionsState;
+      optionsStateAt?: Date | null;
     } = {};
     if (patch.topic !== undefined) data.topic = patch.topic;
     if (patch.description !== undefined) data.description = patch.description;
     if (patch.status !== undefined) data.status = patch.status;
+    if (patch.mode !== undefined) data.mode = patch.mode;
+    if (patch.optionsState !== undefined) data.optionsState = patch.optionsState;
+    if (patch.optionsStateAt !== undefined) data.optionsStateAt = patch.optionsStateAt;
 
     return prisma.skill.update({
       where: { id },
       data,
-      select: { id: true, topic: true, description: true, status: true },
+      select: {
+        id: true,
+        topic: true,
+        description: true,
+        status: true,
+        mode: true,
+        optionsState: true,
+        optionsStateAt: true,
+      },
     });
   },
 
   findById: async (id) => {
     const skill = await prisma.skill.findFirst({
       where: { id },
-      select: { id: true, topic: true, description: true, status: true, userId: true },
+      select: {
+        id: true,
+        topic: true,
+        description: true,
+        status: true,
+        mode: true,
+        optionsState: true,
+        optionsStateAt: true,
+        userId: true,
+      },
     });
     return skill;
   },
@@ -53,6 +78,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         topic: true,
         description: true,
         status: true,
+        mode: true,
         userId: true,
         requestId: true,
         createdAt: true,
@@ -127,6 +153,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         topic: skill.topic,
         description: skill.description,
         status: skill.status,
+        mode: skill.mode,
         userId: skill.userId,
         requestId: skill.requestId,
         createdAt: skill.createdAt,
@@ -150,6 +177,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         topic: true,
         description: true,
         status: true,
+        mode: true,
         userId: true,
         requestId: true,
         createdAt: true,
@@ -162,6 +190,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       topic: skill.topic,
       description: skill.description,
       status: skill.status,
+      mode: skill.mode,
       userId: skill.userId,
       requestId: skill.requestId,
       createdAt: skill.createdAt,

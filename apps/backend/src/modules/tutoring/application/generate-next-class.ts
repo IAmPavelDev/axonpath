@@ -14,6 +14,7 @@ import {
   toGeneratedQuestion,
   type GeneratedQuestion,
 } from "@/modules/tutoring/domain/parse";
+import type { Clock } from "@/modules/platform/ports/clock";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
@@ -21,6 +22,7 @@ import type {
   AnswerReview,
   QuizRepository,
 } from "@/modules/learning/domain/quiz/quiz.repository";
+import { selectReviewItems } from "@/modules/learning/domain/quiz/review-schedule";
 import type { NewVector, VectorStoreError } from "@/modules/memory/ports";
 
 /** Enqueued by submit-quiz after a scored attempt — the submit is the learning signal. */
@@ -29,6 +31,12 @@ export const SKILL_NEXT_CLASS_JOB = "skill-next-class";
 export type SkillNextClassJobPayload = {
   skillId: number;
   userId: number;
+  /**
+   * Learner-chosen direction (MANUAL mode, skill.create-class). Present =>
+   * the request is explicit: generation happens even without a previous
+   * lesson (first lesson) and the retake-dedup is bypassed.
+   */
+  target?: string;
 };
 
 export type ParsedNextClass = {
@@ -66,6 +74,8 @@ export type GenerateNextClassDeps = {
   classRepo: ClassRepository;
   quizRepo: QuizRepository;
   eventRepo: EventRepository;
+  /** Dates the mastery ledger's staleness math (spiral thresholds). */
+  clock: Clock;
   recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
   chatModel: string;
   /** Fire-and-forget queue: class-content vectorization rides it after the commit. */
@@ -75,6 +85,7 @@ export type GenerateNextClassDeps = {
 export type GenerateNextClassInput = {
   skillId: number;
   userId: number;
+  target?: string;
 };
 
 /** The bound, dependency-complete use case — what the job registry consumes. */
@@ -85,13 +96,16 @@ export type GenerateNextClass = (
 /**
  * The adaptive loop's engine: generate the next, personalized class for a
  * skill. Runs in the background ("skill-next-class" job, enqueued by
- * submit-quiz after a scored attempt):
+ * submit-quiz after a scored attempt — AUTOMATIC mode — and by
+ * skill.create-class with the learner's chosen target — MANUAL mode):
  *   1. Resolve the skill and its latest class (NoClassesYet means init has
- *      not finished — permanent, the job must not have run).
+ *      not finished — permanent, the job must not have run; an explicit
+ *      target bypasses it and composes lesson 0).
  *   2. Read the user's quiz attempts for that class; the latest attempt per
  *      question wins, so retakes do not flood the prompt.
  *   3. Retrieve per-user lesson memory in one call (split by source in the
- *      prompt: AI_NEXT = lessons already covered, AI_INITIAL = learner facts).
+ *      prompt: AI_NEXT = lessons already covered, AI_INITIAL = learner facts),
+ *      and schedule older quiz results for re-testing via the mastery ledger.
  *   4. Generate and audit CLASS_GENERATED.
  *   5. Persist class (index + 1), questions, and vectors (lessonSummary as
  *      AI_NEXT, snippets as AI_INITIAL) so memory keeps compounding.
@@ -108,6 +122,7 @@ export const makeGenerateNextClass =
     classRepo,
     quizRepo,
     eventRepo,
+    clock,
     recordVectors,
     chatModel,
     jobs,
@@ -124,22 +139,23 @@ export const makeGenerateNextClass =
     // nor in its GENERATING phase must not spawn lessons — the submit still
     // scored, the durable job still fired, but this pipeline no-ops with no
     // event and no AI call. GENERATING passes because it IS the generation
-    // phase submit-quiz opened for the loop; settlePhase below owns it.
+    // phase submit-quiz/create-class opened for the loop; settlePhase owns it.
     if (skill.status !== SkillStatus.ACTIVE && skill.status !== SkillStatus.GENERATING) {
       return ok(undefined);
     }
 
     const last = await classRepo.findTopBySkill(input.skillId);
-    if (!last) {
+    if (!last && input.target === undefined) {
       return err({ kind: "NoClassesYet", skillId: input.skillId });
     }
 
-    // submit-quiz flipped the skill into GENERATING (the user-visible
-    // "composing your next lesson" phase). This pipeline owns settling it:
-    // every exit past this point — success, dedup no-op, or failure — ends
-    // the phase, because the skill keeps its existing classes either way. A
-    // skill that was not GENERATING on entry (PAUSED, or GENERATING from an
-    // init still in flight) is left untouched — its status is not ours.
+    // submit-quiz/create-class flipped the skill into GENERATING (the
+    // user-visible "composing your next lesson" phase). This pipeline owns
+    // settling it: every exit past this point — success, dedup no-op, or
+    // failure — ends the phase, because the skill keeps its existing classes
+    // either way. A skill that was not GENERATING on entry (PAUSED, or
+    // GENERATING from an init still in flight) is left untouched — its
+    // status is not ours.
     const phaseStarted = skill.status === SkillStatus.GENERATING;
     const settlePhase = async (): Promise<void> => {
       if (phaseStarted) {
@@ -152,24 +168,30 @@ export const makeGenerateNextClass =
     // Generate only when the learner has answered through the newest class;
     // with no recorded answers (anomalous job replay) generation is the safe
     // default. A retake of an older class still signals learning and
-    // regenerates from the latest one.
-    const answeredIndex = await quizRepo.findHighestAnsweredClassIndex(
-      input.skillId,
-      input.userId,
-    );
-    if (answeredIndex !== null && last.index > answeredIndex) {
-      await settlePhase();
-      return ok(undefined);
+    // regenerates from the latest one. An explicit target (MANUAL
+    // create-class) is a direct user request and bypasses the dedup.
+    if (input.target === undefined) {
+      const answeredIndex = await quizRepo.findHighestAnsweredClassIndex(
+        input.skillId,
+        input.userId,
+      );
+      if (answeredIndex !== null && last && last.index > answeredIndex) {
+        await settlePhase();
+        return ok(undefined);
+      }
     }
 
     // Latest attempt per question wins: answers arrive id-asc, so a Map keyed
-    // by questionId keeps the newest row per question.
+    // by questionId keeps the newest row per question. Only meaningful when a
+    // previous lesson exists (a first manual lesson has no attempts yet).
     const latestByQuestion = new Map<number, AnswerReview>();
-    for (const review of await quizRepo.findAnswersByClassAndUser(
-      last.id,
-      input.userId,
-    )) {
-      latestByQuestion.set(review.questionId, review);
+    if (last) {
+      for (const review of await quizRepo.findAnswersByClassAndUser(
+        last.id,
+        input.userId,
+      )) {
+        latestByQuestion.set(review.questionId, review);
+      }
     }
     const attempts = [...latestByQuestion.values()];
     const mistakes = attempts
@@ -181,27 +203,38 @@ export const makeGenerateNextClass =
       }));
     const allCorrect = attempts.length > 0 && mistakes.length === 0;
 
+    // Mastery ledger: older quiz results across the whole skill, scheduled
+    // by the pure review policy (reteach/reinforce/spiral, capped).
+    const review = selectReviewItems(
+      await quizRepo.findReviewCandidatesBySkill(input.skillId, input.userId),
+      { topClassIndex: last?.index ?? null, now: clock.now() },
+    );
+
     // One retrieval call for both history blocks; degrades to [] on failure.
     const history = await retrieveContext({
       userId: input.userId,
-      query: `${skill.topic} ${last.title}`,
+      query: last ? `${skill.topic} ${last.title}` : `${skill.topic} ${input.target ?? ""}`,
       topK: 12,
     });
-    const lastSummaryHit = history.find(
-      (hit) =>
-        hit.source === VectorSource.AI_NEXT && hit.classIndex === last.index,
-    );
+    const lastSummaryHit = last
+      ? history.find(
+          (hit) =>
+            hit.source === VectorSource.AI_NEXT && hit.classIndex === last.index,
+        )
+      : undefined;
     const priorHistory = lastSummaryHit
       ? history.filter((hit) => hit !== lastSummaryHit)
       : history;
 
     const prompt = buildNextClassPrompt({
       topic: skill.topic,
-      lastTitle: last.title,
+      lastTitle: last?.title,
       lastSummary: lastSummaryHit?.textSnippet,
+      target: input.target,
       history: priorHistory,
       mistakes,
       allCorrect,
+      review,
     });
 
     const generation = await ai.generateJson(
@@ -251,7 +284,7 @@ export const makeGenerateNextClass =
       },
     });
 
-    const classIndex = last.index + 1;
+    const classIndex = (last?.index ?? -1) + 1;
     const createdClass = await classRepo.createWithQuestions(
       {
         skillId: input.skillId,

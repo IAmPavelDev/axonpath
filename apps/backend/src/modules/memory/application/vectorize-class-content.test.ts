@@ -12,7 +12,7 @@ import type {
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { AiPort } from "@/modules/tutoring/ports";
-import { VectorSource } from "@/prisma/generated";
+import { NextClassOptionsState, SkillMode, VectorSource } from "@/prisma/generated";
 
 const CLASS_ROW = {
   id: 5,
@@ -21,7 +21,16 @@ const CLASS_ROW = {
   title: "Joins",
   contentMd: "## Intro\nMeet the join.\n\n## Left join\nKeeps left rows.",
 };
-const SKILL = { id: 10, userId: 7, topic: "SQL", description: "", status: "ACTIVE" };
+const SKILL = {
+  id: 10,
+  userId: 7,
+  topic: "SQL",
+  description: "",
+  status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
+};
 
 /** Test seam: scriptable dedup + embedding failures, capturing recordVectors. */
 const makeFakeDeps = (options: {

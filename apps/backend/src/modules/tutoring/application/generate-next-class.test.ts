@@ -7,6 +7,7 @@ import type { AnswerReview } from "@/modules/learning/domain/quiz/quiz.repositor
 import type { DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { AiError, AiUsage } from "@/modules/tutoring/ports";
 import type { NewVector } from "@/modules/memory/ports";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const LESSON_JSON = JSON.stringify({
@@ -27,7 +28,16 @@ const LESSON_JSON = JSON.stringify({
   ],
 });
 
-const SKILL = { id: 10, userId: 7, topic: "SQL joins", description: "", status: "ACTIVE" };
+const SKILL = {
+  id: 10,
+  userId: 7,
+  topic: "SQL joins",
+  description: "",
+  status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
+};
 
 type NextClassState = {
   prompts: string[];
@@ -96,7 +106,15 @@ const makeDeps = (
       },
       update: async (id, patch) => {
         state.skillUpdates.push({ id, patch });
-        return { id, topic: "SQL joins", description: "", status: "ACTIVE" };
+        return {
+          id,
+          topic: "SQL joins",
+          description: "",
+          status: "ACTIVE",
+          mode: SkillMode.AUTOMATIC,
+          optionsState: NextClassOptionsState.NONE,
+          optionsStateAt: null,
+        };
       },
       findById: async () =>
         overrides.skill === undefined ? SKILL : overrides.skill,
@@ -137,6 +155,7 @@ const makeDeps = (
       findWrongAnswersBySkill: async () => {
         throw new Error("not used in next-class tests");
       },
+      findReviewCandidatesBySkill: async () => [],
       findByClassId: async () => {
         throw new Error("not used in next-class tests");
       },
@@ -154,12 +173,11 @@ const makeDeps = (
         if (overrides.answeredIndex !== undefined) {
           return overrides.answeredIndex;
         }
-        // Default: the learner has answered through the newest class, so the
-        // dedup guard never fires unless a test asks for it.
-        const last =
-          overrides.last === undefined
-            ? { id: 5, index: 2, title: "Previous lesson" }
-            : overrides.last;
+        // Default: the learner has answered through the newest class, so
+        // generation proceeds (retake dedup would no-op the wrong way).
+        const last = overrides.last === undefined
+          ? { id: 5, index: 2, title: "Previous lesson" }
+          : overrides.last;
         return last?.index ?? null;
       },
       findAnswerStatsBySkill: async () => {
@@ -178,6 +196,7 @@ const makeDeps = (
         state.events.push(event);
       },
     },
+    clock: { now: () => new Date() },
     recordVectors: async (vectors) => {
       state.vectors.push(...vectors);
       return ok(vectors.map((_, i) => 900 + i));

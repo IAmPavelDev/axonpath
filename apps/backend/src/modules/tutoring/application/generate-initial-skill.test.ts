@@ -6,6 +6,7 @@ import {
 import type { AiError, AiUsage } from "@/modules/tutoring/ports";
 import type { DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { NewVector } from "@/modules/memory/ports";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const INIT_JSON = JSON.stringify({
@@ -78,7 +79,15 @@ const makeDeps = (
       },
       update: async (id, patch) => {
         state.skillUpdates.push({ id, patch: { ...patch } });
-        return { id, topic: "t", description: "d", status: "ACTIVE" };
+        return {
+          id,
+          topic: "t",
+          description: "d",
+          status: "ACTIVE",
+          mode: SkillMode.AUTOMATIC,
+          optionsState: NextClassOptionsState.NONE,
+          optionsStateAt: null,
+        };
       },
       findById: async () => {
         throw new Error("not used in init tests");
@@ -115,6 +124,9 @@ const makeDeps = (
     },
     quizRepo: {
       findWrongAnswersBySkill: async () => {
+        throw new Error("not used in init tests");
+      },
+      findReviewCandidatesBySkill: async () => {
         throw new Error("not used in init tests");
       },
       findByClassId: async () => {

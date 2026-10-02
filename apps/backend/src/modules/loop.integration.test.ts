@@ -1,11 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
+import {
+  EventType,
+  NextClassOptionsState,
+  SkillStatus,
+  VectorSource,
+} from "@/prisma/generated";
 import { ok, unwrapOrThrow } from "@/modules/platform/result";
 import {
   SKILL_INIT_JOB,
   makeCreateSkill,
 } from "@/modules/learning/application/commands/create-skill";
 import { makeAskClassQuestion } from "@/modules/learning/application/commands/ask-class-question";
+import { makeCreateClass } from "@/modules/learning/application/commands/create-class";
+import {
+  SKILL_CLASS_OPTIONS_JOB,
+} from "@/modules/tutoring/application/generate-class-options";
 import { makeSubmitQuiz } from "@/modules/learning/application/commands/submit-quiz";
 import { makeRetrySkill } from "@/modules/learning/application/commands/retry-skill";
 import {
@@ -48,7 +57,7 @@ describe("adaptive loop integration", () => {
 
     // 1. Create → GENERATING; init job → ACTIVE with class 0, questions,
     //    AI_NEXT summary vector and AI_INITIAL snippet vectors.
-    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
     expect(created).toEqual(ok({ id: 1, status: SkillStatus.GENERATING }));
     const skillId = unwrapOrThrow(created).id;
 
@@ -89,6 +98,7 @@ describe("adaptive loop integration", () => {
     // 2. Submit with one deliberate wrong answer → scored, next-class enqueued.
     const submitQuiz = makeSubmitQuiz({
       quizRepo: h.deps.quizRepo,
+      classRepo: h.deps.classRepo,
       eventRepo: h.deps.eventRepo,
       skillRepo: h.deps.skillRepo,
       jobs: h.jobs,
@@ -219,7 +229,7 @@ describe("adaptive loop integration", () => {
     // 5. Scripted AI failure before any persist → FAILED + ERROR_OCCURRED.
     const h = makeLoopHarness({ failOnceOn: "init_skill" });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
     const skillId = unwrapOrThrow(created).id;
 
     await h.runJob(SKILL_INIT_JOB);
@@ -251,7 +261,7 @@ describe("adaptive loop integration", () => {
     // no duplicate class, no new AI calls (D2).
     const h = makeLoopHarness({ failEmbeddingsOnce: true });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
     const skillId = unwrapOrThrow(created).id;
 
     await h.runJob(SKILL_INIT_JOB);
@@ -278,7 +288,7 @@ describe("adaptive loop integration", () => {
   it("refuses a retry the user does not own or from a non-FAILED state", async () => {
     const h = makeLoopHarness();
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
     const skillId = unwrapOrThrow(created).id;
     await h.runJob(SKILL_INIT_JOB); // → ACTIVE
 
@@ -296,7 +306,7 @@ describe("adaptive loop integration", () => {
   it("answers an anchored QA question through the layered pipeline and memory", async () => {
     const h = makeLoopHarness();
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins" });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
     const skillId = unwrapOrThrow(created).id;
     await h.runJob(SKILL_INIT_JOB);
     const class0 = classesOfSkill(h, skillId)[0];
@@ -378,5 +388,148 @@ describe("adaptive loop integration", () => {
     expect(
       h.state.events.filter((event) => event.type === EventType.QA_ANSWERED),
     ).toHaveLength(2);
+  });
+
+  it("runs the MANUAL loop: create → options → choose target → lesson 0 → fresh options", async () => {
+    const h = makeLoopHarness();
+    const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+
+    // 1. MANUAL create: ACTIVE immediately — no init generation — with the
+    //    candidate-options job armed.
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "MANUAL" });
+    expect(created).toEqual(ok({ id: 1, status: SkillStatus.ACTIVE }));
+    const skillId = unwrapOrThrow(created).id;
+    expect(h.state.enqueued.some((job) => job.jobName === SKILL_INIT_JOB)).toBe(false);
+    expect(h.state.skills.get(skillId)?.optionsState).toBe(
+      NextClassOptionsState.PENDING,
+    );
+
+    // 2. Options job: three ranked candidates, state READY, audited.
+    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
+    expect(h.state.skills.get(skillId)?.optionsState).toBe(
+      NextClassOptionsState.READY,
+    );
+    const options = h.state.nextClassOptions.filter(
+      (option) => option.skillId === skillId,
+    );
+    expect(options.map((option) => option.rank)).toEqual([1, 2, 3]);
+    expect(h.state.events.some((e) => e.type === EventType.CLASS_OPTIONS_GENERATED)).toBe(
+      true,
+    );
+
+    // 3. Choose a path: options consumed, skill GENERATING, target durable.
+    const createClass = makeCreateClass({
+      skillRepo: h.deps.skillRepo,
+      optionRepo: h.deps.nextClassOptions,
+      jobs: h.jobs,
+      nextClassJobs: h.nextClassJobs,
+    });
+    const chosen = await createClass({
+      skillId,
+      userId: 7,
+      target: "Master LEFT JOIN with real datasets",
+    });
+    expect(chosen).toEqual(ok({ status: SkillStatus.GENERATING }));
+    expect(
+      h.state.nextClassOptions.filter((option) => option.skillId === skillId),
+    ).toHaveLength(0);
+
+    await h.runJob(SKILL_NEXT_CLASS_JOB);
+    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
+    const class0 = classesOfSkill(h, skillId);
+    expect(class0).toHaveLength(1);
+    expect(class0[0]).toMatchObject({ index: 0 });
+    const lessonCall = h.state.aiCalls.find((call) => call.schemaName === "next_class");
+    expect(lessonCall?.prompt).toContain("Master LEFT JOIN with real datasets");
+    expect(lessonCall?.prompt).toContain(
+      "Make it the lesson's central learning target",
+    );
+
+    // 4. Submitting the newest lesson re-arms options instead of spawning a
+    //    next class automatically.
+    const submitQuiz = makeSubmitQuiz({
+      quizRepo: h.deps.quizRepo,
+      classRepo: h.deps.classRepo,
+      eventRepo: h.deps.eventRepo,
+      skillRepo: h.deps.skillRepo,
+      jobs: h.jobs,
+      nextClassJobs: h.nextClassJobs,
+    });
+    const multipleChoice = firstQuestionOfType(
+      h,
+      class0[0]?.id ?? 0,
+      "MULTIPLE_CHOICE",
+    );
+    expect(multipleChoice).toBeDefined();
+    const submitted = await submitQuiz({
+      classId: class0[0]?.id ?? 0,
+      userId: 7,
+      answers: [{ questionId: multipleChoice?.id ?? 0, answer: "LEFT JOIN" }],
+    });
+    expect(submitted.ok).toBe(true);
+    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
+    expect(h.state.skills.get(skillId)?.optionsState).toBe(
+      NextClassOptionsState.PENDING,
+    );
+    expect(
+      h.state.enqueued.filter((job) => job.jobName === SKILL_NEXT_CLASS_JOB),
+    ).toHaveLength(0);
+
+    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
+    expect(h.state.skills.get(skillId)?.optionsState).toBe(
+      NextClassOptionsState.READY,
+    );
+    const regenerationCall = h.state.aiCalls.filter(
+      (call) => call.schemaName === "class_options",
+    )[1];
+    expect(regenerationCall?.prompt).toContain("Previous lesson");
+  });
+
+  it("does not churn options on a retake or an older-lesson submit", async () => {
+    const h = makeLoopHarness();
+    const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "MANUAL" });
+    const skillId = unwrapOrThrow(created).id;
+    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
+
+    const createClass = makeCreateClass({
+      skillRepo: h.deps.skillRepo,
+      optionRepo: h.deps.nextClassOptions,
+      jobs: h.jobs,
+      nextClassJobs: h.nextClassJobs,
+    });
+    await createClass({ skillId, userId: 7, target: "Start with joins" });
+    await h.runJob(SKILL_NEXT_CLASS_JOB);
+    const class0 = classesOfSkill(h, skillId);
+
+    const submitQuiz = makeSubmitQuiz({
+      quizRepo: h.deps.quizRepo,
+      classRepo: h.deps.classRepo,
+      eventRepo: h.deps.eventRepo,
+      skillRepo: h.deps.skillRepo,
+      jobs: h.jobs,
+      nextClassJobs: h.nextClassJobs,
+    });
+    const multipleChoice = firstQuestionOfType(
+      h,
+      class0[0]?.id ?? 0,
+      "MULTIPLE_CHOICE",
+    );
+    const answers = [
+      { questionId: multipleChoice?.id ?? 0, answer: "LEFT JOIN" },
+    ];
+
+    // First completion arms options; an immediate retake must not stack
+    // another options job.
+    await submitQuiz({ classId: class0[0]?.id ?? 0, userId: 7, answers });
+    const afterFirst = h.state.enqueued.filter(
+      (job) => job.jobName === SKILL_CLASS_OPTIONS_JOB,
+    ).length;
+    expect(afterFirst).toBe(1);
+
+    await submitQuiz({ classId: class0[0]?.id ?? 0, userId: 7, answers });
+    expect(
+      h.state.enqueued.filter((job) => job.jobName === SKILL_CLASS_OPTIONS_JOB),
+    ).toHaveLength(1);
   });
 });

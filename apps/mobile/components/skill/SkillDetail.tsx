@@ -1,22 +1,20 @@
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
 import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
+import { SegmentedControl } from '@atomics/segmented-control';
+import { Icon } from '@atomics/icon';
 import { ScreenHeader } from '@components/screen-header';
 import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
 import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
-import { ProgressPanel } from '@components/skill/ProgressPanel';
-import { MistakeList } from '@components/skill/MistakeList';
-import { StatusControls } from '@components/skill/StatusControls';
 import { Class } from '@/types/class';
-import type { SettableSkillStatus } from '@/types/skill';
 import rpc from '@/utils/rpc';
-import { useSkillMistakes } from '@/hooks/use-skill-mistakes';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
+import { ChevronDown, Plus } from 'lucide-react-native';
 import { FC, useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 /** One list row while the next lesson generates: ClassListItem's exact
  * geometry — two title lines (17px/24px), meta line (13px/18px), chevron —
@@ -42,6 +40,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const [editing, setEditing] = useState(false);
   const [topic, setTopic] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
 
   const {
     data: skill,
@@ -76,8 +75,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   });
-
-  const { data: mistakes } = useSkillMistakes(skillId);
 
   // Only a user-initiated pull may drive the native refresh spinner;
   // background polls refresh silently.
@@ -131,11 +128,10 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   });
 
   const {
-    mutate: setSkillStatus,
-    isPending: statusPending,
+    mutate: setSkillMode,
+    isPending: modePending,
   } = useMutation({
-    mutationFn: (status: SettableSkillStatus) =>
-      rpc.skill.updateStatus({ id: skillId, status }),
+    mutationFn: (mode: 'AUTOMATIC' | 'MANUAL') => rpc.skill.setMode({ id: skillId, mode }),
     onSuccess: invalidate,
   });
 
@@ -146,6 +142,13 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       ),
     [classes]
+  );
+
+  // Learning success per lesson: correct/answered from skill.progress,
+  // merged into the lesson rows by id.
+  const accuracyByClassId = useMemo(
+    () => new Map(progress?.classes.map((cls) => [cls.classId, cls.accuracy])),
+    [progress]
   );
 
   const isSaving = topicPending || descriptionPending;
@@ -166,9 +169,8 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
 
   if (isLoading || !skill) {
     // Mirrors the loaded layout block for block: header row (h-14, px-3),
-    // topic (28px/34px), description (17px/29px), count (13px/18px),
-    // status buttons (h-9), progress panel, LESSONS label bar — so nothing
-    // shifts when real content replaces the placeholder.
+    // topic (28px/34px), folded description line (29px), LESSONS label bar —
+    // so nothing shifts when real content replaces the placeholder.
     return (
       <View className="flex-1">
         <View className="h-14 flex-row items-center px-3">
@@ -177,23 +179,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
         <View className="gap-3 px-6 pb-7 pt-1">
           <Skeleton className="h-[34px] w-2/3 rounded-sm" />
           <Skeleton className="h-[29px] w-full rounded-sm" />
-          <Skeleton className="h-[29px] w-11/12 rounded-sm" />
-          <Skeleton className="h-[29px] w-3/4 rounded-sm" />
-          <Skeleton className="h-[18px] w-16 rounded-sm" />
-          <View className="flex-row gap-2 pt-2">
-            <Skeleton className="h-9 w-20 rounded-md" />
-            <Skeleton className="h-9 w-36 rounded-md" />
-            <Skeleton className="h-9 w-24 rounded-md" />
-          </View>
-        </View>
-        <View className="gap-3 px-6 pb-6">
-          <Skeleton className="h-4 w-24 rounded-sm" />
-          <View className="gap-1.5">
-            <Skeleton className="h-5 w-3/5 rounded-sm" />
-            <Skeleton className="h-1.5 w-full rounded-full" />
-          </View>
-          <Skeleton className="h-[18px] w-28 rounded-sm" />
-          <Skeleton className="h-9 w-40 self-start rounded-md" />
         </View>
         <View className="border-hairline border-border px-6 pb-2 pt-1">
           <Skeleton className="h-4 w-20 rounded-sm" />
@@ -243,7 +228,10 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
           row.kind === 'generating' ? (
             <ClassItemSkeleton />
           ) : (
-            <ClassListItem classData={row.classData} />
+            <ClassListItem
+              classData={row.classData}
+              accuracy={accuracyByClassId.get(row.classData.id) ?? null}
+            />
           )
         }
         ItemSeparatorComponent={() => <View className="border-hairline border-border" />}
@@ -323,13 +311,28 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                   {skill.topic}
                 </Text>
                 {skill.description.length > 0 && (
-                  <Text variant="body" className="text-muted-foreground">
-                    {skill.description}
-                  </Text>
+                  <Pressable
+                    className="flex-row items-start gap-1"
+                    onPress={() => setDescriptionOpen((open) => !open)}
+                  >
+                    <Text
+                      variant="body"
+                      className="flex-1 text-muted-foreground"
+                      numberOfLines={descriptionOpen ? undefined : 1}
+                    >
+                      {skill.description}
+                    </Text>
+                    <Icon
+                      as={ChevronDown}
+                      size={16}
+                      className="mt-1 shrink-0 text-muted-foreground"
+                      strokeWidth={2}
+                      style={{
+                        transform: [{ rotate: descriptionOpen ? '180deg' : '0deg' }],
+                      }}
+                    />
+                  </Pressable>
                 )}
-                <Text variant="meta">
-                  {sortedClasses.length} {sortedClasses.length === 1 ? 'lesson' : 'lessons'}
-                </Text>
                 {skill.status === 'FAILED' && (
                   <View className="gap-2 pt-1">
                     <Text variant="body" className="text-destructive">
@@ -340,11 +343,40 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                     </Button>
                   </View>
                 )}
-                <StatusControls status={skill.status} disabled={statusPending} onSetStatus={setSkillStatus} />
+                {(skill.status === 'ACTIVE' || skill.status === 'PAUSED') && (
+                  <View className="gap-2 pt-1">
+                    <Text variant="label">Lesson flow</Text>
+                    <SegmentedControl
+                      options={[
+                        { value: 'AUTOMATIC', label: 'Automatic' },
+                        { value: 'MANUAL', label: 'Manual' },
+                      ]}
+                      value={skill.mode}
+                      onChange={(value) => {
+                        if (value !== skill.mode) {
+                          setSkillMode(value);
+                        }
+                      }}
+                    />
+                    {skill.mode === 'MANUAL' && skill.status === 'ACTIVE' && (
+                      <Button
+                        className="mt-1"
+                        disabled={modePending}
+                        onPress={() => router.push(`/skill/${skillId}/new-class`)}>
+                        <View className="flex-row items-center gap-2">
+                          <Icon as={Plus} size={16} strokeWidth={2} />
+                          <Text>
+                            {sortedClasses.length === 0
+                              ? 'Create your first class'
+                              : 'Add next class'}
+                          </Text>
+                        </View>
+                      </Button>
+                    )}
+                  </View>
+                )}
               </View>
             )}
-            {progress ? <ProgressPanel progress={progress} /> : null}
-            {mistakes ? <MistakeList mistakes={mistakes} /> : null}
             <View className="border-hairline border-border px-6 pb-2 pt-1">
               <Text variant="label">Lessons</Text>
             </View>
@@ -352,7 +384,11 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
         }
         ListEmptyComponent={
           <View className="px-6 py-8">
-            <Text variant="muted">No lessons yet.</Text>
+            <Text variant="muted">
+              {skill.mode === 'MANUAL'
+                ? 'No lessons yet — pick a direction for your first one.'
+                : 'No lessons yet.'}
+            </Text>
           </View>
         }
       />

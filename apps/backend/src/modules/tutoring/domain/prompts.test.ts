@@ -53,6 +53,7 @@ describe("author attribution (D6)", () => {
         },
       ],
       allCorrect: false,
+      review: [],
     });
     expect(prompt).toContain('"""SQL joins"""');
     expect(prompt).toContain("Previous lesson (Axon-generated):");
@@ -185,5 +186,65 @@ describe("buildQaAnswerPrompt (Phase 8 D1)", () => {
   it("omits the memory layer when both hit groups are empty", () => {
     const prompt = buildQaAnswerPrompt(base);
     expect(prompt).not.toContain("Background memory");
+  });
+});
+
+describe("buildNextClassPrompt — target + mastery ledger", () => {
+  const base = {
+    topic: "SQL joins",
+    lastTitle: "Previous lesson",
+    history: [],
+    mistakes: [],
+    allCorrect: false,
+    review: [],
+  };
+
+  it("makes an explicit learner target the lesson's center", () => {
+    const prompt = buildNextClassPrompt({
+      ...base,
+      target: "Master LEFT JOIN with real datasets",
+    });
+    expect(prompt).toContain('"""Master LEFT JOIN with real datasets"""');
+    expect(prompt).toContain("central learning target");
+  });
+
+  it("renders the mastery ledger with tier labels and freshness notes", () => {
+    const prompt = buildNextClassPrompt({
+      ...base,
+      review: [
+        {
+          questionId: 1,
+          questionText: "Which join drops unmatched rows?",
+          urgency: "reteach",
+          note: "missed 3 days ago and not re-tested since",
+        },
+        {
+          questionId: 2,
+          questionText: "What does a LEFT JOIN keep?",
+          urgency: "spiral",
+          note: "answered correctly every time, but not tested for 5 days",
+        },
+      ],
+    });
+    expect(prompt).toContain("Mastery ledger");
+    expect(prompt).toContain("[reteach]");
+    expect(prompt).toContain("[spiral]");
+    expect(prompt).toContain("Never reuse the earlier wording");
+  });
+
+  it("omits both blocks when target and review are empty", () => {
+    const prompt = buildNextClassPrompt(base);
+    expect(prompt).not.toContain("central learning target");
+    expect(prompt).not.toContain("Mastery ledger");
+  });
+
+  it("builds a first-lesson prompt without a previous-lesson line", () => {
+    const prompt = buildNextClassPrompt({
+      ...base,
+      lastTitle: undefined,
+      target: "Start from zero",
+    });
+    expect(prompt).toContain("Create the first lesson");
+    expect(prompt).not.toContain("Previous lesson");
   });
 });

@@ -4,10 +4,19 @@ import type { ClassRepository } from "@/modules/learning/domain/class/class.repo
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa";
 import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class-qa.repository";
-import { ClassQaStatus } from "@/prisma/generated";
+import { ClassQaStatus, NextClassOptionsState, SkillMode } from "@/prisma/generated";
 
 const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
-const SKILL = { id: 10, userId: 7, topic: "SQL", description: "", status: "ACTIVE" };
+const SKILL = {
+  id: 10,
+  userId: 7,
+  topic: "SQL",
+  description: "",
+  status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
+};
 
 const block = (
   overrides: Partial<ClassQaEntity> & Pick<ClassQaEntity, "id" | "anchorParagraph">,

@@ -2,6 +2,10 @@ import type { JobHandler } from "@/modules/platform/ports/jobs";
 import { SKILL_INIT_JOB } from "@/modules/learning/application/commands/create-skill";
 import { SKILL_NEXT_CLASS_JOB } from "@/modules/tutoring/application/generate-next-class";
 import {
+  SKILL_CLASS_OPTIONS_JOB,
+  type GenerateClassOptions,
+} from "@/modules/tutoring/application/generate-class-options";
+import {
   CLASS_QA_ANSWER_JOB,
   type AnswerClassQuestion,
 } from "@/modules/tutoring/application/answer-class-question";
@@ -30,6 +34,7 @@ import { getMineAnswerVectorsJobHandler } from "./mineAnswerVectorsJobHandler";
 import { getMineQaVectorsJobHandler } from "./mineQaVectorsJobHandler";
 import { getVectorizeClassContentJobHandler } from "./vectorizeClassContentJobHandler";
 import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
+import { getGenerateClassOptionsJobHandler } from "./generateClassOptionsJobHandler";
 
 /**
  * Job configuration: maps job names to their handlers. The composition root
@@ -45,6 +50,7 @@ export type JobRegistryDeps = {
   mineQaVectors: MineQaVectors;
   vectorizeClassContent: VectorizeClassContent;
   gradeOpenEnded: GradeOpenEnded;
+  generateClassOptions: GenerateClassOptions;
 };
 
 export const makeJobHandlers = ({
@@ -55,9 +61,11 @@ export const makeJobHandlers = ({
   mineQaVectors,
   vectorizeClassContent,
   gradeOpenEnded,
+  generateClassOptions,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
+  [SKILL_CLASS_OPTIONS_JOB]: getGenerateClassOptionsJobHandler(generateClassOptions),
   [CLASS_QA_ANSWER_JOB]: getAnswerClassQuestionJobHandler(answerClassQuestion),
   [SKILL_ANSWER_VECTORS_JOB]: getMineAnswerVectorsJobHandler(mineAnswerVectors),
   [QA_BLOCK_VECTORS_JOB]: getMineQaVectorsJobHandler(mineQaVectors),

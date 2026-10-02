@@ -7,6 +7,8 @@
 export type NextClassJobClaim = {
   skillId: number;
   userId: number;
+  /** Learner-chosen direction (MANUAL create-class); null = automatic. */
+  target: string | null;
   /** Incremented at claim time; the claim's attempt number, 1-based. */
   attempts: number;
   /**
@@ -18,7 +20,7 @@ export type NextClassJobClaim = {
 
 export type NextClassJobRepository = {
   /** Idempotently mark a skill due for its next lesson; resets retries. */
-  enqueue(input: { skillId: number; userId: number }): Promise<void>;
+  enqueue(input: { skillId: number; userId: number; target?: string }): Promise<void>;
   /**
    * Atomically claim due jobs: PENDING rows plus PROCESSING rows whose lease
    * expired (the server died mid-run). FOR UPDATE SKIP LOCKED keeps concurrent

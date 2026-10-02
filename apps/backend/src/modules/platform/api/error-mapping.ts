@@ -20,7 +20,7 @@ export const toORPCError = (error: unknown): MappedORPCError => {
         data: { kind: error.kind },
       }) as unknown as MappedORPCError;
     }
-    if (error.kind === "InvalidSkillTransition") {
+    if (error.kind === "InvalidSkillTransition" || error.kind.endsWith("NotAllowed")) {
       return new ORPCError("CONFLICT", {
         data: { kind: error.kind },
       }) as unknown as MappedORPCError;

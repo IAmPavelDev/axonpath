@@ -1,4 +1,4 @@
-import { SkillStatus } from "@/prisma/generated";
+import { SkillMode, SkillStatus } from "@/prisma/generated";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
@@ -23,9 +23,9 @@ export type NextClassReconciler = () => Promise<void>;
  *   - no class yet            → skip (init lifecycle owns the status)
  *   - newest class unanswered → skip (learner still working through it)
  *   - marker PENDING/PROCESSING → skip (already queued or generating)
- * The rest are due: re-arm the marker, flip the skill into its GENERATING
- * phase, and let the sweeper's claim — later in the same tick — start the
- * run. The next-class pipeline settles the status back to ACTIVE.
+ * run. The next-class pipeline settles the status back to ACTIVE. MANUAL
+ * skills are skipped entirely — their lessons come from learner-chosen
+ * targets, never from the safety net.
  */
 export const makeNextClassReconciler =
   ({ skillRepo, classRepo, quizRepo, nextClassJobs }: NextClassReconcilerDeps) =>
@@ -33,6 +33,12 @@ export const makeNextClassReconciler =
     const skills = await skillRepo.listByStatus(SkillStatus.ACTIVE);
 
     for (const skill of skills) {
+      // MANUAL skills never self-continue: the learner composes the next
+      // lesson from candidate directions, so the safety net must not re-arm
+      // them. (Their create-class markers are armed deliberately.)
+      if (skill.mode === SkillMode.MANUAL) {
+        continue;
+      }
       const last = await classRepo.findTopBySkill(skill.id);
       if (!last) {
         continue;

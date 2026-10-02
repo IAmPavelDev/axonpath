@@ -16,7 +16,10 @@ export const buildSkillRouter = (deps: SkillApiDeps) => {
     list: rpc.skill.list.handler(handlers.list),
     progress: rpc.skill.progress.handler(handlers.progress),
     retry: rpc.skill.retry.handler(handlers.retry),
-    updateStatus: rpc.skill.updateStatus.handler(handlers.updateStatus),
+    setMode: rpc.skill.setMode.handler(handlers.setMode),
+    classOptions: rpc.skill.classOptions.handler(handlers.classOptions),
+    refreshClassOptions: rpc.skill.refreshClassOptions.handler(handlers.refreshClassOptions),
+    createClass: rpc.skill.createClass.handler(handlers.createClass),
     mistakes: rpc.skill.mistakes.handler(handlers.mistakes),
   };
 };

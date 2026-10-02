@@ -18,25 +18,21 @@ export const EditSkillDescription: FC = () => {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mode } = useLocalSearchParams<{ id: string; mode?: string }>();
   const skillId = Number(id);
+  // MANUAL skills skip init generation entirely — there is no AI description
+  // incoming, so the form renders immediately.
+  const isManual = mode === 'MANUAL';
 
   const { data } = useQuery({
     queryKey: ['skillData', skillId],
     queryFn: () => rpc.skill.get({ id: skillId }),
-    enabled: Number.isFinite(skillId),
     retry: true,
     // Smart polling: the next request is scheduled POLL_INTERVAL_MS after
     // the previous response landed, never while one is in flight. Polling
     // ends the moment a description exists — and dies with the screen on
     // redirect, since the observer unmounts.
-    refetchInterval: (query) => {
-      if (query.state.data?.description) {
-        return false;
-      }
-      const sinceResponse = Date.now() - (query.state.dataUpdatedAt ?? 0);
-      return Math.max(100, POLL_INTERVAL_MS - sinceResponse);
-    },
+    enabled: Number.isFinite(skillId) && !isManual,
   });
 
   const [description, setDescription] = useState('');
@@ -68,7 +64,7 @@ export const EditSkillDescription: FC = () => {
 
   // Full-screen preparation while the AI writes; the textarea only appears
   // once a description exists (freshly prefilled).
-  const isPreparing = !touched && !data?.description;
+  const isPreparing = !isManual && !touched && !data?.description;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }}>

@@ -3,12 +3,14 @@ import { makeSubmitQuiz } from "./submit-quiz";
 import { SKILL_NEXT_CLASS_JOB } from "@/modules/tutoring/application/generate-next-class";
 import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
 import { GRADE_OPEN_ENDED_JOB } from "@/modules/tutoring/application/grade-open-ended";
+import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ScoreableQuestion } from "@/modules/learning/domain/quiz/question";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { EventRepository, DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const QUESTIONS: ScoreableQuestion[] = [
@@ -49,6 +51,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     findWrongAnswersBySkill: async () => {
       throw new Error("not used in submit tests");
     },
+    findReviewCandidatesBySkill: async () => {
+      throw new Error("not used in submit tests");
+    },
     findAnswerActivityByUser: async () => {
       throw new Error("not used in submit tests");
     },
@@ -78,6 +83,28 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
       throw new Error("not used in submit tests");
     },
   };
+  // Manual-mode path only; these tests cover the AUTOMATIC path, so no top class.
+  const classRepo: ClassRepository = {
+    findQuestionCountsByClassIds: async () => {
+      throw new Error("not used in submit tests");
+    },
+    createWithQuestions: async () => {
+      throw new Error("not used in submit tests");
+    },
+    listBySkill: async () => {
+      throw new Error("not used in submit tests");
+    },
+    listBySkillByIndex: async () => {
+      throw new Error("not used in submit tests");
+    },
+    listByIds: async () => {
+      throw new Error("not used in submit tests");
+    },
+    findTopBySkill: async () => null,
+    findById: async () => {
+      throw new Error("not used in submit tests");
+    },
+  };
 
   const skillRepo: SkillRepository = {
     create: async () => {
@@ -86,7 +113,15 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     update: async (id, patch) => {
       skillUpdates.push({ id, patch });
       if (typeof patch.status === "string") status = patch.status;
-      return { id, topic: "SQL joins", description: "", status };
+      return {
+        id,
+        topic: "SQL joins",
+        description: "",
+        status,
+        mode: SkillMode.AUTOMATIC,
+        optionsState: NextClassOptionsState.NONE,
+        optionsStateAt: null,
+      };
     },
     findById: async () => ({
       id: 10,
@@ -94,6 +129,9 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
       description: "",
       status,
       userId: 1,
+      mode: SkillMode.AUTOMATIC,
+      optionsState: NextClassOptionsState.NONE,
+      optionsStateAt: null,
     }),
     listByUser: async () => [],
     listByStatus: async () => [],
@@ -107,7 +145,7 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
   };
 
   return {
-    submitQuiz: makeSubmitQuiz({ quizRepo, eventRepo, skillRepo, jobs, nextClassJobs }),
+    submitQuiz: makeSubmitQuiz({ quizRepo, classRepo, eventRepo, skillRepo, jobs, nextClassJobs }),
     answerRows,
     events,
     enqueued,

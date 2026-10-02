@@ -1,5 +1,7 @@
 import { config } from "@/modules/platform/config";
+import { makeSystemClock } from "@/modules/platform/ports/clock";
 import { makePrismaSkillRepository } from "@/modules/learning/infrastructure/skill.prisma.repo";
+import { makePrismaNextClassOptionRepository } from "@/modules/learning/infrastructure/next-class-option.prisma.repo";
 import { makePrismaClassRepository } from "@/modules/learning/infrastructure/class.prisma.repo";
 import { makePrismaClassQaRepository } from "@/modules/learning/infrastructure/class-qa.prisma.repo";
 import { makePrismaQuizRepository } from "@/modules/learning/infrastructure/quiz.prisma.repo";
@@ -21,6 +23,9 @@ import {
   type GetUsageReport,
 } from "@/modules/learning/application/queries/get-usage-report";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
+import {
+  makeGenerateClassOptions,
+} from "@/modules/tutoring/application/generate-class-options";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
@@ -50,6 +55,7 @@ export type Container = LearningApiDeps & {
 export const configureContainer = (): Container => {
   const skillRepo = makePrismaSkillRepository();
   const classRepo = makePrismaClassRepository();
+  const optionRepo = makePrismaNextClassOptionRepository();
   const qaRepo = makePrismaClassQaRepository();
   const quizRepo = makePrismaQuizRepository();
   const eventRepo = makePrismaEventRepository();
@@ -88,6 +94,8 @@ export const configureContainer = (): Container => {
     jobs,
   });
 
+  const clock = makeSystemClock();
+
   const generateNextClass = makeGenerateNextClass({
     ai,
     retrieveContext,
@@ -95,9 +103,21 @@ export const configureContainer = (): Container => {
     classRepo,
     quizRepo,
     eventRepo,
+    clock,
     recordVectors,
     chatModel: config.ai.models.chat,
     jobs,
+  });
+
+  const generateClassOptions = makeGenerateClassOptions({
+    ai,
+    retrieveContext,
+    skillRepo,
+    optionRepo,
+    classRepo,
+    quizRepo,
+    eventRepo,
+    clock,
   });
 
   const answerClassQuestion = makeAnswerClassQuestion({
@@ -154,6 +174,7 @@ export const configureContainer = (): Container => {
       mineQaVectors,
       vectorizeClassContent,
       gradeOpenEnded,
+      generateClassOptions,
     }),
   );
 
@@ -175,6 +196,7 @@ export const configureContainer = (): Container => {
   return {
     skillRepo,
     classRepo,
+    optionRepo,
     qaRepo,
     quizRepo,
     eventRepo,
@@ -182,6 +204,7 @@ export const configureContainer = (): Container => {
     chatModel: config.ai.models.chat,
     embeddingModel: config.ai.models.embedding,
     getUsageReport,
+    clock,
     jobs,
     nextClassJobs,
     nextClassSweeper,

@@ -35,6 +35,7 @@ export const makeNextClassWorker = ({
     const result = await generateNextClass({
       skillId: claim.skillId,
       userId: claim.userId,
+      target: claim.target ?? undefined,
     });
 
     if (result.ok) {

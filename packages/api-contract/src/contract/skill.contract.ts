@@ -63,6 +63,46 @@ const updateStatus = oc
   .input(schema.UpdateSkillStatusInput)
   .output(schema.StatusOnly);
 
+const setMode = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/mode`,
+    summary: "Switch between AUTOMATIC and MANUAL lesson flow",
+    tags: ["Skill", "Mode"],
+  })
+  .input(schema.SetSkillModeInput)
+  .output(schema.StatusOnly);
+
+const classOptions = oc
+  .route({
+    method: "GET",
+    path: `${BASE_PATH}/:id/class-options`,
+    summary: "Candidate learning targets for the next manual lesson",
+    tags: ["Skill", "ClassOptions"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.GetClassOptionsOutput);
+
+const refreshClassOptions = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/class-options/refresh`,
+    summary: "(Re)generate the candidate learning targets",
+    tags: ["Skill", "ClassOptions"],
+  })
+  .input(schema.RefreshClassOptionsInput)
+  .output(schema.GetClassOptionsOutput);
+
+const createClass = oc
+  .route({
+    method: "POST",
+    path: `${BASE_PATH}/:id/create-class`,
+    summary: "Compose the next manual lesson around a chosen target",
+    tags: ["Skill", "ClassOptions"],
+  })
+  .input(schema.CreateClassInput)
+  .output(schema.StatusOnly);
+
 const mistakes = oc
   .route({
     method: "GET",
@@ -90,6 +130,10 @@ export const skillContract = {
   list,
   progress,
   updateStatus,
+  setMode,
+  classOptions,
+  refreshClassOptions,
+  createClass,
   retry,
   mistakes
 }

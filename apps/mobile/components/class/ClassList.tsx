@@ -7,11 +7,15 @@ import { ChevronRight } from 'lucide-react-native';
 import { FC } from 'react';
 import { Pressable, View } from 'react-native';
 
-export const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {
+export const ClassListItem: FC<{ classData: Class; accuracy: number | null }> = ({
+  classData,
+  accuracy,
+}) => {
   const activity = classData.lastActivityAt
     ? `Last studied ${formatRelativeDate(classData.lastActivityAt)}`
     : `Created ${formatRelativeDate(classData.createdAt)}`;
-
+  const success =
+    accuracy === null ? 'No answers yet' : `${Math.round(accuracy * 100)}% right`;
   return (
     <Link asChild href={`/class/${classData.id}`}>
       <Pressable className="flex-row items-center gap-4 bg-background px-6 py-4 active:bg-accent">
@@ -20,7 +24,7 @@ export const ClassListItem: FC<{ classData: Class }> = ({ classData }) => {
             {classData.title}
           </Text>
           <Text variant="meta">
-            {classData.learnedPoints}/{classData.questionCount} learned · {activity}
+            {success} · {activity}
           </Text>
         </View>
         <Icon as={ChevronRight} size={16} className="text-muted-foreground" strokeWidth={2} />

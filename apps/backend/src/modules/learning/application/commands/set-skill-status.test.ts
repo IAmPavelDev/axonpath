@@ -4,9 +4,12 @@ import {
   USER_SETTABLE_STATUSES,
   type SetSkillStatusDeps,
 } from "./set-skill-status";
-import { SkillStatus } from "@/prisma/generated";
+import { NextClassOptionsState, SkillMode, SkillStatus } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
-import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
+import type {
+  SkillCoreRow,
+  SkillRepository,
+} from "@/modules/learning/domain/skill/skill.repository";
 
 const unused = async (): Promise<never> => {
   throw new Error("not used in set-status tests");
@@ -14,7 +17,7 @@ const unused = async (): Promise<never> => {
 
 /** Test seam: in-memory skill repo capturing status updates. */
 const makeFakeDeps = (
-  skill: { id: number; userId: number; topic: string; description: string; status: string } | null,
+  skill: SkillCoreRow | null,
 ) => {
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
 
@@ -27,6 +30,9 @@ const makeFakeDeps = (
         topic: "SQL joins",
         description: "",
         status: patch.status ?? SkillStatus.ACTIVE,
+        mode: SkillMode.AUTOMATIC,
+        optionsState: NextClassOptionsState.NONE,
+        optionsStateAt: null,
       };
     },
     findById: async () => skill,
@@ -46,6 +52,9 @@ describe("makeSetSkillStatus", () => {
     topic: "SQL joins",
     description: "",
     status,
+    mode: SkillMode.AUTOMATIC,
+    optionsState: NextClassOptionsState.NONE,
+    optionsStateAt: null,
   });
 
   it.each([

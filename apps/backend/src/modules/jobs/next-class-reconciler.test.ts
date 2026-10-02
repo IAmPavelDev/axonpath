@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SkillStatus } from "@/prisma/generated";
+import type { SkillMode, SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
@@ -8,7 +8,7 @@ import { makeNextClassReconciler } from "./next-class-reconciler";
 
 /** Test seam: one skill per scenario; every interaction captured. */
 const makeDeps = ({
-  skills = [] as { id: number; userId: number; status: SkillStatus }[],
+  skills = [] as { id: number; userId: number; status: SkillStatus; mode?: SkillMode }[],
   topBySkill = {} as Record<number, { id: number; index: number; title: string } | null>,
   answeredIndex = {} as Record<number, number | null>,
   pending = new Set<number>(),
@@ -25,7 +25,15 @@ const makeDeps = ({
       create: async () => notUsed("create"),
       update: async (id: number, patch: Record<string, unknown>) => {
         statusUpdates.push({ id, patch });
-        return { id, topic: "t", description: "", status: "ACTIVE" };
+        return {
+          id,
+          topic: "t",
+          description: "",
+          status: "ACTIVE",
+          mode: "AUTOMATIC",
+          optionsState: "NONE",
+          optionsStateAt: null,
+        };
       },
       findById: async () => notUsed("findById"),
       listByUser: async () => notUsed("listByUser"),
@@ -37,6 +45,7 @@ const makeDeps = ({
             topic: "SQL joins",
             description: "",
             status: skill.status,
+            mode: skill.mode ?? ("AUTOMATIC" as const),
             userId: skill.userId,
             requestId: null,
             createdAt: new Date(),
@@ -68,6 +77,7 @@ const makeDeps = ({
       updateGrades: async () => notUsed("updateGrades"),
       findHighestAnsweredClassIndex: async (skillId: number) =>
         answeredIndex[skillId] ?? null,
+      findReviewCandidatesBySkill: async () => notUsed("findReviewCandidatesBySkill"),
     } satisfies QuizRepository,
     nextClassJobs: {
       enqueue: async (input: { skillId: number; userId: number }) => {
@@ -159,6 +169,25 @@ describe("makeNextClassReconciler", () => {
       skills: [ACTIVE_SKILL, generating],
       topBySkill: { 10: NEWEST_CLASS, 11: NEWEST_CLASS },
       answeredIndex: { 10: 2, 11: 2 },
+    });
+
+    await makeNextClassReconciler(deps)();
+
+    expect(enqueued).toEqual([{ skillId: 10, userId: 7 }]);
+    expect(statusUpdates).toEqual([{ id: 10, patch: { status: "GENERATING" } }]);
+  });
+
+  it("skips MANUAL skills — they never self-continue", async () => {
+    const manual = {
+      id: 12,
+      userId: 7,
+      status: "ACTIVE" as const,
+      mode: "MANUAL" as const,
+    };
+    const { deps, enqueued, statusUpdates } = makeDeps({
+      skills: [ACTIVE_SKILL, manual],
+      topBySkill: { 10: NEWEST_CLASS, 12: NEWEST_CLASS },
+      answeredIndex: { 10: 2, 12: 2 },
     });
 
     await makeNextClassReconciler(deps)();

@@ -22,7 +22,12 @@ import type {
   RetrieveQaContext,
 } from "@/modules/memory/application/retrieve-qa-context";
 import { ok } from "@/modules/platform/result";
-import { ClassQaStatus, type EventType } from "@/prisma/generated";
+import {
+  ClassQaStatus,
+  type EventType,
+  NextClassOptionsState,
+  SkillMode,
+} from "@/prisma/generated";
 import { QA_TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 
 const LESSON_MD =
@@ -34,6 +39,9 @@ const SKILL = {
   topic: "SQL joins",
   description: "Learn SQL joins by doing.",
   status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
 };
 
 const pendingBlock = (overrides: Partial<ClassQaEntity> = {}): ClassQaEntity => ({

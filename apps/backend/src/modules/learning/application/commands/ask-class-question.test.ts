@@ -14,10 +14,23 @@ import type {
   NewClassQaBlock,
 } from "@/modules/learning/domain/class-qa/class-qa.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
-import { ClassQaStatus } from "@/prisma/generated";
+import {
+  ClassQaStatus,
+  NextClassOptionsState,
+  SkillMode,
+} from "@/prisma/generated";
 
 const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
-const SKILL = { id: 10, userId: 7, topic: "SQL", description: "", status: "ACTIVE" };
+const SKILL = {
+  id: 10,
+  userId: 7,
+  topic: "SQL",
+  description: "",
+  status: "ACTIVE",
+  mode: SkillMode.AUTOMATIC,
+  optionsState: NextClassOptionsState.NONE,
+  optionsStateAt: null,
+};
 
 type AskState = {
   created: NewClassQaBlock[];

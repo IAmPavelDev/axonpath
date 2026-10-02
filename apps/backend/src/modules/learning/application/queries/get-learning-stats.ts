@@ -1,6 +1,7 @@
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
+import type { Clock } from "@/modules/platform/ports/clock";
 import {
   answersInCurrentWeek,
   currentStreakDays,
@@ -14,6 +15,7 @@ export type GetLearningStatsDeps = {
   skillRepo: SkillRepository;
   classRepo: Pick<ClassRepository, "findQuestionCountsByClassIds">;
   quizRepo: Pick<QuizRepository, "findAnswerActivityByUser">;
+  clock: Clock;
 };
 
 export type GetLearningStatsInput = {
@@ -48,9 +50,9 @@ export type StatsOverview = {
  * (same contract as skill.progress for a fresh skill).
  */
 export const makeGetLearningStats =
-  ({ skillRepo, classRepo, quizRepo }: GetLearningStatsDeps) =>
+  ({ skillRepo, classRepo, quizRepo, clock }: GetLearningStatsDeps) =>
   async (input: GetLearningStatsInput): Promise<StatsOverview> => {
-    const now = new Date();
+    const now = clock.now();
     const [skills, activity] = await Promise.all([
       skillRepo.listByUser(input.userId),
       quizRepo.findAnswerActivityByUser(input.userId),

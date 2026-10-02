@@ -10,6 +10,7 @@ const CLAIM: NextClassJobClaim = {
   userId: 7,
   attempts: 1,
   claimedAt: new Date(),
+  target: null,
 };
 
 const makeDeps = () => {

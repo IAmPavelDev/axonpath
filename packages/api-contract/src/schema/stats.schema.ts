@@ -53,6 +53,7 @@ export const UsageReportOutput = z.object({
     skillInit: UsageKindSummary,
     nextClass: UsageKindSummary,
     qa: UsageKindSummary,
+    classOptions: UsageKindSummary,
   }),
   /** Chat events whose payload lacks usage — counted, never costed. */
   eventsWithoutUsage: z.number().int(),

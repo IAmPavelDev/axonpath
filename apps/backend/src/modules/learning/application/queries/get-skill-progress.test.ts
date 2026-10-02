@@ -3,9 +3,13 @@ import {
   makeGetSkillProgress,
   type GetSkillProgressDeps,
 } from "./get-skill-progress";
-import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
+import type {
+  SkillCoreRow,
+  SkillRepository,
+} from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
+import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 
 const unused = async (): Promise<never> => {
   throw new Error("not used in progress tests");
@@ -13,13 +17,22 @@ const unused = async (): Promise<never> => {
 
 /** Test seam: ownership stub + scripted lessons and per-class answer stats. */
 const makeFakeDeps = (options: {
-  skill?: { id: number; userId: number; topic: string; description: string; status: string } | null;
+  skill?: SkillCoreRow | null;
   classes?: Array<{ id: number; index: number; title: string; questionCount: number }>;
   stats?: Array<{ classId: number; answeredCount: number; correctCount: number }>;
 }) => {
   const skill =
     options.skill === undefined
-      ? { id: 42, userId: 7, topic: "SQL joins", description: "", status: "ACTIVE" }
+      ? {
+          id: 42,
+          userId: 7,
+          topic: "SQL joins",
+          description: "",
+          status: "ACTIVE",
+          mode: SkillMode.AUTOMATIC,
+          optionsState: NextClassOptionsState.NONE,
+          optionsStateAt: null,
+        }
       : options.skill;
 
   const skillRepo: SkillRepository = {
@@ -40,6 +53,7 @@ const makeFakeDeps = (options: {
   };
   const quizRepo: QuizRepository = {
     findWrongAnswersBySkill: unused,
+    findReviewCandidatesBySkill: unused,
     findAnswerActivityByUser: unused,
     findByClassId: unused,
     findScoreableByClassId: unused,
@@ -162,7 +176,18 @@ describe("makeGetSkillProgress", () => {
 
   it("rejects a skill the user does not own", async () => {
     const result = await makeGetSkillProgress(
-      makeFakeDeps({ skill: { id: 42, userId: 8, topic: "SQL joins", description: "", status: "ACTIVE" } }),
+      makeFakeDeps({
+        skill: {
+          id: 42,
+          userId: 8,
+          topic: "SQL joins",
+          description: "",
+          status: "ACTIVE",
+          mode: SkillMode.AUTOMATIC,
+          optionsState: NextClassOptionsState.NONE,
+          optionsStateAt: null,
+        },
+      }),
     )(input);
 
     expect(result).toEqual({ ok: false, error: { kind: "NotOwned", skillId: 42 } });

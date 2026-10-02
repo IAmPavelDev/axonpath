@@ -1,5 +1,6 @@
 import type { QuestionType } from "@/prisma/generated";
 import type { NewAnswer, QuestionView, ScoreableQuestion } from "./question";
+import type { ReviewCandidate } from "./review-schedule";
 
 /** Flattened review of one recorded attempt, for AI prompt building. */
 export type AnswerReview = {
@@ -50,7 +51,6 @@ export type WrongAnswerRow = {
   classIndex: number | null;
   answeredAt: Date;
 };
-
 export type QuizRepository = {
   findByClassId(classId: number): Promise<QuestionView[]>;
   /** Questions with answer keys + owning skillId, for server-side scoring. */
@@ -111,4 +111,11 @@ export type QuizRepository = {
    * is not a mistake yet. Newest first.
    */
   findWrongAnswersBySkill(skillId: number, userId: number): Promise<WrongAnswerRow[]>;
+  /**
+   * Full attempt history per question of one user's skill, attempts oldest
+   * first — the mastery ledger's raw material (review-schedule.ts). Every
+   * graded and ungraded attempt counts; the pure scheduler decides what to
+   * re-test.
+   */
+  findReviewCandidatesBySkill(skillId: number, userId: number): Promise<ReviewCandidate[]>;
 };
