@@ -12,7 +12,7 @@
         "disabled": true
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://100.58.200.156:3001",
+        "EXPO_PUBLIC_API_URL": "https://5m849jukxl.execute-api.us-east-1.amazonaws.com",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCdG6yl4HW3_VB4v20yElKG3xJwLjK_Td0",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "9e88e.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "axon-9e88e",
@@ -25,7 +25,7 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://100.58.200.156:3001",
+        "EXPO_PUBLIC_API_URL": "https://5m849jukxl.execute-api.us-east-1.amazonaws.com",
         "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyCdG6yl4HW3_VB4v20yElKG3xJwLjK_Td0",
         "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "9e88e.firebaseapp.com",
         "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "axon-9e88e",

@@ -5,6 +5,8 @@ export const config = {
   },
   qdrant: {
     url: process.env.QDRANT_URL || 'http://localhost:6333',
+    // Qdrant Cloud requires an API key; a self-hosted Qdrant does not.
+    apiKey: process.env.QDRANT_API_KEY || '',
   },
   ai: {
     ZAI_API_KEY: process.env.ZAI_API_KEY,

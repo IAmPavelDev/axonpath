@@ -13,26 +13,32 @@
   report the blocker, and let the user decide (e.g. they pause the exit node
   themselves, or you fall back to cached/base images).
 
-## Project state (actualized 2026-09-22)
+## Project state (actualized 2026-10-02)
 - Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
-  `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth;
-  backend 86/86 tests and mobile `tsc --noEmit` verified green 2026-09-22 at `d6508e8`.
-- Current phase: **Phase 7 (post-beta)** — execution authority
-  `knowledge-base/PHASE7_POST_BETA.md`. Current-state detail: `knowledge-base/ARCHITECTURE.md`;
-  plan history: `knowledge-base/BETA_PLAN.md`; gap ledger: `knowledge-base/GAPS.md`.
+  `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth.
+  Backend 286/286 tests and mobile `tsc --noEmit` green as of 2026-10-02.
+- Current phase: **serverless production** (Lambda cutover landed 2026-10-02, EC2
+  terminated) — execution authority `knowledge-base/DEPLOY_AWS_SERVERLESS.md`.
+  Current-state detail: `knowledge-base/ARCHITECTURE.md`; plan history:
+  `knowledge-base/BETA_PLAN.md`; gap ledger: `knowledge-base/GAPS.md`.
 - Commands: build `@axon/api-contract` FIRST (backend resolves `dist/`);
   `pnpm --filter @axon/backend test`; `pnpm --filter @axon/mobile exec tsc --noEmit`
   (package name is `@axon/mobile`, not `axon-mobile`); dev stack
   `docker compose -f docker-compose-dev.yaml up -d`.
-- TypeScript 7.0.2 upgrade is committed (`d974bd2`; ts-node dropped, api-contract build
-  emits `.d.ts`). Durable next-class job queue + sweeper landed in `5902e68`/`d6508e8`.
-  Working tree is clean.
-- Deployment (beta): AWS all-free edition — t3.micro + 2GB swap (≤5 users), auto-assigned
-  public IP, plain HTTP :3001 (no TLS/EIP, user decision; self-signed HTTPS variant lives
-  in DEPLOY_AWS_BETA.md git history). Image is BUILT ON THE DEV MACHINE (`pnpm
-  backend:image`), shipped via docker save/load — **never `--build` on the server**
-  (1 GiB RAM OOMs). Never stop/start the instance (IP is baked into the APK). Runbook:
-  `knowledge-base/DEPLOY_AWS_BETA.md`; stack `docker-compose-prod.yaml` + `.env.aws`;
-  Android beta via EAS (`apps/mobile/eas.json`).
+- TypeScript 7.0.2 upgrade committed (`d974bd2`). Durable Postgres job queue +
+  sweeper landed in `5902e68`/`d6508e8`; sweeper gained `tickOnce`/`awaitRuns` and the
+  setImmediate queue an `idle()` drain for the Lambda worker (2026-10-02).
+- Deployment (serverless, since 2026-10-02): Lambda `axon-api` (30 s) + `axon-worker`
+  (15 min, EventBridge `rate(1 minute)`) behind API Gateway HTTPS
+  (`https://5m849jukxl.execute-api.us-east-1.amazonaws.com`, baked into the APK via
+  `apps/mobile/eas.json`), Postgres on **Neon free** (pooled URL), vectors on **Qdrant
+  Cloud free**. One image serves both functions: `pnpm backend:image:lambda` → push to
+  ECR → `bash scripts/provision-serverless.sh` (idempotent, us-east-1). Secrets in
+  `.env.aws.serverless` (git-ignored; DATABASE_URL must stay quoted — the script
+  sources the file with bash). `docker-compose-prod.yaml` remains for a self-hosted
+  fallback only. Old EC2 beta (`DEPLOY_AWS_BETA.md`) terminated 2026-10-02 after its
+  data and vectors were migrated. Known limit: API Gateway caps requests at 30 s;
+  class-qa answers ride the worker tick (≤2 min). Watch: z.ai account balance
+  (generation dies with code 1113 when it runs out; Gemini embeddings unaffected).
 - Docs rule: landing a phase includes syncing ARCHITECTURE/GAPS/BETA_PLAN status lines
   and ticking the phase file's steps in the same change.

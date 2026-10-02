@@ -44,6 +44,15 @@ EXPOSE 3001
 
 CMD ["sh", "-c", "pnpm exec prisma migrate deploy --schema /app/apps/backend/src/prisma/schema.prisma && node -r /app/apps/backend/alias-register.js /app/apps/backend/dist/src/main.js"]
 
+# Lambda target: the same runtime layout as production, on the AWS Node.js 22
+# base image (Amazon Linux 2023, glibc — Prisma's rhel-openssl-3.0.x engines).
+# One image serves both functions: each sets LAMBDA_ROLE and lambda.ts
+# dispatches on it. NODE_OPTIONS loads the module-alias registrations that
+FROM public.ecr.aws/lambda/nodejs:24 AS lambda
+COPY --from=production /app/ ${LAMBDA_TASK_ROOT}/
+ENV NODE_OPTIONS="--require /var/task/apps/backend/alias-register.js --experimental-require-module"
+CMD ["apps/backend/dist/src/lambda.handler"]
+
 FROM base AS development
 WORKDIR /app
 

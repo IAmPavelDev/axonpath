@@ -67,6 +67,9 @@ importers:
       prisma:
         specifier: ^6.19.3
         version: 6.19.3(typescript@7.0.2)
+      serverless-http:
+        specifier: ^4.0.0
+        version: 4.0.0
       zod:
         specifier: ^4.1.5
         version: 4.1.5
@@ -5238,6 +5241,10 @@ packages:
 
   server-only@0.0.1:
     resolution: {integrity: sha512-qepMx2JxAa5jjfzxG79yPPq+8BuFToHd1hm7kI+Z4zAq1ftQiP7HcxMhDDItrbtwVeLg/cY2JnKnrcFkmiswNA==}
+
+  serverless-http@4.0.0:
+    resolution: {integrity: sha512-KKl9h1+VApX9y2vHsVMogf906UXBwO3FDYiWPzqS0mCjEEx4Sx91JrssbWA7RN43HBuxrtoh8MkocZPvjyGnLg==}
+    engines: {node: '>=12.0'}
 
   set-cookie-parser@2.7.1:
     resolution: {integrity: sha512-IOc8uWeOZgnb3ptbCURJWNjWUPcO3ZnTTdzsurqERrP6nPyv+paC55vJM0LpOlT2ne+Ix+9+CRG1MNLlyZ4GjQ==}
@@ -11465,6 +11472,8 @@ snapshots:
       - supports-color
 
   server-only@0.0.1: {}
+
+  serverless-http@4.0.0: {}
 
   set-cookie-parser@2.7.1: {}
 

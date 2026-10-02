@@ -121,4 +121,48 @@ describe("makeNextClassSweeper", () => {
     sweeper.stop();
     consoleError.mockRestore();
   });
+
+});
+
+describe("next-class sweeper worker mode", () => {
+  it("tickOnce awaits each run to completion", async () => {
+    const { nextClassJobs, reconcile, run } = makeDeps();
+    const { promise: gated, resolve: release } = Promise.withResolvers<void>();
+    run.mockImplementation(async () => {
+      await gated;
+    });
+    const sweeper = makeNextClassSweeper({
+      reconcile,
+      nextClassJobs,
+      run,
+      awaitRuns: true,
+    });
+
+    let settled = false;
+    const tick = sweeper.tickOnce().then(() => {
+      settled = true;
+    });
+
+    await vi.waitFor(() => expect(run).toHaveBeenCalledWith(CLAIM));
+    // The run is still gated open — an awaiting tickOnce must not have
+    // resolved past it (a detached tick would have).
+    expect(settled).toBe(false);
+
+    release();
+    await tick;
+    expect(settled).toBe(true);
+  });
+
+  it("server mode: tickOnce resolves without waiting for the detached run", async () => {
+    const { nextClassJobs, reconcile, run } = makeDeps();
+    const { promise: gated, resolve: release } = Promise.withResolvers<void>();
+    run.mockImplementation(() => gated);
+    const sweeper = makeNextClassSweeper({ reconcile, nextClassJobs, run });
+
+    await sweeper.tickOnce();
+
+    // Fire-and-forget: the tick returned while the generation still runs.
+    expect(run).toHaveBeenCalledWith(CLAIM);
+    release();
+  });
 });

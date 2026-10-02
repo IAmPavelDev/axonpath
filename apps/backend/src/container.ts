@@ -48,11 +48,19 @@ export type Container = LearningApiDeps & {
   /** Started by main.ts after listen; stopped on shutdown. */
   nextClassSweeper: NextClassSweeper;
   classQaSweeper: ClassQaSweeper;
+  /**
+   * Resolves when every setImmediate job — including follow-up jobs enqueued
+   * by jobs — has settled. The Lambda worker drains on it before returning;
+   * the server never waits (fire-and-forget is the point there).
+   */
+  jobQueueIdle: () => Promise<void>;
   /** Bound for the stats router; stats deps carry it into the API surface. */
   getUsageReport: GetUsageReport;
 };
 
-export const configureContainer = (): Container => {
+export const configureContainer = (
+  { sweeperMode = 'server' }: { sweeperMode?: 'server' | 'worker' } = {},
+): Container => {
   const skillRepo = makePrismaSkillRepository();
   const classRepo = makePrismaClassRepository();
   const optionRepo = makePrismaNextClassOptionRepository();
@@ -70,9 +78,9 @@ export const configureContainer = (): Container => {
   // The generation/QA pipelines enqueue follow-up memory jobs, and the job
   // handlers wrap those same pipelines — the cycle resolves through the
   // handlers record, which is filled in after the use cases are built
-  // (enqueue only dereferences it at call time, never during construction).
   const jobHandlers: Record<string, JobHandler> = {};
-  const jobs: JobQueuePort = makeSetImmediateJobQueue(jobHandlers);
+  const jobQueue = makeSetImmediateJobQueue(jobHandlers);
+  const jobs: JobQueuePort = jobQueue;
 
   const vectorizeClassContent = makeVectorizeClassContent({
     ai,
@@ -184,13 +192,13 @@ export const configureContainer = (): Container => {
     quizRepo,
     nextClassJobs,
   });
-
   const nextClassSweeper = makeNextClassSweeper({
     reconcile: nextClassReconciler,
     nextClassJobs,
     run: nextClassWorker.run,
+    // Worker mode owns sweeping inline; server mode stays fire-and-forget.
+    awaitRuns: sweeperMode === 'worker',
   });
-
   const classQaSweeper = makeClassQaSweeper({ qaRepo, jobs });
 
   return {
@@ -206,6 +214,7 @@ export const configureContainer = (): Container => {
     getUsageReport,
     clock,
     jobs,
+    jobQueueIdle: jobQueue.idle,
     nextClassJobs,
     nextClassSweeper,
     classQaSweeper,

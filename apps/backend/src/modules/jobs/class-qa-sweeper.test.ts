@@ -170,4 +170,17 @@ describe("makeClassQaSweeper", () => {
 
     expect(qaRepo.claimStranded).toHaveBeenCalledTimes(1);
   });
+
+  it("tickOnce drains stranded blocks without the interval", async () => {
+    const stranded = block();
+    const { qaRepo, jobs } = makeDeps([stranded]);
+    const sweeper = makeClassQaSweeper({ qaRepo, jobs });
+
+    await sweeper.tickOnce();
+
+    expect(jobs.enqueue).toHaveBeenCalledWith(CLASS_QA_ANSWER_JOB, {
+      blockId: stranded.id,
+    });
+  });
+
 });

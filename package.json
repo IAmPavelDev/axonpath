@@ -9,6 +9,7 @@
     "backend:rebuild": "docker-compose -f docker-compose-dev.yaml build --no-cache",
     "backend:start": "docker compose --env-file .env.aws -f docker-compose-prod.yaml up -d",
     "backend:image": "docker build --target production -t axon-backend:local .",
+    "backend:image:lambda": "docker build --target lambda -t axon-backend:lambda .",
     "backend:dev:rebuild": "docker-compose -f docker-compose-dev.yaml up -d --build"
   },
   "keywords": [],

@@ -10,7 +10,10 @@ let collectionReady: Promise<void> | null = null;
 
 export const getQdrantClient = (): QdrantClient => {
   if (!client) {
-    client = new QdrantClient({ url: config.qdrant.url });
+    client = new QdrantClient({
+      url: config.qdrant.url,
+      apiKey: config.qdrant.apiKey || undefined,
+    });
   }
   return client;
 };

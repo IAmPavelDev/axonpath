@@ -14,6 +14,11 @@ export const CLASS_QA_BATCH = 50;
 export type ClassQaSweeper = {
   start(): void;
   stop(): void;
+  /**
+   * One synchronous sweep to completion. The Lambda worker calls this on a
+   * schedule; server mode never does (it uses start()'s interval instead).
+   */
+  tickOnce(): Promise<void>;
 };
 
 /**
@@ -79,5 +84,6 @@ export const makeClassQaSweeper = ({
       clearInterval(timer);
       timer = null;
     },
+    tickOnce: tick,
   };
 };

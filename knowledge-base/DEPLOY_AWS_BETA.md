@@ -1,14 +1,14 @@
 # Axon — AWS beta deployment (all-free: t2.micro, plain HTTP, ≤5 users)
 
-> Written 2026-09-22; all-free edition: **no Elastic IP, no HTTPS, no domain** — the app
-> talks plain HTTP straight to the instance's auto-assigned public IP
-> (`http://<IP>:3001`, Android cleartext already enabled). **Execution authority for
-> deploying the beta to AWS.** The user performs console steps (AWS, Firebase, Expo);
-> everything scriptable is in the repo: `docker-compose-prod.yaml` (full stack),
-> `.env.aws.example` (config template), `apps/mobile/eas.json` (Android beta build).
-> Stack: Postgres + Qdrant + RabbitMQ + backend on one EC2 instance; the Docker image is
-> **built on the dev machine and shipped** — the server never compiles.
-> (The self-signed-HTTPS variant lives in git history if TLS is ever wanted.)
+> **SUPERSEDED 2026-10-02** by `knowledge-base/DEPLOY_AWS_SERVERLESS.md` (Lambda +
+> API Gateway + Neon + Qdrant Cloud). The `axon-beta` instance (i-0ca41536eef3629c7,
+> us-east-1) was terminated the same day, after its Postgres data and 148 Qdrant
+> vectors were migrated and its secrets were carried over. Kept as history — the
+> billing analysis and console walkthroughs below still apply to any future EC2
+> setup. The original header: all-free edition, no Elastic IP, no HTTPS, no domain;
+> plain HTTP :3001 on the auto-assigned public IP; Postgres + Qdrant + RabbitMQ +
+> backend on one EC2 instance; image built on the dev machine and shipped — the
+> server never compiles. (The self-signed-HTTPS variant lives in git history.)
 
 ## 0. How AWS bills this — and what it costs
 

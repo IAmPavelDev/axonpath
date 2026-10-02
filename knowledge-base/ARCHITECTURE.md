@@ -13,9 +13,12 @@
 > Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
 > (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
-> Deployment (beta): `knowledge-base/DEPLOY_AWS_BETA.md` (AWS single host, t2.micro
-> free tier, plain HTTP :3001 on the auto-assigned public IP, full stack incl.
-> Postgres/Qdrant/RabbitMQ; image built on the dev machine and shipped).
+> Deployment (production): `knowledge-base/DEPLOY_AWS_SERVERLESS.md` (Lambda
+> `axon-api` + `axon-worker` behind API Gateway HTTPS, Postgres on Neon free
+> (pooled endpoint), vectors on Qdrant Cloud free; one container image, both
+> functions, `LAMBDA_ROLE` dispatch; worker drains the durable job queues on an
+> EventBridge minute tick). Superseded beta: `knowledge-base/DEPLOY_AWS_BETA.md`
+> (EC2 t2.micro, terminated 2026-10-02).
 
 ## 1. One-paragraph summary
 

@@ -5,21 +5,49 @@ import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
  * `runDetached` helper: work is deferred off the request path, failures are
  * logged, never propagated to the caller. Replaced by a broker-backed adapter
  * when durable jobs are needed.
+ *
+ * `idle()` is the drain seam for the Lambda worker: it resolves once every
+ * enqueued job — including follow-ups enqueued by jobs themselves — has
+ * settled. A parent's counter stays raised until its body finishes, so a
+ * child enqueued mid-run can never let `idle()` resolve early.
  */
 export const makeSetImmediateJobQueue = (
   handlers: Record<string, JobHandler>,
-): JobQueuePort => ({
-  enqueue: (jobName, payload) => {
-    const handler = handlers[jobName];
-    if (!handler) {
-      console.error({ jobName }, "Background job handler not registered");
-      return;
-    }
+): JobQueuePort & { idle(): Promise<void> } => {
+  let pending = 0;
+  let drainWaiters: Array<() => void> = [];
 
-    setImmediate(() => {
-      Promise.resolve(handler(payload as never)).catch((err) => {
-        console.error({ err, jobName }, "Background job failed");
+  const settle = (): void => {
+    pending -= 1;
+    if (pending === 0 && drainWaiters.length > 0) {
+      const waiters = drainWaiters;
+      drainWaiters = [];
+      for (const wake of waiters) wake();
+    }
+  };
+
+  return {
+    enqueue: (jobName, payload) => {
+      const handler = handlers[jobName];
+      if (!handler) {
+        console.error({ jobName }, "Background job handler not registered");
+        return;
+      }
+
+      pending += 1;
+      setImmediate(() => {
+        Promise.resolve(handler(payload as never)).then(settle, (err) => {
+          console.error({ err, jobName }, "Background job failed");
+          settle();
+        });
       });
-    });
-  },
-});
+    },
+
+    idle: (): Promise<void> => {
+      if (pending === 0) return Promise.resolve();
+      const { promise, resolve } = Promise.withResolvers<void>();
+      drainWaiters.push(resolve);
+      return promise;
+    },
+  };
+};

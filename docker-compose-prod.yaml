@@ -1,5 +1,5 @@
-# Axon — AWS beta stack (free tier: t3.micro, auto-assigned public IP, plain HTTP).
-# Services: Postgres, Qdrant, RabbitMQ, backend. The app talks directly to
+# Axon — AWS beta stack (t2.micro, auto-assigned public IP, plain HTTP).
+# Services: Postgres, Qdrant, backend. The app talks directly to
 # http://<EC2-PUBLIC-IP>:3001 (Android cleartext enabled). SG inbound: SSH 22
 # (your IP) + TCP 3001. Never stop/start the instance — the public IP changes
 # on stop/start and is baked into the APK.
@@ -49,24 +49,6 @@ services:
     networks:
       - axon-network
 
-  # Deployed per user decision (2026-09-22). Backend has no amqplib usage yet —
-  # nothing connects to this service today; it is future durable-jobs capacity.
-  rabbitmq:
-    image: rabbitmq:3.12-management
-    container_name: axon-rabbitmq
-    restart: unless-stopped
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-axon}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-    # Management UI reachable only from the host itself:
-    #   ssh -L 15672:127.0.0.1:15672 ubuntu@<ec2-ip>  →  http://localhost:15672
-    ports:
-      - '127.0.0.1:15672:15672'
-    networks:
-      - axon-network
-
   backend:
     # Image is built on the dev machine (pnpm backend:image) and shipped via
     # docker save/load — the t3.micro server must never run `--build` (OOM).
@@ -89,7 +71,7 @@ services:
       - APP_PORT=3001
       - APP_HOST=0.0.0.0
     # Published publicly: the phone reaches http://<EC2-PUBLIC-IP>:3001 directly.
-    # Guarded by the security group; DB/Qdrant/RabbitMQ stay internal-only.
+    # Guarded by the security group; DB/Qdrant stay internal-only.
     ports:
       - '3001:3001'
     healthcheck:
@@ -105,7 +87,6 @@ volumes:
   db_data:
   qdrant_data:
   qdrant_snapshots:
-  rabbitmq_data:
 
 networks:
   axon-network:
