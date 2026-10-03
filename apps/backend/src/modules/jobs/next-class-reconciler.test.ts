@@ -8,8 +8,16 @@ import { makeNextClassReconciler } from "./next-class-reconciler";
 
 /** Test seam: one skill per scenario; every interaction captured. */
 const makeDeps = ({
-  skills = [] as { id: number; userId: number; status: SkillStatus; mode?: SkillMode }[],
-  topBySkill = {} as Record<number, { id: number; index: number; title: string } | null>,
+  skills = [] as {
+    id: number;
+    userId: number;
+    status: SkillStatus;
+    mode?: SkillMode;
+  }[],
+  topBySkill = {} as Record<
+    number,
+    { id: number; index: number; title: string } | null
+  >,
   answeredIndex = {} as Record<number, number | null>,
   pending = new Set<number>(),
 }) => {
@@ -55,9 +63,12 @@ const makeDeps = ({
             learnedPoints: 0,
             lastActivityAt: null,
           })),
+      claimStaleInit: async () => notUsed("claimStaleInit"),
+      listStalePendingOptions: async () => notUsed("listStalePendingOptions"),
     } satisfies SkillRepository,
     classRepo: {
-      findQuestionCountsByClassIds: async () => notUsed("findQuestionCountsByClassIds"),
+      findQuestionCountsByClassIds: async () =>
+        notUsed("findQuestionCountsByClassIds"),
       createWithQuestions: async () => notUsed("createWithQuestions"),
       listBySkill: async () => notUsed("listBySkill"),
       listBySkillByIndex: async () => notUsed("listBySkillByIndex"),
@@ -66,18 +77,22 @@ const makeDeps = ({
       findById: async () => notUsed("findById"),
     } satisfies ClassRepository,
     quizRepo: {
+      findLatestAttemptResults: async () => notUsed("findLatestAttemptResults"),
+      listPendingGradingIds: async () => notUsed("listPendingGradingIds"),
       findWrongAnswersBySkill: async () => notUsed("findWrongAnswersBySkill"),
       findAnswerActivityByUser: async () => notUsed("findAnswerActivityByUser"),
       findByClassId: async () => notUsed("findByClassId"),
       findScoreableByClassId: async () => notUsed("findScoreableByClassId"),
       createAnswers: async () => notUsed("createAnswers"),
-      findAnswersByClassAndUser: async () => notUsed("findAnswersByClassAndUser"),
+      findAnswersByClassAndUser: async () =>
+        notUsed("findAnswersByClassAndUser"),
       findAnswerStatsBySkill: async () => notUsed("findAnswerStatsBySkill"),
       findAnswersWithQuestions: async () => notUsed("findAnswersWithQuestions"),
       updateGrades: async () => notUsed("updateGrades"),
       findHighestAnsweredClassIndex: async (skillId: number) =>
         answeredIndex[skillId] ?? null,
-      findReviewCandidatesBySkill: async () => notUsed("findReviewCandidatesBySkill"),
+      findReviewCandidatesBySkill: async () =>
+        notUsed("findReviewCandidatesBySkill"),
     } satisfies QuizRepository,
     nextClassJobs: {
       enqueue: async (input: { skillId: number; userId: number }) => {
@@ -108,7 +123,9 @@ describe("makeNextClassReconciler", () => {
     await makeNextClassReconciler(deps)();
 
     expect(enqueued).toEqual([{ skillId: 10, userId: 7 }]);
-    expect(statusUpdates).toEqual([{ id: 10, patch: { status: "GENERATING" } }]);
+    expect(statusUpdates).toEqual([
+      { id: 10, patch: { status: "GENERATING" } },
+    ]);
   });
 
   it("skips a skill whose learner has not finished the newest lesson", async () => {
@@ -174,7 +191,9 @@ describe("makeNextClassReconciler", () => {
     await makeNextClassReconciler(deps)();
 
     expect(enqueued).toEqual([{ skillId: 10, userId: 7 }]);
-    expect(statusUpdates).toEqual([{ id: 10, patch: { status: "GENERATING" } }]);
+    expect(statusUpdates).toEqual([
+      { id: 10, patch: { status: "GENERATING" } },
+    ]);
   });
 
   it("skips MANUAL skills — they never self-continue", async () => {
@@ -193,6 +212,8 @@ describe("makeNextClassReconciler", () => {
     await makeNextClassReconciler(deps)();
 
     expect(enqueued).toEqual([{ skillId: 10, userId: 7 }]);
-    expect(statusUpdates).toEqual([{ id: 10, patch: { status: "GENERATING" } }]);
+    expect(statusUpdates).toEqual([
+      { id: 10, patch: { status: "GENERATING" } },
+    ]);
   });
 });

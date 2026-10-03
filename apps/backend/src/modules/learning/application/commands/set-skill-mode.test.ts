@@ -33,7 +33,11 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
     updates: [] as { id: number; patch: Record<string, unknown> }[],
     cleared: [] as number[],
     enqueued: [] as { jobName: string; payload: unknown }[],
-    durableEnqueued: [] as { skillId: number; userId: number; target?: string }[],
+    durableEnqueued: [] as {
+      skillId: number;
+      userId: number;
+      target?: string;
+    }[],
   };
 
   const deps = {
@@ -57,6 +61,8 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
       findById: async () => skill,
       listByUser: async () => [],
       listByStatus: async () => [],
+      claimStaleInit: async () => [],
+      listStalePendingOptions: async () => [],
     },
     optionRepo: {
       replaceForSkill: async () => {
@@ -73,7 +79,11 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
       },
     },
     nextClassJobs: {
-      enqueue: async (input: { skillId: number; userId: number; target?: string }) => {
+      enqueue: async (input: {
+        skillId: number;
+        userId: number;
+        target?: string;
+      }) => {
         state.durableEnqueued.push(input);
       },
       claim: async () => {
@@ -135,7 +145,10 @@ describe("setSkillMode", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(state.updates).toContainEqual({ id: 10, patch: { mode: SkillMode.MANUAL } });
+    expect(state.updates).toContainEqual({
+      id: 10,
+      patch: { mode: SkillMode.MANUAL },
+    });
     expect(state.updates).toContainEqual({
       id: 10,
       patch: {
@@ -157,9 +170,9 @@ describe("setSkillMode", () => {
 
     expect(result.ok).toBe(true);
     expect(state.enqueued).toEqual([]);
-    expect(
-      state.updates.some((update) => "optionsState" in update.patch),
-    ).toBe(false);
+    expect(state.updates.some((update) => "optionsState" in update.patch)).toBe(
+      false,
+    );
   });
 
   it("consumes options and hands an ACTIVE skill to the pipeline when switching to AUTO", async () => {

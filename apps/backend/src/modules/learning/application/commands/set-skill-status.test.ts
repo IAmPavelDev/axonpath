@@ -4,7 +4,11 @@ import {
   USER_SETTABLE_STATUSES,
   type SetSkillStatusDeps,
 } from "./set-skill-status";
-import { NextClassOptionsState, SkillMode, SkillStatus } from "@/prisma/generated";
+import {
+  NextClassOptionsState,
+  SkillMode,
+  SkillStatus,
+} from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 import type {
   SkillCoreRow,
@@ -16,9 +20,7 @@ const unused = async (): Promise<never> => {
 };
 
 /** Test seam: in-memory skill repo capturing status updates. */
-const makeFakeDeps = (
-  skill: SkillCoreRow | null,
-) => {
+const makeFakeDeps = (skill: SkillCoreRow | null) => {
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
 
   const skillRepo: SkillRepository = {
@@ -38,6 +40,8 @@ const makeFakeDeps = (
     findById: async () => skill,
     listByUser: unused,
     listByStatus: unused,
+    claimStaleInit: unused,
+    listStalePendingOptions: unused,
   };
 
   const deps: SetSkillStatusDeps = { skillRepo };
@@ -153,9 +157,7 @@ describe("makeSetSkillStatus", () => {
   });
 
   it("rejects a skill the user does not own", async () => {
-    const { deps, updates } = makeFakeDeps(
-      skillWithStatus(SkillStatus.ACTIVE),
-    );
+    const { deps, updates } = makeFakeDeps(skillWithStatus(SkillStatus.ACTIVE));
     const foreign = { ...input, userId: 99 };
 
     const result = await makeSetSkillStatus(deps)({
@@ -163,7 +165,10 @@ describe("makeSetSkillStatus", () => {
       status: SkillStatus.PAUSED,
     });
 
-    expect(result).toEqual({ ok: false, error: { kind: "NotOwned", skillId: 42 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "NotOwned", skillId: 42 },
+    });
     expect(updates).toHaveLength(0);
   });
 

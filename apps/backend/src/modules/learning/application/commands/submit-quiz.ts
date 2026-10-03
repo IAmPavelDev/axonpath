@@ -53,6 +53,7 @@ export type QuestionResult = {
   /** null = open-ended, grading in flight. */
   isCorrect: boolean | null;
   correctAnswer: string | null;
+  userAnswer: string;
 };
 export type SubmitQuizOutput = {
   score: number;
@@ -77,8 +78,17 @@ export type SubmitQuizOutput = {
  * class-options.
  */
 export const makeSubmitQuiz =
-  ({ quizRepo, classRepo, eventRepo, skillRepo, jobs, nextClassJobs }: SubmitQuizDeps) =>
-  async (input: SubmitQuizInput): Promise<Result<SubmitQuizOutput, QuizError>> => {
+  ({
+    quizRepo,
+    classRepo,
+    eventRepo,
+    skillRepo,
+    jobs,
+    nextClassJobs,
+  }: SubmitQuizDeps) =>
+  async (
+    input: SubmitQuizInput,
+  ): Promise<Result<SubmitQuizOutput, QuizError>> => {
     const questions = await quizRepo.findScoreableByClassId(input.classId);
     if (questions.length === 0) {
       return err({ kind: "ClassNotFound", classId: input.classId });
@@ -86,7 +96,9 @@ export const makeSubmitQuiz =
 
     const byId = new Map(questions.map((question) => [question.id, question]));
     const scored = input.answers.flatMap(
-      (submitted): Array<{
+      (
+        submitted,
+      ): Array<{
         question: ScoreableQuestion;
         submitted: SubmittedAnswer;
         score: number | null;
@@ -194,7 +206,10 @@ export const makeSubmitQuiz =
         // The user-visible phase change. Illegal from PAUSED/COMPLETED/
         // ARCHIVED — the flip is only for learnable skills; generation itself
         // is not gated here.
-        if (skill && canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)) {
+        if (
+          skill &&
+          canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)
+        ) {
           await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
         }
         jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
@@ -204,7 +219,7 @@ export const makeSubmitQuiz =
       }
     }
 
-    const perQuestion = scored.map(({ question, isCorrect }) => ({
+    const perQuestion = scored.map(({ question, isCorrect, submitted }) => ({
       questionId: question.id,
       type: question.type,
       isCorrect,
@@ -215,6 +230,7 @@ export const makeSubmitQuiz =
           : typeof question.answerKey === "string"
             ? question.answerKey
             : null,
+      userAnswer: submitted.answer,
     }));
 
     await eventRepo.record({

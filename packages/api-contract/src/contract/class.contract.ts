@@ -33,6 +33,15 @@ const qa = {
     })
     .input(schema.AskClassQuestionInput)
     .output(schema.AskClassQuestionOutput),
+  retry: oc
+    .route({
+      method: "POST",
+      path: `${BASE_PATH}/qa/retry`,
+      summary: "Restart a failed Q&A block in place (same id, same anchor)",
+      tags: ["Class", "Qa", "Retry"],
+    })
+    .input(schema.RetryClassQaInput)
+    .output(schema.AskClassQuestionOutput),
 
   list: oc
     .route({
@@ -49,6 +58,6 @@ export const classContract = {
   list,
   get,
   qa,
-}
+};
 
 export type ClassContractType = typeof classContract;

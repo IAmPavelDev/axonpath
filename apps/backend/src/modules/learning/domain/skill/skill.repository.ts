@@ -66,4 +66,23 @@ export type SkillRepository = {
   ): Promise<SkillListItem[]>;
   /** Skills in one status — the cron's reconciliation sweep enumerates ACTIVE. */
   listByStatus(status: SkillStatus): Promise<SkillListItem[]>;
+  /**
+   * Atomically claim stuck init generations: GENERATING skills with zero
+   * classes untouched since `olderThan` (create-skill's in-process job was
+   * lost — the serverless API freezes setImmediate work). Claiming refreshes
+   * updatedAt, which doubles as the lease: concurrent sweepers never claim
+   * the same skill, and a run in flight keeps it claimed.
+   */
+  claimStaleInit(
+    olderThan: Date,
+  ): Promise<Array<{ id: number; userId: number; topic: string }>>;
+  /**
+   * MANUAL skills whose candidate-options job was lost: optionsState still
+   * PENDING past `olderThan`. Plain read — re-enqueueing while a run is in
+   * flight is benign (the job's writes are last-wins), and every terminal
+   * outcome (READY/FAILED) drops the skill out of the query.
+   */
+  listStalePendingOptions(
+    olderThan: Date,
+  ): Promise<Array<{ id: number; userId: number }>>;
 };

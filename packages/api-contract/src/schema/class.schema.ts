@@ -4,14 +4,16 @@ export const GetClassListInput = z.object({
   skillId: z.number(),
 });
 
-export const GetClassListOutput = z.array(z.object({
-  id: z.number(),
-  title: z.string(),
-  createdAt: z.date(),
-  questionCount: z.number().int(),
-  learnedPoints: z.number().int(),
-  lastActivityAt: z.date().nullable(),
-}));
+export const GetClassListOutput = z.array(
+  z.object({
+    id: z.number(),
+    title: z.string(),
+    createdAt: z.date(),
+    questionCount: z.number().int(),
+    learnedPoints: z.number().int(),
+    lastActivityAt: z.date().nullable(),
+  }),
+);
 
 export const GetClassByIdInput = z.object({
   id: z.number(),
@@ -41,6 +43,12 @@ export const AskClassQuestionOutput = z.object({
   status: ClassQaStatus,
 });
 
+export const RetryClassQaInput = z.object({
+  classId: z.number(),
+  /** The FAILED block to restart in place — same id, same anchor. */
+  blockId: z.number(),
+});
+
 export const ClassQaBlock = z.object({
   id: z.number(),
   classId: z.number(),
@@ -52,7 +60,7 @@ export const ClassQaBlock = z.object({
   answer: z.string().nullable(),
   status: ClassQaStatus,
   createdAt: z.date(),
- });
+});
 
 export const ListClassQaInput = z.object({
   classId: z.number(),

@@ -23,9 +23,20 @@ const submit = oc
   .input(schema.SubmitQuizAnswersInput)
   .output(schema.SubmitQuizAnswersOutput);
 
+const result = oc
+  .route({
+    method: "GET",
+    path: `${BASE_PATH}/:classId/result`,
+    summary: "Get the learner's latest quiz attempt for a class",
+    tags: ["Quiz", "Get"],
+  })
+  .input(schema.GetQuizResultInput)
+  .output(schema.GetQuizResultOutput);
+
 export const quizContract = {
   get,
   submit,
-}
+  result,
+};
 
 export type QuizContractType = typeof quizContract;

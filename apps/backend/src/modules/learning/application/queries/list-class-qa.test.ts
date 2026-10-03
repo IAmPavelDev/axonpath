@@ -4,9 +4,19 @@ import type { ClassRepository } from "@/modules/learning/domain/class/class.repo
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa";
 import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class-qa.repository";
-import { ClassQaStatus, NextClassOptionsState, SkillMode } from "@/prisma/generated";
+import {
+  ClassQaStatus,
+  NextClassOptionsState,
+  SkillMode,
+} from "@/prisma/generated";
 
-const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
+const CLASS = {
+  id: 5,
+  skillId: 10,
+  index: 0,
+  title: "Joins",
+  contentMd: "## Intro",
+};
 const SKILL = {
   id: 10,
   userId: 7,
@@ -19,7 +29,8 @@ const SKILL = {
 };
 
 const block = (
-  overrides: Partial<ClassQaEntity> & Pick<ClassQaEntity, "id" | "anchorParagraph">,
+  overrides: Partial<ClassQaEntity> &
+    Pick<ClassQaEntity, "id" | "anchorParagraph">,
 ): ClassQaEntity => ({
   classId: 5,
   userId: 7,
@@ -35,12 +46,22 @@ const block = (
 /** Same order the Prisma adapter produces: (anchorParagraph, createdAt, id) asc. */
 const ORDERED: ClassQaEntity[] = [
   block({ id: 3, anchorParagraph: 0 }),
-  block({ id: 1, anchorParagraph: 2, createdAt: new Date("2026-09-29T00:00:01Z") }),
-  block({ id: 2, anchorParagraph: 2, createdAt: new Date("2026-09-29T00:00:02Z") }),
+  block({
+    id: 1,
+    anchorParagraph: 2,
+    createdAt: new Date("2026-09-29T00:00:01Z"),
+  }),
+  block({
+    id: 2,
+    anchorParagraph: 2,
+    createdAt: new Date("2026-09-29T00:00:02Z"),
+  }),
   block({ id: 4, anchorParagraph: 7 }),
 ];
 
-const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL | null } = {}) => {
+const makeDeps = (
+  overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL | null } = {},
+) => {
   let listedWith: number | null = null;
 
   const classRepo: ClassRepository = {
@@ -62,7 +83,8 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
     findTopBySkill: async () => {
       throw new Error("not used in list tests");
     },
-    findById: async () => overrides.klass === undefined ? CLASS : overrides.klass,
+    findById: async () =>
+      overrides.klass === undefined ? CLASS : overrides.klass,
   };
 
   const skillRepo: SkillRepository = {
@@ -72,16 +94,26 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
     update: async () => {
       throw new Error("not used in list tests");
     },
-    findById: async () => overrides.skill === undefined ? SKILL : overrides.skill,
+    findById: async () =>
+      overrides.skill === undefined ? SKILL : overrides.skill,
     listByUser: async () => {
       throw new Error("not used in list tests");
     },
     listByStatus: async () => {
       throw new Error("not used in list tests");
     },
+    claimStaleInit: async () => {
+      throw new Error("not used in list tests");
+    },
+    listStalePendingOptions: async () => {
+      throw new Error("not used in list tests");
+    },
   };
 
   const qaRepo: ClassQaRepository = {
+    resetForRetry: async () => {
+      throw new Error("not used in list tests");
+    },
     create: async () => {
       throw new Error("not used in list tests");
     },
@@ -110,7 +142,14 @@ const makeDeps = (overrides: { klass?: typeof CLASS | null; skill?: typeof SKILL
   };
 
   const deps: ListClassQaDeps = { classRepo, skillRepo, qaRepo };
-  return { deps, state: { get listedWith() { return listedWith; } } };
+  return {
+    deps,
+    state: {
+      get listedWith() {
+        return listedWith;
+      },
+    },
+  };
 };
 
 describe("listClassQa", () => {

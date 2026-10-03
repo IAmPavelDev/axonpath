@@ -33,8 +33,13 @@ const extractJson = (raw: string): string => {
     .trim()
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/, "");
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
+  // Respect the root type: slicing first-{..last-} on a top-level array
+  // strips the array's own brackets and leaves an unparseable object
+  // sequence (observed live on the grading schema).
+  const opener = trimmed.charAt(0) === "[" ? "[" : "{";
+  const closer = opener === "[" ? "]" : "}";
+  const start = trimmed.indexOf(opener);
+  const end = trimmed.lastIndexOf(closer);
   return start !== -1 && end > start ? trimmed.slice(start, end + 1) : trimmed;
 };
 
@@ -48,7 +53,10 @@ const toAiUsage = (usage: ChatCompletion["usage"]): AiUsage | undefined =>
   usage &&
   typeof usage.prompt_tokens === "number" &&
   typeof usage.completion_tokens === "number"
-    ? { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens }
+    ? {
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+      }
     : undefined;
 
 export const makeZaiAi = (): AiPort => ({
@@ -90,7 +98,10 @@ export const makeZaiAi = (): AiPort => ({
         if (!choice?.message?.content || choice.finish_reason === "length")
           continue;
 
-        return ok({ raw: extractJson(choice.message.content), usage: toAiUsage(completion.usage) });
+        return ok({
+          raw: extractJson(choice.message.content),
+          usage: toAiUsage(completion.usage),
+        });
       } catch (error) {
         // Transport failure: return immediately, the use case decides on retry.
         return err(asAiError(error));
@@ -124,7 +135,10 @@ export const makeZaiAi = (): AiPort => ({
         if (!choice?.message?.content || choice.finish_reason === "length")
           continue;
 
-        return ok({ raw: choice.message.content.trim(), usage: toAiUsage(completion.usage) });
+        return ok({
+          raw: choice.message.content.trim(),
+          usage: toAiUsage(completion.usage),
+        });
       } catch (error) {
         // Transport failure: return immediately, the use case decides on retry.
         return err(asAiError(error));

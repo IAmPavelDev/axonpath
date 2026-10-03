@@ -76,7 +76,9 @@ export type GenerateNextClassDeps = {
   eventRepo: EventRepository;
   /** Dates the mastery ledger's staleness math (spiral thresholds). */
   clock: Clock;
-  recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
+  recordVectors: (
+    vectors: NewVector[],
+  ) => Promise<Result<number[], VectorStoreError>>;
   chatModel: string;
   /** Fire-and-forget queue: class-content vectorization rides it after the commit. */
   jobs: JobQueuePort;
@@ -140,7 +142,10 @@ export const makeGenerateNextClass =
     // scored, the durable job still fired, but this pipeline no-ops with no
     // event and no AI call. GENERATING passes because it IS the generation
     // phase submit-quiz/create-class opened for the loop; settlePhase owns it.
-    if (skill.status !== SkillStatus.ACTIVE && skill.status !== SkillStatus.GENERATING) {
+    if (
+      skill.status !== SkillStatus.ACTIVE &&
+      skill.status !== SkillStatus.GENERATING
+    ) {
       return ok(undefined);
     }
 
@@ -213,13 +218,16 @@ export const makeGenerateNextClass =
     // One retrieval call for both history blocks; degrades to [] on failure.
     const history = await retrieveContext({
       userId: input.userId,
-      query: last ? `${skill.topic} ${last.title}` : `${skill.topic} ${input.target ?? ""}`,
+      query: last
+        ? `${skill.topic} ${last.title}`
+        : `${skill.topic} ${input.target ?? ""}`,
       topK: 12,
     });
     const lastSummaryHit = last
       ? history.find(
           (hit) =>
-            hit.source === VectorSource.AI_NEXT && hit.classIndex === last.index,
+            hit.source === VectorSource.AI_NEXT &&
+            hit.classIndex === last.index,
         )
       : undefined;
     const priorHistory = lastSummaryHit
@@ -249,7 +257,9 @@ export const makeGenerateNextClass =
     let parsed: ParsedNextClass;
     try {
       // Named cast: untrusted model output; every field re-validated below.
-      const raw = extractJsonObject(generation.value.raw) as Partial<ParsedNextClass>;
+      const raw = extractJsonObject(
+        generation.value.raw,
+      ) as Partial<ParsedNextClass>;
       parsed = {
         classTitle: raw.classTitle ?? "Unknown title",
         classContentMd: raw.classContentMd ?? "",
@@ -266,6 +276,20 @@ export const makeGenerateNextClass =
         error: {
           kind: "AiResponseInvalid",
           detail: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
+
+    // A lesson without questions is a dead end — the reconciler waits for
+    // answers through the newest class, which can never happen. Fail the
+    // generation instead of persisting a hollow class.
+    if (parsed.questions.length === 0) {
+      await settlePhase();
+      return {
+        ok: false,
+        error: {
+          kind: "AiResponseInvalid",
+          detail: "model returned no questions",
         },
       };
     }

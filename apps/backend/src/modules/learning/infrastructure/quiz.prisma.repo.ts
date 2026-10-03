@@ -1,4 +1,5 @@
 import { prisma } from "@/modules/platform/infrastructure/prisma";
+import { QuestionType } from "@/prisma/generated";
 import { schema } from "@axon/api-contract";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import { latestWrongPerQuestion } from "@/modules/learning/domain/quiz/latest-wrong";
@@ -49,6 +50,7 @@ const feedbackOf = (content: unknown): string | null => {
   }
   return null;
 };
+
 export const makePrismaQuizRepository = (): QuizRepository => ({
   findByClassId: async (classId) => {
     const rows = await prisma.question.findMany({
@@ -56,6 +58,47 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       select: { id: true, type: true, text: true, choices: true },
     });
     return rows.map(toQuestionView);
+  },
+
+  findLatestAttemptResults: async (classId, userId) => {
+    // One attempt = one answer per question of the class (the client submits
+    // all-or-nothing), so the latest attempt is simply the last N rows by id.
+    const questionCount = await prisma.question.count({ where: { classId } });
+    if (questionCount === 0) {
+      return [];
+    }
+    const rows = await prisma.answer.findMany({
+      where: { userId, question: { classId } },
+      orderBy: { id: "desc" },
+      take: questionCount,
+      select: {
+        questionId: true,
+        content: true,
+        isCorrect: true,
+        question: { select: { type: true, answerKey: true } },
+      },
+    });
+    return rows.reverse().map((row) => ({
+      questionId: row.questionId,
+      questionType: row.question.type,
+      userAnswer: answerTextOf(row.content),
+      isCorrect: row.isCorrect,
+      answerKey: row.question.answerKey,
+    }));
+  },
+
+  listPendingGradingIds: async (olderThan, limit) => {
+    const rows = await prisma.answer.findMany({
+      where: {
+        isCorrect: null,
+        createdAt: { lt: olderThan },
+        question: { type: QuestionType.OPEN_ENDED },
+      },
+      select: { id: true },
+      orderBy: { id: "asc" },
+      take: limit,
+    });
+    return rows.map((row) => row.id);
   },
 
   findScoreableByClassId: async (classId) =>
@@ -124,7 +167,11 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
       // The where clause excludes class-less questions; the optional
       // relation is still nullable in the selected type.
       const index = row.question.class?.index;
-      if (index !== null && index !== undefined && (highest === null || index > highest)) {
+      if (
+        index !== null &&
+        index !== undefined &&
+        (highest === null || index > highest)
+      ) {
         highest = index;
       }
     }
@@ -140,7 +187,11 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
     const [answered, correct] = await Promise.all([
       prisma.question.groupBy({
         by: ["classId"],
-        where: { skillId, classId: { not: null }, answers: { some: { userId } } },
+        where: {
+          skillId,
+          classId: { not: null },
+          answers: { some: { userId } },
+        },
         _count: { _all: true },
       }),
       prisma.question.groupBy({
@@ -176,7 +227,13 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
         content: true,
         isCorrect: true,
         question: {
-          select: { id: true, type: true, text: true, answerKey: true, classId: true },
+          select: {
+            id: true,
+            type: true,
+            text: true,
+            answerKey: true,
+            classId: true,
+          },
         },
       },
     });
@@ -263,7 +320,11 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
         isCorrect: true,
         createdAt: true,
         question: {
-          select: { type: true, text: true, class: { select: { index: true } } },
+          select: {
+            type: true,
+            text: true,
+            class: { select: { index: true } },
+          },
         },
       },
       orderBy: { id: "asc" },
@@ -281,7 +342,10 @@ export const makePrismaQuizRepository = (): QuizRepository => ({
         };
         byQuestion.set(row.questionId, candidate);
       }
-      candidate.attempts.push({ isCorrect: row.isCorrect, createdAt: row.createdAt });
+      candidate.attempts.push({
+        isCorrect: row.isCorrect,
+        createdAt: row.createdAt,
+      });
     }
     return [...byQuestion.values()];
   },

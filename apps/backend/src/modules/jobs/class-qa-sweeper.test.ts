@@ -27,6 +27,9 @@ const block = (overrides: Partial<Block> = {}): Block => ({
 /** In-memory stand-in for the prisma repo, mirroring the claim SQL semantics. */
 const makeDeps = (blocks: Block[]) => {
   const qaRepo: ClassQaRepository = {
+    resetForRetry: async () => {
+      throw new Error("not used in sweeper tests");
+    },
     create: async () => {
       throw new Error("not used in sweeper tests");
     },
@@ -182,5 +185,4 @@ describe("makeClassQaSweeper", () => {
       blockId: stranded.id,
     });
   });
-
 });

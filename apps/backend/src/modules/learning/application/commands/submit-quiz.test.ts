@@ -7,7 +7,10 @@ import type { ClassRepository } from "@/modules/learning/domain/class/class.repo
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ScoreableQuestion } from "@/modules/learning/domain/quiz/question";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
-import type { EventRepository, DomainEvent } from "@/modules/learning/domain/event/event.repository";
+import type {
+  EventRepository,
+  DomainEvent,
+} from "@/modules/learning/domain/event/event.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
@@ -20,7 +23,10 @@ const QUESTIONS: ScoreableQuestion[] = [
 ];
 
 /** Test seam: in-memory repos capturing persisted rows, events, and enqueued jobs. */
-const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") => {
+const makeFakeRepos = (
+  questions: ScoreableQuestion[],
+  skillStatus = "ACTIVE",
+) => {
   const answerRows: unknown[] = [];
   const events: DomainEvent[] = [];
   const enqueued: { jobName: string; payload: unknown }[] = [];
@@ -48,6 +54,12 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     requeue: async () => {},
   };
   const quizRepo: QuizRepository = {
+    findLatestAttemptResults: async () => {
+      throw new Error("not used in submit tests");
+    },
+    listPendingGradingIds: async () => {
+      throw new Error("not used in submit tests");
+    },
     findWrongAnswersBySkill: async () => {
       throw new Error("not used in submit tests");
     },
@@ -135,6 +147,8 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
     }),
     listByUser: async () => [],
     listByStatus: async () => [],
+    claimStaleInit: async () => [],
+    listStalePendingOptions: async () => [],
   };
 
   const eventRepo: EventRepository = {
@@ -145,7 +159,14 @@ const makeFakeRepos = (questions: ScoreableQuestion[], skillStatus = "ACTIVE") =
   };
 
   return {
-    submitQuiz: makeSubmitQuiz({ quizRepo, classRepo, eventRepo, skillRepo, jobs, nextClassJobs }),
+    submitQuiz: makeSubmitQuiz({
+      quizRepo,
+      classRepo,
+      eventRepo,
+      skillRepo,
+      jobs,
+      nextClassJobs,
+    }),
     answerRows,
     events,
     enqueued,
@@ -172,8 +193,20 @@ describe("makeSubmitQuiz", () => {
         score: 1,
         total: 2,
         perQuestion: [
-          { questionId: 1, type: "MULTIPLE_CHOICE", isCorrect: true, correctAnswer: "Paris" },
-          { questionId: 2, type: "TRUE_FALSE", isCorrect: false, correctAnswer: "True" },
+          {
+            questionId: 1,
+            type: "MULTIPLE_CHOICE",
+            isCorrect: true,
+            correctAnswer: "Paris",
+            userAnswer: "Paris",
+          },
+          {
+            questionId: 2,
+            type: "TRUE_FALSE",
+            isCorrect: false,
+            correctAnswer: "True",
+            userAnswer: "False",
+          },
         ],
       }),
     );
@@ -193,7 +226,9 @@ describe("makeSubmitQuiz", () => {
 
     expect(result.ok && result.value.total).toBe(1);
     expect(answerRows).toHaveLength(1);
-    expect(result.ok && result.value.perQuestion.map((q) => q.questionId)).toEqual([1]);
+    expect(
+      result.ok && result.value.perQuestion.map((q) => q.questionId),
+    ).toEqual([1]);
   });
 
   it("fails ClassNotFound for a class with no questions and persists nothing", async () => {
@@ -205,7 +240,10 @@ describe("makeSubmitQuiz", () => {
       answers: [{ questionId: 1, answer: "Paris" }],
     });
 
-    expect(result).toEqual({ ok: false, error: { kind: "ClassNotFound", classId: 404 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "ClassNotFound", classId: 404 },
+    });
     expect(answerRows).toHaveLength(0);
     expect(events).toHaveLength(0);
   });
@@ -259,10 +297,13 @@ describe("makeSubmitQuiz", () => {
       isCorrect: null,
       // The model answer never leaves the server for open-ended questions.
       correctAnswer: null,
+      userAnswer: "my essay",
     });
     // Pending grading: nulls, not a fake 0.
     expect(answerRows[0]).toMatchObject({ score: null, isCorrect: null });
-    expect(enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB)).toEqual([
+    expect(
+      enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB),
+    ).toEqual([
       { jobName: GRADE_OPEN_ENDED_JOB, payload: { answerIds: [1000] } },
     ]);
     expect(result.ok && result.value.score).toBe(0);
@@ -292,7 +333,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("enqueues skill-next-class once with the class skillId after a scored submit", async () => {
-    const { submitQuiz, enqueued, nextClassEnqueued } = makeFakeRepos(QUESTIONS);
+    const { submitQuiz, enqueued, nextClassEnqueued } =
+      makeFakeRepos(QUESTIONS);
 
     await submitQuiz({
       classId: 100,
@@ -313,7 +355,8 @@ describe("makeSubmitQuiz", () => {
   });
 
   it("does not enqueue next-class generation when nothing valid was scored", async () => {
-    const { submitQuiz, enqueued, nextClassEnqueued, skillUpdates } = makeFakeRepos(QUESTIONS);
+    const { submitQuiz, enqueued, nextClassEnqueued, skillUpdates } =
+      makeFakeRepos(QUESTIONS);
 
     await submitQuiz({ classId: 100, userId: 1, answers: [] });
 
@@ -339,7 +382,10 @@ describe("makeSubmitQuiz", () => {
   it("leaves a non-ACTIVE skill's status alone but still enqueues generation", async () => {
     // PAUSED/COMPLETED/ARCHIVED skills have user-owned statuses; the flip is
     // illegal there even though the learning signal still enqueues a job.
-    const { submitQuiz, skillUpdates, nextClassEnqueued } = makeFakeRepos(QUESTIONS, "PAUSED");
+    const { submitQuiz, skillUpdates, nextClassEnqueued } = makeFakeRepos(
+      QUESTIONS,
+      "PAUSED",
+    );
 
     await submitQuiz({
       classId: 100,
@@ -365,7 +411,9 @@ describe("makeSubmitQuiz", () => {
       ],
     });
 
-    const miningJobs = enqueued.filter((job) => job.jobName === SKILL_ANSWER_VECTORS_JOB);
+    const miningJobs = enqueued.filter(
+      (job) => job.jobName === SKILL_ANSWER_VECTORS_JOB,
+    );
     expect(miningJobs).toEqual([
       {
         jobName: SKILL_ANSWER_VECTORS_JOB,
@@ -373,31 +421,43 @@ describe("makeSubmitQuiz", () => {
       },
     ]);
     // The same submit also enqueues grading for its open-ended answer.
-    expect(enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB)).toEqual([
+    expect(
+      enqueued.filter((job) => job.jobName === GRADE_OPEN_ENDED_JOB),
+    ).toEqual([
       { jobName: GRADE_OPEN_ENDED_JOB, payload: { answerIds: [1002] } },
     ]);
   });
 
   it("caps the answer-memory payload at 10 wrong answers", async () => {
-    const manyWrong: ScoreableQuestion[] = Array.from({ length: 12 }, (_, i) => ({
-      id: i + 1,
-      skillId: 10,
-      type: "MULTIPLE_CHOICE" as const,
-      answerKey: `key-${i + 1}`,
-    }));
+    const manyWrong: ScoreableQuestion[] = Array.from(
+      { length: 12 },
+      (_, i) => ({
+        id: i + 1,
+        skillId: 10,
+        type: "MULTIPLE_CHOICE" as const,
+        answerKey: `key-${i + 1}`,
+      }),
+    );
     const { submitQuiz, enqueued } = makeFakeRepos(manyWrong);
 
     await submitQuiz({
       classId: 100,
       userId: 1,
-      answers: manyWrong.map((question) => ({ questionId: question.id, answer: "wrong" })),
+      answers: manyWrong.map((question) => ({
+        questionId: question.id,
+        answer: "wrong",
+      })),
     });
 
-    const miningJobs = enqueued.filter((job) => job.jobName === SKILL_ANSWER_VECTORS_JOB);
+    const miningJobs = enqueued.filter(
+      (job) => job.jobName === SKILL_ANSWER_VECTORS_JOB,
+    );
     expect(miningJobs).toHaveLength(1);
     const payload = miningJobs[0]?.payload as { answerIds: number[] };
     // First 10 in submit order; the overflow is dropped, not queued twice.
-    expect(payload.answerIds).toEqual([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009]);
+    expect(payload.answerIds).toEqual([
+      1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009,
+    ]);
   });
 
   it("does not enqueue answer-memory mining when everything was correct", async () => {
@@ -409,7 +469,11 @@ describe("makeSubmitQuiz", () => {
       answers: [{ questionId: 1, answer: "Paris" }],
     });
 
-    expect(enqueued.filter((job) => job.jobName === SKILL_ANSWER_VECTORS_JOB)).toEqual([]);
-    expect(enqueued.filter((job) => job.jobName === SKILL_NEXT_CLASS_JOB)).toHaveLength(1);
+    expect(
+      enqueued.filter((job) => job.jobName === SKILL_ANSWER_VECTORS_JOB),
+    ).toEqual([]);
+    expect(
+      enqueued.filter((job) => job.jobName === SKILL_NEXT_CLASS_JOB),
+    ).toHaveLength(1);
   });
 });

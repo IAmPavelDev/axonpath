@@ -3,7 +3,10 @@ import {
   makeGetLearningStats,
   type GetLearningStatsDeps,
 } from "./get-learning-stats";
-import type { SkillRepository, SkillListItem } from "@/modules/learning/domain/skill/skill.repository";
+import type {
+  SkillRepository,
+  SkillListItem,
+} from "@/modules/learning/domain/skill/skill.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import { SkillMode } from "@/prisma/generated";
@@ -59,6 +62,12 @@ const makeDeps = (
     listByStatus: async () => {
       throw new Error("not used");
     },
+    claimStaleInit: async () => {
+      throw new Error("not used");
+    },
+    listStalePendingOptions: async () => {
+      throw new Error("not used");
+    },
   };
   const quizRepo: Pick<QuizRepository, "findAnswerActivityByUser"> = {
     findAnswerActivityByUser: async () => options.activity ?? [],
@@ -99,8 +108,18 @@ describe("makeGetLearningStats", () => {
   it("derives the streak from answers today and yesterday", async () => {
     const { deps } = makeDeps({
       activity: [
-        { createdAt: at("2026-09-29T09:00:00Z"), skillId: 1, classId: null, questionId: 1 },
-        { createdAt: at("2026-09-30T09:00:00Z"), skillId: 1, classId: null, questionId: 2 },
+        {
+          createdAt: at("2026-09-29T09:00:00Z"),
+          skillId: 1,
+          classId: null,
+          questionId: 1,
+        },
+        {
+          createdAt: at("2026-09-30T09:00:00Z"),
+          skillId: 1,
+          classId: null,
+          questionId: 2,
+        },
       ],
     });
 
@@ -112,9 +131,24 @@ describe("makeGetLearningStats", () => {
   it("counts distinct skills per week — retakes never inflate", async () => {
     const { deps } = makeDeps({
       activity: [
-        { createdAt: at("2026-09-28T10:00:00Z"), skillId: 1, classId: null, questionId: 1 },
-        { createdAt: at("2026-09-29T10:00:00Z"), skillId: 2, classId: null, questionId: 2 },
-        { createdAt: at("2026-09-29T11:00:00Z"), skillId: 1, classId: null, questionId: 3 },
+        {
+          createdAt: at("2026-09-28T10:00:00Z"),
+          skillId: 1,
+          classId: null,
+          questionId: 1,
+        },
+        {
+          createdAt: at("2026-09-29T10:00:00Z"),
+          skillId: 2,
+          classId: null,
+          questionId: 2,
+        },
+        {
+          createdAt: at("2026-09-29T11:00:00Z"),
+          skillId: 1,
+          classId: null,
+          questionId: 3,
+        },
       ],
     });
 
@@ -129,9 +163,24 @@ describe("makeGetLearningStats", () => {
   it("counts answer rows this week — retakes included", async () => {
     const { deps } = makeDeps({
       activity: [
-        { createdAt: at("2026-09-28T10:00:00Z"), skillId: 1, classId: 11, questionId: 1 },
-        { createdAt: at("2026-09-28T11:00:00Z"), skillId: 1, classId: 11, questionId: 1 },
-        { createdAt: at("2026-09-20T10:00:00Z"), skillId: 1, classId: 11, questionId: 1 },
+        {
+          createdAt: at("2026-09-28T10:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 1,
+        },
+        {
+          createdAt: at("2026-09-28T11:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 1,
+        },
+        {
+          createdAt: at("2026-09-20T10:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 1,
+        },
       ],
     });
 
@@ -144,10 +193,25 @@ describe("makeGetLearningStats", () => {
     const { deps, state } = makeDeps({
       activity: [
         // Class 11 (2 questions) fully covered this week.
-        { createdAt: at("2026-09-28T10:00:00Z"), skillId: 1, classId: 11, questionId: 1 },
-        { createdAt: at("2026-09-28T12:00:00Z"), skillId: 1, classId: 11, questionId: 2 },
+        {
+          createdAt: at("2026-09-28T10:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 1,
+        },
+        {
+          createdAt: at("2026-09-28T12:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 2,
+        },
         // Class 12 (3 questions) only partially covered.
-        { createdAt: at("2026-09-29T10:00:00Z"), skillId: 1, classId: 12, questionId: 5 },
+        {
+          createdAt: at("2026-09-29T10:00:00Z"),
+          skillId: 1,
+          classId: 12,
+          questionId: 5,
+        },
       ],
       questionCounts: [
         { classId: 11, questionCount: 2 },
@@ -183,7 +247,12 @@ describe("makeGetLearningStats", () => {
   it("skips the question-count lookup when nothing was answered this week", async () => {
     const { deps, state } = makeDeps({
       activity: [
-        { createdAt: at("2026-09-10T10:00:00Z"), skillId: 1, classId: 11, questionId: 1 },
+        {
+          createdAt: at("2026-09-10T10:00:00Z"),
+          skillId: 1,
+          classId: 11,
+          questionId: 1,
+        },
       ],
     });
 

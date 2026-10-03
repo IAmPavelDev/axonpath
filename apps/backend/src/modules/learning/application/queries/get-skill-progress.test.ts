@@ -18,8 +18,17 @@ const unused = async (): Promise<never> => {
 /** Test seam: ownership stub + scripted lessons and per-class answer stats. */
 const makeFakeDeps = (options: {
   skill?: SkillCoreRow | null;
-  classes?: Array<{ id: number; index: number; title: string; questionCount: number }>;
-  stats?: Array<{ classId: number; answeredCount: number; correctCount: number }>;
+  classes?: Array<{
+    id: number;
+    index: number;
+    title: string;
+    questionCount: number;
+  }>;
+  stats?: Array<{
+    classId: number;
+    answeredCount: number;
+    correctCount: number;
+  }>;
 }) => {
   const skill =
     options.skill === undefined
@@ -41,6 +50,8 @@ const makeFakeDeps = (options: {
     findById: async () => skill,
     listByUser: unused,
     listByStatus: unused,
+    claimStaleInit: unused,
+    listStalePendingOptions: unused,
   };
   const classRepo: ClassRepository = {
     findQuestionCountsByClassIds: unused,
@@ -52,6 +63,8 @@ const makeFakeDeps = (options: {
     findById: unused,
   };
   const quizRepo: QuizRepository = {
+    findLatestAttemptResults: unused,
+    listPendingGradingIds: unused,
     findWrongAnswersBySkill: unused,
     findReviewCandidatesBySkill: unused,
     findAnswerActivityByUser: unused,
@@ -95,7 +108,9 @@ describe("makeGetSkillProgress", () => {
   it("reports zeros and no accuracy for lessons nothing was answered in", async () => {
     const result = await makeGetSkillProgress(
       makeFakeDeps({
-        classes: [{ id: 101, index: 0, title: "Inner joins", questionCount: 4 }],
+        classes: [
+          { id: 101, index: 0, title: "Inner joins", questionCount: 4 },
+        ],
       }),
     )(input);
 
@@ -122,7 +137,9 @@ describe("makeGetSkillProgress", () => {
   it("computes a partially-answered class without marking it completed", async () => {
     const result = await makeGetSkillProgress(
       makeFakeDeps({
-        classes: [{ id: 101, index: 0, title: "Inner joins", questionCount: 4 }],
+        classes: [
+          { id: 101, index: 0, title: "Inner joins", questionCount: 4 },
+        ],
         stats: [{ classId: 101, answeredCount: 2, correctCount: 1 }],
       }),
     )(input);
@@ -190,14 +207,20 @@ describe("makeGetSkillProgress", () => {
       }),
     )(input);
 
-    expect(result).toEqual({ ok: false, error: { kind: "NotOwned", skillId: 42 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "NotOwned", skillId: 42 },
+    });
   });
 
   it("reports SkillNotFound when the skill does not exist", async () => {
-    const result = await makeGetSkillProgress(
-      makeFakeDeps({ skill: null }),
-    )(input);
+    const result = await makeGetSkillProgress(makeFakeDeps({ skill: null }))(
+      input,
+    );
 
-    expect(result).toEqual({ ok: false, error: { kind: "SkillNotFound", skillId: 42 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "SkillNotFound", skillId: 42 },
+    });
   });
 });

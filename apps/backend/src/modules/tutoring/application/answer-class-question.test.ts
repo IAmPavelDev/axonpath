@@ -5,7 +5,11 @@ import {
 } from "./answer-class-question";
 import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectorize-class-content";
 import { QA_BLOCK_VECTORS_JOB } from "@/modules/memory/application/mine-qa-vectors";
-import type { AiError, AiPort, TextGenerationResult } from "@/modules/tutoring/ports";
+import type {
+  AiError,
+  AiPort,
+  TextGenerationResult,
+} from "@/modules/tutoring/ports";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa";
@@ -32,7 +36,13 @@ import { QA_TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 
 const LESSON_MD =
   "## Introduction\nMeet the join.\n\n## Left join\nKeeps left rows.\n\n## Summary\nJoins filter rows.";
-const CLASS = { id: 5, skillId: 10, index: 2, title: "Joins", contentMd: LESSON_MD };
+const CLASS = {
+  id: 5,
+  skillId: 10,
+  index: 2,
+  title: "Joins",
+  contentMd: LESSON_MD,
+};
 const SKILL = {
   id: 10,
   userId: 7,
@@ -44,7 +54,9 @@ const SKILL = {
   optionsStateAt: null,
 };
 
-const pendingBlock = (overrides: Partial<ClassQaEntity> = {}): ClassQaEntity => ({
+const pendingBlock = (
+  overrides: Partial<ClassQaEntity> = {},
+): ClassQaEntity => ({
   id: 101,
   classId: 5,
   userId: 7,
@@ -120,6 +132,9 @@ const makeDeps = (
   };
 
   const qaRepo: ClassQaRepository = {
+    resetForRetry: async () => {
+      throw new Error("not used in answer tests");
+    },
     create: async (_input: NewClassQaBlock) => {
       throw new Error("not used in answer tests");
     },
@@ -166,7 +181,8 @@ const makeDeps = (
     findTopBySkill: async () => {
       throw new Error("not used in answer tests");
     },
-    findById: async () => (overrides.klass === undefined ? CLASS : overrides.klass),
+    findById: async () =>
+      overrides.klass === undefined ? CLASS : overrides.klass,
   };
 
   const skillRepo: SkillRepository = {
@@ -176,11 +192,18 @@ const makeDeps = (
     update: async () => {
       throw new Error("not used in answer tests");
     },
-    findById: async () => (overrides.skill === undefined ? SKILL : overrides.skill),
+    findById: async () =>
+      overrides.skill === undefined ? SKILL : overrides.skill,
     listByUser: async () => {
       throw new Error("not used in answer tests");
     },
     listByStatus: async () => {
+      throw new Error("not used in answer tests");
+    },
+    claimStaleInit: async () => {
+      throw new Error("not used in answer tests");
+    },
+    listStalePendingOptions: async () => {
       throw new Error("not used in answer tests");
     },
   };
@@ -238,10 +261,24 @@ describe("answerClassQuestion", () => {
       ],
       hits: {
         skillHits: [
-          { vectorId: 1, score: 0.9, textSnippet: "Notes on outer joins", source: "CONTENT_CHUNK", classIndex: 1, tokenCount: null },
+          {
+            vectorId: 1,
+            score: 0.9,
+            textSnippet: "Notes on outer joins",
+            source: "CONTENT_CHUNK",
+            classIndex: 1,
+            tokenCount: null,
+          },
         ],
         crossHits: [
-          { vectorId: 2, score: 0.8, textSnippet: "Already comfortable with SELECT filters", source: "AI_INITIAL", classIndex: null, tokenCount: null },
+          {
+            vectorId: 2,
+            score: 0.8,
+            textSnippet: "Already comfortable with SELECT filters",
+            source: "AI_INITIAL",
+            classIndex: null,
+            tokenCount: null,
+          },
         ],
       },
     });
@@ -251,20 +288,30 @@ describe("answerClassQuestion", () => {
     expect(result).toEqual({ ok: true, value: undefined });
     const { system, prompt } = state.generateTextInputs[0];
     expect(system).toBe(QA_TUTOR_SYSTEM);
-    expect(prompt.indexOf("Document model")).toBeLessThan(prompt.indexOf("The learner typed:"));
-    expect(prompt).toContain("The learner selected this passage from the lesson");
+    expect(prompt.indexOf("Document model")).toBeLessThan(
+      prompt.indexOf("The learner typed:"),
+    );
+    expect(prompt).toContain(
+      "The learner selected this passage from the lesson",
+    );
     expect(prompt).toContain('"""a left join keeps every left row"""');
     expect(prompt).toContain("(anchor: paragraph 1)");
-    expect(prompt).toContain('The learner typed:\n"""When does a left join drop rows?"""');
+    expect(prompt).toContain(
+      'The learner typed:\n"""When does a left join drop rows?"""',
+    );
     expect(prompt).toContain(LESSON_MD);
     expect(prompt).toContain("Skill: SQL joins — Learn SQL joins by doing.");
     expect(prompt).toContain("Other lessons in this skill: Aggregates");
     // L3: anchored annotation with per-line author tags.
     expect(prompt).toContain('— Passage: "Meet the join."');
     expect(prompt).toContain('The learner typed: """What is a join?"""');
-    expect(prompt).toContain('You answered: """A left join keeps every left row."""');
+    expect(prompt).toContain(
+      'You answered: """A left join keeps every left row."""',
+    );
     // L5: labeled background memory after the lesson.
-    expect(prompt).toContain("Background memory from this learner's other lessons and skills, written by Axon");
+    expect(prompt).toContain(
+      "Background memory from this learner's other lessons and skills, written by Axon",
+    );
     expect(prompt).toContain("- Notes on outer joins");
     expect(prompt).toContain("- Already comfortable with SELECT filters");
   });
@@ -312,12 +359,16 @@ describe("answerClassQuestion", () => {
       { jobName: QA_BLOCK_VECTORS_JOB, payload: { blockId: 101 } },
     ]);
     // The content vectorizer runs inline here — it never enqueues itself.
-    expect(state.enqueued.some((job) => job.jobName === CLASS_CONTENT_VECTORS_JOB)).toBe(false);
+    expect(
+      state.enqueued.some((job) => job.jobName === CLASS_CONTENT_VECTORS_JOB),
+    ).toBe(false);
   });
 
   it("persists the trimmed answer as ANSWERED with the model name", async () => {
     const { deps, state } = makeDeps({
-      textResult: { raw: "  Left joins drop rows when the right side has no match.  " },
+      textResult: {
+        raw: "  Left joins drop rows when the right side has no match.  ",
+      },
     });
 
     const result = await makeAnswerClassQuestion(deps)({ blockId: 101 });
@@ -431,7 +482,10 @@ describe("answerClassQuestion", () => {
       userId: 7,
       type: "QA_ANSWERED" satisfies EventType,
     });
-    const payload = state.events[0].payload as { usage?: unknown; model?: string };
+    const payload = state.events[0].payload as {
+      usage?: unknown;
+      model?: string;
+    };
     expect(payload.usage).toEqual({ promptTokens: 40, completionTokens: 25 });
     expect(payload.model).toBe("glm-5.3-flash");
   });

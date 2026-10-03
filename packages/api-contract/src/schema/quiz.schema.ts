@@ -4,7 +4,11 @@ export const GetQuizByClassIdInput = z.object({
   classId: z.number(),
 });
 
-export const QuestionType = z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "OPEN_ENDED"]);
+export const QuestionType = z.enum([
+  "MULTIPLE_CHOICE",
+  "TRUE_FALSE",
+  "OPEN_ENDED",
+]);
 
 export const Question = z.object({
   id: z.number(),
@@ -35,10 +39,21 @@ export const QuestionResult = z.object({
   isCorrect: z.boolean().nullable(),
   /** Null for OPEN_ENDED forever — the model answer never leaves the server. */
   correctAnswer: z.string().nullable(),
+  /** The answer the learner gave for this question, verbatim. */
+  userAnswer: z.string(),
 });
 
 export const SubmitQuizAnswersOutput = z.object({
   score: z.number(),
   total: z.number(),
   perQuestion: z.array(QuestionResult),
+});
+
+export const GetQuizResultInput = z.object({
+  classId: z.number(),
+});
+
+/** The learner's LATEST attempt for the class; null = never submitted. */
+export const GetQuizResultOutput = z.object({
+  result: SubmitQuizAnswersOutput.nullable(),
 });

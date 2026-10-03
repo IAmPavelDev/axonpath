@@ -4,8 +4,10 @@ import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class
 
 /** Sweeper cadence: every minute, plus once at boot. */
 export const CLASS_QA_TICK_MS = 60_000;
-/** A PENDING block untouched this long lost its in-process job (restart/crash). */
-export const CLASS_QA_STALE_MS = 120_000;
+/** A PENDING block untouched this long lost its in-process job. On the
+ * serverless API the freeze is immediate, so every answer rides this net —
+ * 30s keeps the client's skeleton wait under ~90s including the tick. */
+export const CLASS_QA_STALE_MS = 30_000;
 /** Max sweeper requeues per block; past this it is FAILED (client re-asks). */
 export const CLASS_QA_MAX_REQUEUES = 3;
 /** Max blocks claimed per tick; the rest wait for the next minute. */

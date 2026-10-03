@@ -46,7 +46,10 @@ const OPTIONS_JSON = JSON.stringify({
 
 type OptionsState = {
   prompts: string[];
-  replacements: Array<{ skillId: number; options: Array<{ rank: number; text: string }> }>;
+  replacements: Array<{
+    skillId: number;
+    options: Array<{ rank: number; text: string }>;
+  }>;
   skillUpdates: { id: number; patch: Record<string, unknown> }[];
   events: DomainEvent[];
   cleared: number[];
@@ -77,7 +80,10 @@ const makeDeps = (
             return { ok: false, error: overrides.aiError };
           }
           state.prompts.push(input.prompt);
-          return ok({ raw: overrides.raw ?? OPTIONS_JSON, usage: overrides.usage });
+          return ok({
+            raw: overrides.raw ?? OPTIONS_JSON,
+            usage: overrides.usage,
+          });
         }
         throw new Error(`unexpected schema ${request.schemaName}`);
       },
@@ -101,7 +107,8 @@ const makeDeps = (
           description: "",
           status: SKILL.status,
           mode: SKILL.mode,
-          optionsState: (patch.optionsState as NextClassOptionsState) ?? SKILL.optionsState,
+          optionsState:
+            (patch.optionsState as NextClassOptionsState) ?? SKILL.optionsState,
           optionsStateAt: (patch.optionsStateAt as Date | null) ?? null,
         };
       },
@@ -109,6 +116,8 @@ const makeDeps = (
         overrides.skill === undefined ? SKILL : overrides.skill,
       listByUser: async () => [],
       listByStatus: async () => [],
+      claimStaleInit: async () => [],
+      listStalePendingOptions: async () => [],
     },
     optionRepo: {
       replaceForSkill: async (skillId, options) => {
@@ -132,6 +141,8 @@ const makeDeps = (
       findById: async () => null,
     },
     quizRepo: {
+      findLatestAttemptResults: async () => [],
+      listPendingGradingIds: async () => [],
       findReviewCandidatesBySkill: async () => [],
       findByClassId: async () => [],
       findScoreableByClassId: async () => [],
@@ -158,11 +169,16 @@ const makeDeps = (
 describe("generateClassOptions", () => {
   it("proposes three ranked targets for an ACTIVE skill and settles READY", async () => {
     const { deps, state } = makeDeps();
-    const result = await makeGenerateClassOptions(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateClassOptions(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result).toEqual({ ok: true, value: undefined });
     expect(state.replacements).toHaveLength(1);
-    expect(state.replacements[0].options.map((option) => option.rank)).toEqual([1, 2, 3]);
+    expect(state.replacements[0].options.map((option) => option.rank)).toEqual([
+      1, 2, 3,
+    ]);
     expect(state.replacements[0].options[0].text).toContain("LEFT JOIN");
     expect(state.skillUpdates).toContainEqual({
       id: 10,
@@ -178,7 +194,10 @@ describe("generateClassOptions", () => {
 
   it("builds a first-lesson prompt when the skill has no classes yet", async () => {
     const { deps, state } = makeDeps({ last: null });
-    const result = await makeGenerateClassOptions(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateClassOptions(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.prompts).toHaveLength(1);
@@ -197,7 +216,10 @@ describe("generateClassOptions", () => {
   it("no-ops for a non-ACTIVE skill and rewinds a dangling PENDING", async () => {
     const paused = { ...SKILL, status: SkillStatus.PAUSED };
     const { deps, state } = makeDeps({ skill: paused });
-    const result = await makeGenerateClassOptions(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateClassOptions(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result).toEqual({ ok: true, value: undefined });
     expect(state.prompts).toEqual([]);
@@ -216,7 +238,10 @@ describe("generateClassOptions", () => {
     const { deps, state } = makeDeps({
       aiError: { kind: "AiGenerationFailed", detail: "down" },
     });
-    const result = await makeGenerateClassOptions(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateClassOptions(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(false);
     expect(state.skillUpdates).toContainEqual({
@@ -241,7 +266,9 @@ describe("generateClassOptions", () => {
     expect(malformedResult.ok).toBe(false);
     expect(malformed.state.skillUpdates).toContainEqual(
       expect.objectContaining({
-        patch: expect.objectContaining({ optionsState: NextClassOptionsState.FAILED }),
+        patch: expect.objectContaining({
+          optionsState: NextClassOptionsState.FAILED,
+        }),
       }),
     );
 
@@ -258,7 +285,10 @@ describe("generateClassOptions", () => {
     const { deps, state } = makeDeps({
       raw: JSON.stringify({ targets: ["a", 42, "b", "c", "d"] }),
     });
-    const result = await makeGenerateClassOptions(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateClassOptions(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.replacements[0].options.map((option) => option.text)).toEqual([

@@ -58,6 +58,8 @@ const makeFakeDeps = (options: {
     return ok(vectors.map((_, i) => i));
   };
   const quizRepo: QuizRepository = {
+    findLatestAttemptResults: unused,
+    listPendingGradingIds: unused,
     findWrongAnswersBySkill: unused,
     findReviewCandidatesBySkill: unused,
     findAnswerActivityByUser: unused,
@@ -77,7 +79,8 @@ const makeFakeDeps = (options: {
     listBySkillByIndex: unused,
     findTopBySkill: unused,
     findById: unused,
-    listByIds: async () => options.classes ?? [{ id: 77, index: 2, title: "Outer joins" }],
+    listByIds: async () =>
+      options.classes ?? [{ id: 77, index: 2, title: "Outer joins" }],
   };
   const ai = {
     generateEmbeddings: async (content: string[]) =>

@@ -27,6 +27,12 @@ const makeFakeDeps = () => {
     listByStatus: async () => {
       throw new Error("not used in create tests");
     },
+    claimStaleInit: async () => {
+      throw new Error("not used in create tests");
+    },
+    listStalePendingOptions: async () => {
+      throw new Error("not used in create tests");
+    },
   };
 
   const jobs: JobQueuePort = {

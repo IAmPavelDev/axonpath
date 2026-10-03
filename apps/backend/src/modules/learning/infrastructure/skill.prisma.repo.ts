@@ -1,6 +1,6 @@
 import { prisma } from "@/modules/platform/infrastructure/prisma";
-import { SkillStatus } from "@/prisma/generated";
-import type { NextClassOptionsState, SkillMode } from "@/prisma/generated";
+import { NextClassOptionsState, SkillStatus } from "@/prisma/generated";
+import type { SkillMode } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 
 export const makePrismaSkillRepository = (): SkillRepository => ({
@@ -28,8 +28,10 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
     if (patch.description !== undefined) data.description = patch.description;
     if (patch.status !== undefined) data.status = patch.status;
     if (patch.mode !== undefined) data.mode = patch.mode;
-    if (patch.optionsState !== undefined) data.optionsState = patch.optionsState;
-    if (patch.optionsStateAt !== undefined) data.optionsStateAt = patch.optionsStateAt;
+    if (patch.optionsState !== undefined)
+      data.optionsState = patch.optionsState;
+    if (patch.optionsStateAt !== undefined)
+      data.optionsStateAt = patch.optionsStateAt;
 
     return prisma.skill.update({
       where: { id },
@@ -104,7 +106,10 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
     const skillByQuestion = new Map<number, number>();
     const classByQuestion = new Map<number, number>();
     for (const question of questions) {
-      questionCountByClass.set(question.classId!, (questionCountByClass.get(question.classId!) ?? 0) + 1);
+      questionCountByClass.set(
+        question.classId!,
+        (questionCountByClass.get(question.classId!) ?? 0) + 1,
+      );
       skillByQuestion.set(question.id, question.skillId);
       classByQuestion.set(question.id, question.classId!);
     }
@@ -145,7 +150,6 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         completedBySkill.set(skillId, (completedBySkill.get(skillId) ?? 0) + 1);
       }
     }
-
 
     return skills.map((skill) => {
       return {
@@ -201,4 +205,22 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       lastActivityAt: null,
     }));
   },
+  claimStaleInit: (olderThan) =>
+    prisma.$queryRaw<Array<{ id: number; userId: number; topic: string }>>`
+      UPDATE "Skill" AS skill
+      SET "updatedAt" = NOW()
+      WHERE skill."status" = 'GENERATING'
+        AND skill."updatedAt" < ${olderThan}
+        AND NOT EXISTS (SELECT 1 FROM "Class" AS klass WHERE klass."skillId" = skill."id")
+      RETURNING skill."id", skill."userId", skill."topic"
+    `,
+
+  listStalePendingOptions: (olderThan) =>
+    prisma.skill.findMany({
+      where: {
+        optionsState: NextClassOptionsState.PENDING,
+        optionsStateAt: { lt: olderThan },
+      },
+      select: { id: true, userId: true },
+    }),
 });

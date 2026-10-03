@@ -33,7 +33,11 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
     updates: [] as { id: number; patch: Record<string, unknown> }[],
     cleared: [] as number[],
     enqueued: [] as { jobName: string; payload: unknown }[],
-    durableEnqueued: [] as { skillId: number; userId: number; target?: string }[],
+    durableEnqueued: [] as {
+      skillId: number;
+      userId: number;
+      target?: string;
+    }[],
   };
 
   const deps = {
@@ -57,6 +61,8 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
       findById: async () => skill,
       listByUser: async () => [],
       listByStatus: async () => [],
+      claimStaleInit: async () => [],
+      listStalePendingOptions: async () => [],
     },
     optionRepo: {
       replaceForSkill: async () => {
@@ -73,7 +79,11 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
       },
     },
     nextClassJobs: {
-      enqueue: async (input: { skillId: number; userId: number; target?: string }) => {
+      enqueue: async (input: {
+        skillId: number;
+        userId: number;
+        target?: string;
+      }) => {
         state.durableEnqueued.push(input);
       },
       claim: async () => {
@@ -136,7 +146,10 @@ describe("createClass", () => {
       target: "Practice LEFT JOIN with real datasets",
     });
 
-    expect(result).toMatchObject({ ok: true, value: { status: SkillStatus.GENERATING } });
+    expect(result).toMatchObject({
+      ok: true,
+      value: { status: SkillStatus.GENERATING },
+    });
     expect(state.cleared).toEqual([10]);
     expect(state.updates).toContainEqual({
       id: 10,

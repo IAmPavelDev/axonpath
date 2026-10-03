@@ -41,7 +41,13 @@ const SKILL = {
 
 type NextClassState = {
   prompts: string[];
-  createdClasses: { skillId: number; index: number; title: string; contentMd: string; aiModel?: string }[];
+  createdClasses: {
+    skillId: number;
+    index: number;
+    title: string;
+    contentMd: string;
+    aiModel?: string;
+  }[];
   questionInputs: unknown[];
   vectors: NewVector[];
   events: DomainEvent[];
@@ -55,7 +61,11 @@ const makeDeps = (
     skill?: typeof SKILL | null;
     last?: { id: number; index: number; title: string } | null;
     answers?: AnswerReview[];
-    history?: { textSnippet: string; source: string; classIndex: number | null }[];
+    history?: {
+      textSnippet: string;
+      source: string;
+      classIndex: number | null;
+    }[];
     initRaw?: string;
     initError?: AiError;
     /** Chat usage the fake next_class call reports (default: none — degrade). */
@@ -83,7 +93,10 @@ const makeDeps = (
             return { ok: false, error: overrides.initError };
           }
           state.prompts.push(_input.prompt);
-          return ok({ raw: overrides.initRaw ?? LESSON_JSON, usage: overrides.nextUsage });
+          return ok({
+            raw: overrides.initRaw ?? LESSON_JSON,
+            usage: overrides.nextUsage,
+          });
         }
         throw new Error(`unexpected schema ${request.schemaName}`);
       },
@@ -124,6 +137,12 @@ const makeDeps = (
       listByStatus: async () => {
         throw new Error("not used in next-class tests");
       },
+      claimStaleInit: async () => {
+        throw new Error("not used in next-class tests");
+      },
+      listStalePendingOptions: async () => {
+        throw new Error("not used in next-class tests");
+      },
     },
     classRepo: {
       findQuestionCountsByClassIds: async () => {
@@ -152,6 +171,12 @@ const makeDeps = (
       },
     },
     quizRepo: {
+      findLatestAttemptResults: async () => {
+        throw new Error("not used in next-class tests");
+      },
+      listPendingGradingIds: async () => {
+        throw new Error("not used in next-class tests");
+      },
       findWrongAnswersBySkill: async () => {
         throw new Error("not used in next-class tests");
       },
@@ -175,9 +200,10 @@ const makeDeps = (
         }
         // Default: the learner has answered through the newest class, so
         // generation proceeds (retake dedup would no-op the wrong way).
-        const last = overrides.last === undefined
-          ? { id: 5, index: 2, title: "Previous lesson" }
-          : overrides.last;
+        const last =
+          overrides.last === undefined
+            ? { id: 5, index: 2, title: "Previous lesson" }
+            : overrides.last;
         return last?.index ?? null;
       },
       findAnswerStatsBySkill: async () => {
@@ -216,12 +242,27 @@ describe("makeGenerateNextClass", () => {
   it("creates the next class at index + 1 with questions and memory vectors", async () => {
     const { deps, state } = makeDeps({
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
-        { questionId: 2, questionText: "Q2", userAnswer: "True", correctAnswer: "True", isCorrect: true },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
+        {
+          questionId: 2,
+          questionText: "Q2",
+          userAnswer: "True",
+          correctAnswer: "True",
+          isCorrect: true,
+        },
       ],
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.createdClasses).toEqual([
@@ -282,11 +323,20 @@ describe("makeGenerateNextClass", () => {
     const { deps, state } = makeDeps({
       skill: { ...SKILL, status: "PAUSED" },
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result).toEqual(ok(undefined));
     expect(state.prompts).toHaveLength(0);
@@ -302,7 +352,10 @@ describe("makeGenerateNextClass", () => {
       skill: { ...SKILL, status: "COMPLETED" },
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result).toEqual(ok(undefined));
     expect(state.prompts).toHaveLength(0);
@@ -314,11 +367,25 @@ describe("makeGenerateNextClass", () => {
   it("renders the known-gaps block only from ANSWER_DERIVED hits", async () => {
     const { deps, state } = makeDeps({
       history: [
-        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
-        { textSnippet: "Struggled with: LEFT JOIN filters.", source: "ANSWER_DERIVED", classIndex: 0 },
+        {
+          textSnippet: "Inner joins were covered last lesson",
+          source: "AI_NEXT",
+          classIndex: 0,
+        },
+        {
+          textSnippet: "Struggled with: LEFT JOIN filters.",
+          source: "ANSWER_DERIVED",
+          classIndex: 0,
+        },
       ],
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
@@ -360,7 +427,11 @@ describe("makeGenerateNextClass", () => {
   it("omits the asked-questions block without QA_DERIVED hits", async () => {
     const { deps, state } = makeDeps({
       history: [
-        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
+        {
+          textSnippet: "Inner joins were covered last lesson",
+          source: "AI_NEXT",
+          classIndex: 0,
+        },
       ],
     });
 
@@ -372,16 +443,30 @@ describe("makeGenerateNextClass", () => {
     expect(state.enqueued).toEqual([
       { jobName: "class-content-vectors", payload: { classId: 77 } },
     ]);
-   });
+  });
 
   it("omits the known-gaps block when retrieval has no ANSWER_DERIVED hits", async () => {
     const { deps, state } = makeDeps({
       history: [
-        { textSnippet: "Inner joins were covered last lesson", source: "AI_NEXT", classIndex: 0 },
-        { textSnippet: "First exposure to SQL joins", source: "AI_INITIAL", classIndex: 0 },
+        {
+          textSnippet: "Inner joins were covered last lesson",
+          source: "AI_NEXT",
+          classIndex: 0,
+        },
+        {
+          textSnippet: "First exposure to SQL joins",
+          source: "AI_INITIAL",
+          classIndex: 0,
+        },
       ],
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
@@ -420,7 +505,13 @@ describe("makeGenerateNextClass", () => {
   it("raises difficulty when every attempt was correct", async () => {
     const { deps, state } = makeDeps({
       answers: [
-        { questionId: 2, questionText: "Q2", userAnswer: "True", correctAnswer: "True", isCorrect: true },
+        {
+          questionId: 2,
+          questionText: "Q2",
+          userAnswer: "True",
+          correctAnswer: "True",
+          isCorrect: true,
+        },
       ],
     });
 
@@ -434,8 +525,20 @@ describe("makeGenerateNextClass", () => {
   it("keeps only the newest attempt per question, in both retake directions", async () => {
     const newerWrong = makeDeps({
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "right", correctAnswer: "A", isCorrect: true },
-        { questionId: 1, questionText: "Q1", userAnswer: "wrong", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "right",
+          correctAnswer: "A",
+          isCorrect: true,
+        },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "wrong",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
     await makeGenerateNextClass(newerWrong.deps)({ skillId: 10, userId: 1 });
@@ -444,8 +547,20 @@ describe("makeGenerateNextClass", () => {
 
     const newerRight = makeDeps({
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "wrong", correctAnswer: "A", isCorrect: false },
-        { questionId: 1, questionText: "Q1", userAnswer: "right", correctAnswer: "A", isCorrect: true },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "wrong",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "right",
+          correctAnswer: "A",
+          isCorrect: true,
+        },
       ],
     });
     await makeGenerateNextClass(newerRight.deps)({ skillId: 10, userId: 1 });
@@ -456,9 +571,21 @@ describe("makeGenerateNextClass", () => {
   it("splits retrieval hits by source and lifts the previous lesson summary", async () => {
     const { deps, state } = makeDeps({
       history: [
-        { textSnippet: "Learner is comfortable with SELECTs", source: "AI_INITIAL", classIndex: 0 },
-        { textSnippet: "Lesson 2 covered inner joins at depth", source: "AI_NEXT", classIndex: 2 },
-        { textSnippet: "Lesson 0 introduced tables", source: "AI_NEXT", classIndex: 0 },
+        {
+          textSnippet: "Learner is comfortable with SELECTs",
+          source: "AI_INITIAL",
+          classIndex: 0,
+        },
+        {
+          textSnippet: "Lesson 2 covered inner joins at depth",
+          source: "AI_NEXT",
+          classIndex: 2,
+        },
+        {
+          textSnippet: "Lesson 0 introduced tables",
+          source: "AI_NEXT",
+          classIndex: 0,
+        },
       ],
     });
 
@@ -480,11 +607,20 @@ describe("makeGenerateNextClass", () => {
   it("proceeds with empty history blocks when retrieval yields nothing", async () => {
     const { deps, state } = makeDeps({
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     const prompt = state.prompts[0] ?? "";
@@ -496,9 +632,15 @@ describe("makeGenerateNextClass", () => {
   it("fails NoClassesYet without calling the AI when init has not produced a class", async () => {
     const { deps, state } = makeDeps({ last: null });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
-    expect(result).toEqual({ ok: false, error: { kind: "NoClassesYet", skillId: 10 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "NoClassesYet", skillId: 10 },
+    });
     expect(state.prompts).toHaveLength(0);
     expect(state.createdClasses).toHaveLength(0);
   });
@@ -506,16 +648,27 @@ describe("makeGenerateNextClass", () => {
   it("fails SkillNotFound for an unknown skill", async () => {
     const { deps, state } = makeDeps({ skill: null });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 404, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 404,
+      userId: 1,
+    });
 
-    expect(result).toEqual({ ok: false, error: { kind: "SkillNotFound", skillId: 404 } });
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "SkillNotFound", skillId: 404 },
+    });
     expect(state.prompts).toHaveLength(0);
   });
 
   it("fails AiResponseInvalid and persists nothing when the model output is unparseable", async () => {
-    const { deps, state } = makeDeps({ initRaw: "Here is your lesson — no JSON though." });
+    const { deps, state } = makeDeps({
+      initRaw: "Here is your lesson — no JSON though.",
+    });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.kind).toBe("AiResponseInvalid");
@@ -530,7 +683,10 @@ describe("makeGenerateNextClass", () => {
       initError: { kind: "AiGenerationFailed", detail: "rate limited" },
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result).toEqual({
       ok: false,
@@ -547,11 +703,20 @@ describe("makeGenerateNextClass", () => {
       last: { id: 5, index: 3, title: "Newest lesson" },
       answeredIndex: 2,
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.prompts).toHaveLength(0);
@@ -566,11 +731,20 @@ describe("makeGenerateNextClass", () => {
     const { deps, state } = makeDeps({
       answeredIndex: 2,
       answers: [
-        { questionId: 1, questionText: "Q1", userAnswer: "B", correctAnswer: "A", isCorrect: false },
+        {
+          questionId: 1,
+          questionText: "Q1",
+          userAnswer: "B",
+          correctAnswer: "A",
+          isCorrect: false,
+        },
       ],
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.prompts).toHaveLength(1);
@@ -583,7 +757,10 @@ describe("makeGenerateNextClass", () => {
     // generation is the safe default (matches pre-dedup behavior).
     const { deps, state } = makeDeps({ answeredIndex: null });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.prompts).toHaveLength(1);
@@ -597,7 +774,10 @@ describe("makeGenerateNextClass", () => {
       skill: { ...SKILL, status: "GENERATING" },
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.skillUpdates).toEqual([
@@ -614,7 +794,10 @@ describe("makeGenerateNextClass", () => {
       answeredIndex: 2,
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.createdClasses).toHaveLength(0);
@@ -631,7 +814,10 @@ describe("makeGenerateNextClass", () => {
       initError: { kind: "AiGenerationFailed", detail: "rate limited" },
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(false);
     expect(state.skillUpdates).toEqual([
@@ -646,7 +832,10 @@ describe("makeGenerateNextClass", () => {
       skill: { ...SKILL, status: "PAUSED" },
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 1 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 1,
+    });
 
     expect(result.ok).toBe(true);
     expect(state.skillUpdates).toEqual([]);
@@ -657,23 +846,38 @@ describe("makeGenerateNextClass", () => {
       embeddingTokens: 90,
     });
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     const payload = state.events[0]?.payload as { usage?: unknown };
-    expect(payload.usage).toEqual({ promptTokens: 700, completionTokens: 1100 });
+    expect(payload.usage).toEqual({
+      promptTokens: 700,
+      completionTokens: 1100,
+    });
     // Summary + two snippet vectors split the batch total, sum preserved.
-    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([30, 30, 30]);
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([
+      30, 30, 30,
+    ]);
   });
 
   it("omits usage when the adapter reports none (tokenCount stays null)", async () => {
     const { deps, state } = makeDeps();
 
-    const result = await makeGenerateNextClass(deps)({ skillId: 10, userId: 7 });
+    const result = await makeGenerateNextClass(deps)({
+      skillId: 10,
+      userId: 7,
+    });
 
     expect(result.ok).toBe(true);
     const payload = state.events[0]?.payload as { usage?: unknown };
     expect(payload.usage).toBeUndefined();
-    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([null, null, null]);
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 });

@@ -6,9 +6,7 @@ import {
 } from "./ask-class-question";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
-import type {
-  ClassQaEntity,
-} from "@/modules/learning/domain/class-qa/class-qa";
+import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa";
 import type {
   ClassQaRepository,
   NewClassQaBlock,
@@ -20,7 +18,13 @@ import {
   SkillMode,
 } from "@/prisma/generated";
 
-const CLASS = { id: 5, skillId: 10, index: 0, title: "Joins", contentMd: "## Intro" };
+const CLASS = {
+  id: 5,
+  skillId: 10,
+  index: 0,
+  title: "Joins",
+  contentMd: "## Intro",
+};
 const SKILL = {
   id: 10,
   userId: 7,
@@ -66,7 +70,8 @@ const makeDeps = (
     findTopBySkill: async () => {
       throw new Error("not used in ask tests");
     },
-    findById: async () => overrides.klass === undefined ? CLASS : overrides.klass,
+    findById: async () =>
+      overrides.klass === undefined ? CLASS : overrides.klass,
   };
 
   const skillRepo: SkillRepository = {
@@ -76,16 +81,26 @@ const makeDeps = (
     update: async () => {
       throw new Error("not used in ask tests");
     },
-    findById: async () => overrides.skill === undefined ? SKILL : overrides.skill,
+    findById: async () =>
+      overrides.skill === undefined ? SKILL : overrides.skill,
     listByUser: async () => {
       throw new Error("not used in ask tests");
     },
     listByStatus: async () => {
       throw new Error("not used in ask tests");
     },
+    claimStaleInit: async () => {
+      throw new Error("not used in ask tests");
+    },
+    listStalePendingOptions: async () => {
+      throw new Error("not used in ask tests");
+    },
   };
 
   const qaRepo: ClassQaRepository = {
+    resetForRetry: async () => {
+      throw new Error("not used in ask tests");
+    },
     create: async (input) => {
       state.created.push(input);
       const entity: ClassQaEntity = {

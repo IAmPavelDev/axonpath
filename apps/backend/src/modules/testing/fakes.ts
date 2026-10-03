@@ -36,18 +36,14 @@ import type {
   VectorStoreError,
   VectorStorePort,
 } from "@/modules/memory/ports";
-import type {
-  ClassQaEntity,
-} from "@/modules/learning/domain/class-qa/class-qa";
+import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa";
 import type {
   ClassQaRepository,
   NewClassQaBlock,
 } from "@/modules/learning/domain/class-qa/class-qa.repository";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
-import {
-  makeGenerateClassOptions,
-} from "@/modules/tutoring/application/generate-class-options";
+import { makeGenerateClassOptions } from "@/modules/tutoring/application/generate-class-options";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
@@ -60,9 +56,7 @@ import type {
   NextClassJobClaim,
   NextClassJobRepository,
 } from "@/modules/jobs/next-class-job.repository";
-import type {
-  NextClassOptionRepository,
-} from "@/modules/learning/domain/skill/next-class-option.repository";
+import type { NextClassOptionRepository } from "@/modules/learning/domain/skill/next-class-option.repository";
 
 /**
  * Deterministic in-memory backend for the composed loop integration test:
@@ -91,7 +85,8 @@ export type AiScript = {
 const GRADING_RAW_DEFAULT = JSON.stringify({ results: [] });
 
 /** Default scripted Q&A answer. */
-const QA_ANSWER_RAW_DEFAULT = "A left join keeps every left row, matched or not.";
+const QA_ANSWER_RAW_DEFAULT =
+  "A left join keeps every left row, matched or not.";
 
 /** Default candidate-target response: three ranked directions. */
 const OPTIONS_JSON_DEFAULT = JSON.stringify({
@@ -101,7 +96,6 @@ const OPTIONS_JSON_DEFAULT = JSON.stringify({
     "Aggregate results after joining two tables",
   ],
 });
-
 
 export type LoopHarness = {
   state: {
@@ -120,7 +114,13 @@ export type LoopHarness = {
     >;
     classes: Map<
       number,
-      { id: number; skillId: number; index: number; title: string; contentMd: string }
+      {
+        id: number;
+        skillId: number;
+        index: number;
+        title: string;
+        contentMd: string;
+      }
     >;
     questions: Map<number, NewQuestion & { id: number }>;
     answers: (NewAnswer & { id: number; createdAt: Date })[];
@@ -143,7 +143,9 @@ export type LoopHarness = {
       query: string;
       topK?: number;
       excludeSkillId?: number;
-    }) => Promise<{ textSnippet: string; source: string; classIndex: number | null }[]>;
+    }) => Promise<
+      { textSnippet: string; source: string; classIndex: number | null }[]
+    >;
     skillRepo: SkillRepository;
     optionRepo: NextClassOptionRepository;
     nextClassOptions: NextClassOptionRepository;
@@ -151,7 +153,9 @@ export type LoopHarness = {
     quizRepo: QuizRepository;
     qaRepo: ClassQaRepository;
     eventRepo: EventRepository;
-    recordVectors: (vectors: NewVector[]) => Promise<Result<number[], VectorStoreError>>;
+    recordVectors: (
+      vectors: NewVector[],
+    ) => Promise<Result<number[], VectorStoreError>>;
     chatModel: string;
     clock: Clock;
     jobs: JobQueuePort;
@@ -162,12 +166,15 @@ export type LoopHarness = {
   runJob: (jobName: string) => Promise<unknown>;
 };
 
-const DESCRIPTION_RAW = JSON.stringify({ description: "Learn SQL joins by doing." });
+const DESCRIPTION_RAW = JSON.stringify({
+  description: "Learn SQL joins by doing.",
+});
 
 const INIT_JSON = JSON.stringify({
   classTitle: "SQL joins from zero",
   classContentMd: "## Introduction\nMeet the join.",
-  lessonSummary: "This lesson introduced inner and left joins with small datasets.",
+  lessonSummary:
+    "This lesson introduced inner and left joins with small datasets.",
   questions: [
     {
       type: "TRUE_FALSE",
@@ -220,7 +227,13 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     >(),
     classes: new Map<
       number,
-      { id: number; skillId: number; index: number; title: string; contentMd: string }
+      {
+        id: number;
+        skillId: number;
+        index: number;
+        title: string;
+        contentMd: string;
+      }
     >(),
     questions: new Map<number, NewQuestion & { id: number }>(),
     answers: [] as (NewAnswer & { id: number; createdAt: Date })[],
@@ -239,10 +252,16 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
 
   const ai: AiPort = {
     generateJson: async (input, request) => {
-      state.aiCalls.push({ schemaName: request.schemaName, prompt: input.prompt });
+      state.aiCalls.push({
+        schemaName: request.schemaName,
+        prompt: input.prompt,
+      });
       if (script.failOnceOn === request.schemaName && !failOnceConsumed) {
         failOnceConsumed = true;
-        const error: AiError = { kind: "AiGenerationFailed", detail: "scripted failure" };
+        const error: AiError = {
+          kind: "AiGenerationFailed",
+          detail: "scripted failure",
+        };
         return { ok: false, error };
       }
       const raw =
@@ -265,7 +284,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     generateEmbeddings: async (content) => {
       if (script.failEmbeddingsOnce && !embeddingsFailConsumed) {
         embeddingsFailConsumed = true;
-        const error: AiError = { kind: "AiGenerationFailed", detail: "embeddings down" };
+        const error: AiError = {
+          kind: "AiGenerationFailed",
+          detail: "embeddings down",
+        };
         return { ok: false, error };
       }
       return ok({
@@ -277,7 +299,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       });
     },
     generateText: async (input) => {
-      state.aiCalls.push({ schemaName: "class_qa_answer", prompt: input.prompt });
+      state.aiCalls.push({
+        schemaName: "class_qa_answer",
+        prompt: input.prompt,
+      });
       return ok({
         raw: script.qaAnswerRaw ?? QA_ANSWER_RAW_DEFAULT,
         usage: { promptTokens: 120, completionTokens: 80 },
@@ -285,12 +310,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     },
   };
 
-  const retrieveContext: LoopHarness["deps"]["retrieveContext"] = async (input) =>
+  const retrieveContext: LoopHarness["deps"]["retrieveContext"] = async (
+    input,
+  ) =>
     state.vectors
       .filter(
         (vector) =>
           vector.userId === input.userId &&
-          (input.excludeSkillId === undefined || vector.skillId !== input.excludeSkillId),
+          (input.excludeSkillId === undefined ||
+            vector.skillId !== input.excludeSkillId),
       )
       .map((vector) => ({
         textSnippet: vector.textSnippet,
@@ -319,11 +347,14 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         throw new Error(`skill ${id} not found`);
       }
       if (patch.topic !== undefined) skill.topic = patch.topic;
-      if (patch.description !== undefined) skill.description = patch.description;
+      if (patch.description !== undefined)
+        skill.description = patch.description;
       if (patch.status !== undefined) skill.status = patch.status;
       if (patch.mode !== undefined) skill.mode = patch.mode;
-      if (patch.optionsState !== undefined) skill.optionsState = patch.optionsState;
-      if (patch.optionsStateAt !== undefined) skill.optionsStateAt = patch.optionsStateAt;
+      if (patch.optionsState !== undefined)
+        skill.optionsState = patch.optionsState;
+      if (patch.optionsStateAt !== undefined)
+        skill.optionsStateAt = patch.optionsStateAt;
       return {
         id,
         topic: skill.topic,
@@ -368,6 +399,33 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           learnedPoints: 0,
           lastActivityAt: null,
         })),
+    claimStaleInit: async (olderThan) => {
+      // No clock in the harness: every stuck GENERATING skill without
+      // classes is claimable; tests control staleness via state setup.
+      const claimed: Array<{ id: number; userId: number; topic: string }> = [];
+      for (const skill of state.skills.values()) {
+        if (skill.status !== SkillStatus.GENERATING) continue;
+        const hasClass = [...state.classes.values()].some(
+          (cls) => cls.skillId === skill.id,
+        );
+        if (hasClass) continue;
+        claimed.push({
+          id: skill.id,
+          userId: skill.userId,
+          topic: skill.topic,
+        });
+      }
+      return claimed;
+    },
+    listStalePendingOptions: async (olderThan) =>
+      [...state.skills.values()]
+        .filter(
+          (skill) =>
+            skill.optionsState === NextClassOptionsState.PENDING &&
+            skill.optionsStateAt !== null &&
+            skill.optionsStateAt < olderThan,
+        )
+        .map((skill) => ({ id: skill.id, userId: skill.userId })),
   };
 
   let optionIdSeq = 0;
@@ -475,6 +533,43 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     state.questions.get(questionId)?.classId ?? null;
 
   const quizRepo: QuizRepository = {
+    listPendingGradingIds: async (olderThan, limit) =>
+      state.answers
+        .filter((answer) => {
+          if (answer.isCorrect !== null) return false;
+          const question = state.questions.get(answer.questionId);
+          return question?.type === "OPEN_ENDED";
+        })
+        .slice(0, limit)
+        .map((answer) => answer.id),
+    findLatestAttemptResults: async (classId, userId) => {
+      // Latest attempt = the last N answers for the class's questions (the
+      // client submits all-or-nothing), one row per question, attempt order.
+      const questionCount = [...state.questions.values()].filter(
+        (question) => question.classId === classId,
+      ).length;
+      if (questionCount === 0) return [];
+      return state.answers
+        .filter(
+          (answer) =>
+            answer.userId === userId &&
+            classIdByQuestion(answer.questionId) === classId,
+        )
+        .slice(-questionCount)
+        .flatMap((answer) => {
+          const question = state.questions.get(answer.questionId);
+          if (!question) return [];
+          return [
+            {
+              questionId: answer.questionId,
+              questionType: question.type,
+              userAnswer: answer.content.answer,
+              isCorrect: answer.isCorrect,
+              answerKey: question.answerKey,
+            },
+          ];
+        });
+    },
     findWrongAnswersBySkill: async (skillId, userId) => {
       // Recency desc: the harness stores answers in insertion (ascending) order.
       const attempts = [...state.answers]
@@ -536,7 +631,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           };
           byQuestion.set(answer.questionId, candidate);
         }
-        candidate.attempts.push({ isCorrect: answer.isCorrect, createdAt: answer.createdAt });
+        candidate.attempts.push({
+          isCorrect: answer.isCorrect,
+          createdAt: answer.createdAt,
+        });
       }
       return [...byQuestion.values()];
     },
@@ -554,7 +652,12 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       const views: QuestionView[] = [];
       for (const question of state.questions.values()) {
         if (question.classId === classId) {
-          views.push({ id: question.id, type: question.type, text: question.text, choices: question.choices });
+          views.push({
+            id: question.id,
+            type: question.type,
+            text: question.text,
+            choices: question.choices,
+          });
         }
       }
       return views;
@@ -582,7 +685,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return ids;
     },
-    findAnswersByClassAndUser: async (classId, userId): Promise<AnswerReview[]> =>
+    findAnswersByClassAndUser: async (
+      classId,
+      userId,
+    ): Promise<AnswerReview[]> =>
       state.answers
         .filter((answer) => {
           const question = state.questions.get(answer.questionId);
@@ -605,7 +711,8 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         const classId = classIdByQuestion(answer.questionId);
         if (classId === null) continue;
         const cls = state.classes.get(classId);
-        if (cls && (highest === null || cls.index > highest)) highest = cls.index;
+        if (cls && (highest === null || cls.index > highest))
+          highest = cls.index;
       }
       return highest;
     },
@@ -619,11 +726,17 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         answered.add(answer.questionId);
         if (answer.isCorrect === true) correct.add(answer.questionId);
       }
-      const statsByClass = new Map<number, { answeredCount: number; correctCount: number }>();
+      const statsByClass = new Map<
+        number,
+        { answeredCount: number; correctCount: number }
+      >();
       for (const questionId of answered) {
         const classId = classIdByQuestion(questionId);
         if (classId === null) continue;
-        const stat = statsByClass.get(classId) ?? { answeredCount: 0, correctCount: 0 };
+        const stat = statsByClass.get(classId) ?? {
+          answeredCount: 0,
+          correctCount: 0,
+        };
         stat.answeredCount += 1;
         if (correct.has(questionId)) stat.correctCount += 1;
         statsByClass.set(classId, stat);
@@ -652,12 +765,23 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         if (!answer) continue;
         answer.score = row.score;
         answer.isCorrect = row.isCorrect;
-        answer.content = { answer: answer.content.answer, feedback: row.feedback };
+        answer.content = {
+          answer: answer.content.answer,
+          feedback: row.feedback,
+        };
       }
     },
   };
 
   const qaRepo: ClassQaRepository = {
+    resetForRetry: async (id) => {
+      const block = state.qaBlocks.find((row) => row.id === id);
+      if (!block || block.status !== ClassQaStatus.FAILED) return null;
+      block.status = ClassQaStatus.PENDING;
+      block.answer = null;
+      block.aiModel = null;
+      return { id: block.id, status: block.status };
+    },
     create: async (input: NewClassQaBlock) => {
       const id = ++qaBlockIdSeq;
       state.qaBlocks.push({
@@ -680,10 +804,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         .sort((a, b) => a.anchorParagraph - b.anchorParagraph || a.id - b.id),
     listAnsweredByClass: async (classId, limit) =>
       state.qaBlocks
-        .filter((block) => block.classId === classId && block.status === ClassQaStatus.ANSWERED)
+        .filter(
+          (block) =>
+            block.classId === classId &&
+            block.status === ClassQaStatus.ANSWERED,
+        )
         .sort((a, b) => b.id - a.id)
         .slice(0, limit),
-    findById: async (id) => state.qaBlocks.find((block) => block.id === id) ?? null,
+    findById: async (id) =>
+      state.qaBlocks.find((block) => block.id === id) ?? null,
     answer: async (id, input) => {
       const block = state.qaBlocks.find((row) => row.id === id);
       if (block) {
@@ -721,7 +850,8 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           (vector) =>
             vector.userId === input.userId &&
             (input.skillId === undefined || vector.skillId === input.skillId) &&
-            (input.excludeSkillId === undefined || vector.skillId !== input.excludeSkillId),
+            (input.excludeSkillId === undefined ||
+              vector.skillId !== input.excludeSkillId),
         )
         .map((vector, i) => ({
           vectorId: i + 1,
@@ -737,7 +867,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
 
   const recordVectors: LoopHarness["deps"]["recordVectors"] = (vectors) =>
     vectorStore.upsert(vectors);
-
 
   const jobs: JobQueuePort = {
     enqueue: (jobName, payload) => {
@@ -787,7 +916,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     const leaseExpired =
       row.claimedAt !== null &&
       now.getTime() - row.claimedAt.getTime() > leaseMinutes * 60_000;
-    if (row.status === "PENDING" || (row.status === "PROCESSING" && leaseExpired)) {
+    if (
+      row.status === "PENDING" ||
+      (row.status === "PROCESSING" && leaseExpired)
+    ) {
       row.status = "PROCESSING";
       row.claimedAt = now;
       row.attempts += 1;

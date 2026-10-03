@@ -23,15 +23,11 @@ import {
   type GetUsageReport,
 } from "@/modules/learning/application/queries/get-usage-report";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
-import {
-  makeGenerateClassOptions,
-} from "@/modules/tutoring/application/generate-class-options";
+import { makeGenerateClassOptions } from "@/modules/tutoring/application/generate-class-options";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
-import {
-  makePrismaNextClassJobRepository,
-} from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
+import { makePrismaNextClassJobRepository } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
 import { makeNextClassReconciler } from "@/modules/jobs/next-class-reconciler";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 import {
@@ -42,12 +38,27 @@ import {
   makeClassQaSweeper,
   type ClassQaSweeper,
 } from "@/modules/jobs/class-qa-sweeper";
+import {
+  makeSkillInitSweeper,
+  type SkillInitSweeper,
+} from "@/modules/jobs/skill-init-sweeper";
+import {
+  makeSkillOptionsSweeper,
+  type SkillOptionsSweeper,
+} from "@/modules/jobs/skill-options-sweeper";
+import {
+  makeGradingSweeper,
+  type GradingSweeper,
+} from "@/modules/jobs/grading-sweeper";
 import type { LearningApiDeps } from "@/router";
 
 export type Container = LearningApiDeps & {
   /** Started by main.ts after listen; stopped on shutdown. */
   nextClassSweeper: NextClassSweeper;
   classQaSweeper: ClassQaSweeper;
+  skillInitSweeper: SkillInitSweeper;
+  skillOptionsSweeper: SkillOptionsSweeper;
+  gradingSweeper: GradingSweeper;
   /**
    * Resolves when every setImmediate job — including follow-up jobs enqueued
    * by jobs — has settled. The Lambda worker drains on it before returning;
@@ -58,9 +69,9 @@ export type Container = LearningApiDeps & {
   getUsageReport: GetUsageReport;
 };
 
-export const configureContainer = (
-  { sweeperMode = 'server' }: { sweeperMode?: 'server' | 'worker' } = {},
-): Container => {
+export const configureContainer = ({
+  sweeperMode = "server",
+}: { sweeperMode?: "server" | "worker" } = {}): Container => {
   const skillRepo = makePrismaSkillRepository();
   const classRepo = makePrismaClassRepository();
   const optionRepo = makePrismaNextClassOptionRepository();
@@ -197,9 +208,16 @@ export const configureContainer = (
     nextClassJobs,
     run: nextClassWorker.run,
     // Worker mode owns sweeping inline; server mode stays fire-and-forget.
-    awaitRuns: sweeperMode === 'worker',
+    awaitRuns: sweeperMode === "worker",
   });
   const classQaSweeper = makeClassQaSweeper({ qaRepo, jobs });
+  // Recovery nets for jobs without a durable row: the serverless API
+  // freezes its in-process setImmediate queue the moment a request returns,
+  // so skill-init, class-options and open-ended grading need state-derived
+  // recovery exactly like the QA and next-class sweepers above.
+  const skillInitSweeper = makeSkillInitSweeper({ skillRepo, jobs });
+  const skillOptionsSweeper = makeSkillOptionsSweeper({ skillRepo, jobs });
+  const gradingSweeper = makeGradingSweeper({ quizRepo, jobs });
 
   return {
     skillRepo,
@@ -218,5 +236,8 @@ export const configureContainer = (
     nextClassJobs,
     nextClassSweeper,
     classQaSweeper,
+    skillInitSweeper,
+    skillOptionsSweeper,
+    gradingSweeper,
   };
 };

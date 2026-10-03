@@ -12,7 +12,8 @@ import { ok } from "@/modules/platform/result";
 const INIT_JSON = JSON.stringify({
   classTitle: "SQL joins from zero",
   classContentMd: "## Introduction\nMeet the join.",
-  lessonSummary: "This lesson introduced inner and left joins with small datasets.",
+  lessonSummary:
+    "This lesson introduced inner and left joins with small datasets.",
   questions: [
     {
       type: "TRUE_FALSE",
@@ -24,7 +25,9 @@ const INIT_JSON = JSON.stringify({
   contextSnippets: ["First exposure to SQL joins"],
 });
 
-const DESCRIPTION_RAW = JSON.stringify({ description: "Learn SQL joins by doing." });
+const DESCRIPTION_RAW = JSON.stringify({
+  description: "Learn SQL joins by doing.",
+});
 
 /** Test seam: deterministic AI adapter + in-memory persistence. */
 const makeDeps = (
@@ -51,14 +54,20 @@ const makeDeps = (
   const deps: GenerateInitialSkillDeps = {
     ai: {
       generateJson: async (_input, request) => {
-        state.aiCalls.push({ schemaName: request.schemaName, prompt: _input.prompt });
+        state.aiCalls.push({
+          schemaName: request.schemaName,
+          prompt: _input.prompt,
+        });
         if (request.schemaName === "skill_description") {
           return ok({ raw: DESCRIPTION_RAW });
         }
         if (overrides.initError) {
           return { ok: false, error: overrides.initError };
         }
-        return ok({ raw: overrides.initRaw ?? INIT_JSON, usage: overrides.initUsage });
+        return ok({
+          raw: overrides.initRaw ?? INIT_JSON,
+          usage: overrides.initUsage,
+        });
       },
       generateEmbeddings: async (content) =>
         ok({
@@ -98,6 +107,12 @@ const makeDeps = (
       listByStatus: async () => {
         throw new Error("not used in init tests");
       },
+      claimStaleInit: async () => {
+        throw new Error("not used in init tests");
+      },
+      listStalePendingOptions: async () => {
+        throw new Error("not used in init tests");
+      },
     },
     classRepo: {
       findQuestionCountsByClassIds: async () => {
@@ -123,6 +138,12 @@ const makeDeps = (
       },
     },
     quizRepo: {
+      findLatestAttemptResults: async () => {
+        throw new Error("not used in init tests");
+      },
+      listPendingGradingIds: async () => {
+        throw new Error("not used in init tests");
+      },
       findWrongAnswersBySkill: async () => {
         throw new Error("not used in init tests");
       },
@@ -188,7 +209,10 @@ describe("makeGenerateInitialSkill", () => {
 
     expect(result.ok).toBe(true);
     // Status lifecycle: description update first, ACTIVE on success last.
-    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
+    expect(state.skillUpdates.at(-1)).toEqual({
+      id: 10,
+      patch: { status: "ACTIVE" },
+    });
 
     // One embedding batch: lesson summary (AI_NEXT) first, snippet (AI_INITIAL) after.
     expect(state.vectors).toHaveLength(2);
@@ -200,7 +224,10 @@ describe("makeGenerateInitialSkill", () => {
       userId: 1,
     });
     expect(state.vectors[0]?.textSnippet).toContain("inner and left joins");
-    expect(state.vectors[1]).toMatchObject({ source: "AI_INITIAL", classIndex: 0 });
+    expect(state.vectors[1]).toMatchObject({
+      source: "AI_INITIAL",
+      classIndex: 0,
+    });
 
     // Composite persist: the class and its questions go out in one call.
     expect(state.createdClasses[0]).toMatchObject({
@@ -248,7 +275,8 @@ describe("makeGenerateInitialSkill", () => {
           type: "OPEN_ENDED",
           text: "Explain why an INNER JOIN drops unmatched rows.",
           choices: ["Left Join", "Right Join"],
-          answerKey: "Rows without a match in the other table fail the join predicate.",
+          answerKey:
+            "Rows without a match in the other table fail the join predicate.",
         },
       ],
       contextSnippets: ["First exposure to SQL joins"],
@@ -262,11 +290,14 @@ describe("makeGenerateInitialSkill", () => {
       type: "OPEN_ENDED",
       text: "Explain why an INNER JOIN drops unmatched rows.",
       choices: [],
-      answerKey: "Rows without a match in the other table fail the join predicate.",
+      answerKey:
+        "Rows without a match in the other table fail the join predicate.",
       aiModel: "glm-5.3-flash",
     });
     // The unlock instruction reaches the model in the init prompt.
-    const initPrompt = state.aiCalls.find((call) => call.schemaName === "init_skill");
+    const initPrompt = state.aiCalls.find(
+      (call) => call.schemaName === "init_skill",
+    );
     expect(initPrompt?.prompt).toContain(
       "Include 1–2 open-ended questions per lesson (type OPEN_ENDED, choices: [], answerKey: a model answer)",
     );
@@ -280,7 +311,10 @@ describe("makeGenerateInitialSkill", () => {
     const result = await makeGenerateInitialSkill(deps)(input);
 
     expect(result.ok).toBe(false);
-    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "FAILED" } });
+    expect(state.skillUpdates.at(-1)).toEqual({
+      id: 10,
+      patch: { status: "FAILED" },
+    });
     expect(state.events).toEqual([
       {
         skillId: 10,
@@ -297,7 +331,9 @@ describe("makeGenerateInitialSkill", () => {
   });
 
   it("flips FAILED on unparseable model output", async () => {
-    const { deps, state } = makeDeps({ initRaw: "Sure — here is your lesson, no JSON though!" });
+    const { deps, state } = makeDeps({
+      initRaw: "Sure — here is your lesson, no JSON though!",
+    });
 
     const result = await makeGenerateInitialSkill(deps)(input);
     if (!result.ok) expect(result.error.kind).toBe("AiResponseInvalid");
@@ -322,7 +358,10 @@ describe("makeGenerateInitialSkill", () => {
     expect(state.createdClasses).toHaveLength(0);
     expect(state.vectors).toHaveLength(0);
     expect(state.events).toHaveLength(0);
-    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
+    expect(state.skillUpdates.at(-1)).toEqual({
+      id: 10,
+      patch: { status: "ACTIVE" },
+    });
   });
 
   it("retry after a pre-persist failure regenerates from scratch", async () => {
@@ -338,7 +377,10 @@ describe("makeGenerateInitialSkill", () => {
       "init_skill",
     ]);
     expect(state.createdClasses[0]).toMatchObject({ index: 0 });
-    expect(state.skillUpdates.at(-1)).toEqual({ id: 10, patch: { status: "ACTIVE" } });
+    expect(state.skillUpdates.at(-1)).toEqual({
+      id: 10,
+      patch: { status: "ACTIVE" },
+    });
   });
   it("audits chat usage on SKILL_CREATED and attributes embedding tokens to vectors", async () => {
     const { deps, state } = makeDeps({
@@ -368,6 +410,9 @@ describe("makeGenerateInitialSkill", () => {
     expect(result.ok).toBe(true);
     const payload = state.events[0]?.payload as { usage?: unknown };
     expect(payload.usage).toBeUndefined();
-    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([null, null]);
+    expect(state.vectors.map((vector) => vector.tokenCount)).toEqual([
+      null,
+      null,
+    ]);
   });
 });

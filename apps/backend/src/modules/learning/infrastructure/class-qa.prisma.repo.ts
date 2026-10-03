@@ -21,7 +21,11 @@ export const makePrismaClassQaRepository = (): ClassQaRepository => ({
   listByClass: async (classId) =>
     prisma.classQaBlock.findMany({
       where: { classId },
-      orderBy: [{ anchorParagraph: "asc" }, { createdAt: "asc" }, { id: "asc" }],
+      orderBy: [
+        { anchorParagraph: "asc" },
+        { createdAt: "asc" },
+        { id: "asc" },
+      ],
     }),
 
   listAnsweredByClass: async (classId, limit) =>
@@ -49,6 +53,21 @@ export const makePrismaClassQaRepository = (): ClassQaRepository => ({
       where: { id },
       data: { status: ClassQaStatus.FAILED },
     });
+  },
+
+  resetForRetry: async (id) => {
+    // Conditional update: only a FAILED block flips. A concurrent ANSWERED
+    // transition (lost race with a late job) leaves the row alone.
+    const updated = await prisma.classQaBlock.updateMany({
+      where: { id, status: ClassQaStatus.FAILED },
+      data: {
+        status: ClassQaStatus.PENDING,
+        answer: null,
+        aiModel: null,
+        requeueCount: 0,
+      },
+    });
+    return updated.count === 1 ? { id, status: ClassQaStatus.PENDING } : null;
   },
 
   // Atomic claim of stranded rows in one statement: still PENDING, untouched

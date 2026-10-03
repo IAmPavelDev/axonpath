@@ -1,4 +1,4 @@
-import { buildApp } from '@/app';
+import { buildApp } from "@/app";
 
 // Server mode: long-lived listener (EC2 container today, dev compose). The
 // Lambda entrypoints live in lambda-api.ts / lambda-worker.ts and share the
@@ -14,17 +14,20 @@ const startServer = async (): Promise<void> => {
       try {
         container.nextClassSweeper.stop();
         container.classQaSweeper.stop();
+        container.skillInitSweeper.stop();
+        container.skillOptionsSweeper.stop();
+        container.gradingSweeper.stop();
         await app.close();
-        app.log.info('Server closed successfully');
+        app.log.info("Server closed successfully");
         process.exit(0);
       } catch (error) {
-        app.log.error('Error during shutdown: ' + error);
+        app.log.error("Error during shutdown: " + error);
         process.exit(1);
       }
     };
 
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
     // Start server
     const address = await app.listen({
@@ -37,13 +40,16 @@ const startServer = async (): Promise<void> => {
     // blocks whose in-process job died with the old process.
     container.nextClassSweeper.start();
     container.classQaSweeper.start();
+    container.skillInitSweeper.start();
+    container.skillOptionsSweeper.start();
+    container.gradingSweeper.start();
 
     app.log.info(`Server running in ${app.config.NODE_ENV} mode`);
     app.log.info(`Server listening at ${address}`);
     app.log.info(`Health check: ${address}/health`);
     app.log.info(`Documentation: ${address}/`);
   } catch (err) {
-    console.error('Failed to start server: ' + err);
+    console.error("Failed to start server: " + err);
     process.exit(1);
   }
 };

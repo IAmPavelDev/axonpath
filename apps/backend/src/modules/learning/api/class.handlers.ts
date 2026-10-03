@@ -14,6 +14,10 @@ import {
   type AskClassQuestionDeps,
 } from "@/modules/learning/application/commands/ask-class-question";
 import {
+  makeRetryClassQuestion,
+  type RetryClassQuestionDeps,
+} from "@/modules/learning/application/commands/retry-class-question";
+import {
   makeListClassQa,
   type ListClassQaDeps,
 } from "@/modules/learning/application/queries/list-class-qa";
@@ -21,12 +25,14 @@ import {
 export type ClassApiDeps = GetClassListDeps &
   GetClassByIdDeps &
   AskClassQuestionDeps &
+  RetryClassQuestionDeps &
   ListClassQaDeps;
 
 export const makeClassHandlers = (deps: ClassApiDeps) => {
   const getClassList = makeGetClassList(deps);
   const getClassById = makeGetClassById(deps);
   const askClassQuestion = makeAskClassQuestion(deps);
+  const retryClassQuestion = makeRetryClassQuestion(deps);
   const listClassQa = makeListClassQa(deps);
 
   return {
@@ -63,6 +69,21 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
         return result.value;
       }) satisfies OrpcHandler<
         z.infer<typeof schema.class.AskClassQuestionInput>,
+        z.infer<typeof schema.class.AskClassQuestionOutput>
+      >,
+
+      retry: (async ({ input, context }) => {
+        const result = await retryClassQuestion({
+          classId: input.classId,
+          userId: context.user.id,
+          blockId: input.blockId,
+        });
+        if (isErr(result)) {
+          throw toORPCError(result.error);
+        }
+        return result.value;
+      }) satisfies OrpcHandler<
+        z.infer<typeof schema.class.RetryClassQaInput>,
         z.infer<typeof schema.class.AskClassQuestionOutput>
       >,
 

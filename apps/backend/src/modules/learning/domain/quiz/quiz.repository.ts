@@ -51,6 +51,21 @@ export type WrongAnswerRow = {
   classIndex: number | null;
   answeredAt: Date;
 };
+
+/**
+ * One row of the learner's LATEST attempt for a class (the last N answers,
+ * N = the class's question count), joined with what a results view needs.
+ * `answerKey` is raw Json — the caller keeps OPEN_ENDED model answers
+ * server-side and exposes gradable keys as the correct answer.
+ */
+export type LatestAttemptRow = {
+  questionId: number;
+  questionType: QuestionType;
+  userAnswer: string;
+  /** null = open-ended still awaiting (or failed) background grading. */
+  isCorrect: boolean | null;
+  answerKey: unknown;
+};
 export type QuizRepository = {
   findByClassId(classId: number): Promise<QuestionView[]>;
   /** Questions with answer keys + owning skillId, for server-side scoring. */
@@ -58,9 +73,29 @@ export type QuizRepository = {
   /** Batch-insert scored attempts; returns created ids in input order. */
   createAnswers(inputs: NewAnswer[]): Promise<number[]>;
   /** All of a user's attempts for a class's questions, ordered id asc (earliest first). */
-  findAnswersByClassAndUser(classId: number, userId: number): Promise<AnswerReview[]>;
+  findAnswersByClassAndUser(
+    classId: number,
+    userId: number,
+  ): Promise<AnswerReview[]>;
+  /**
+   * The user's LATEST attempt for a class as results rows, one per question
+   * of the class, attempt order preserved. Empty = never submitted.
+   */
+  findLatestAttemptResults(
+    classId: number,
+    userId: number,
+  ): Promise<LatestAttemptRow[]>;
+  /**
+   * Open-ended answers still ungraded past `olderThan` — the recovery net's
+   * enqueue set. Re-enqueueing is safe: grading settles every entry (a
+   * verdict or the "Grading failed" row), which drops it from the query.
+   */
+  listPendingGradingIds(olderThan: Date, limit: number): Promise<number[]>;
   /** Highest Class.index the user has any recorded answer for; null = no attempts. */
-  findHighestAnsweredClassIndex(skillId: number, userId: number): Promise<number | null>;
+  findHighestAnsweredClassIndex(
+    skillId: number,
+    userId: number,
+  ): Promise<number | null>;
   /**
    * Per-lesson answer aggregates for one user in a skill: distinct questions
    * answered, and of those, distinct questions answered correctly at least
@@ -70,7 +105,9 @@ export type QuizRepository = {
   findAnswerStatsBySkill(
     skillId: number,
     userId: number,
-  ): Promise<Array<{ classId: number; answeredCount: number; correctCount: number }>>;
+  ): Promise<
+    Array<{ classId: number; answeredCount: number; correctCount: number }>
+  >;
   /**
    * Stored attempts by id, joined with their questions. Missing ids are
    * silently absent from the result, keeping lookups input-independent.
@@ -84,7 +121,12 @@ export type QuizRepository = {
    * text is preserved.
    */
   updateGrades(
-    rows: Array<{ answerId: number; score: number; isCorrect: boolean; feedback: string }>,
+    rows: Array<{
+      answerId: number;
+      score: number;
+      isCorrect: boolean;
+      feedback: string;
+    }>,
   ): Promise<void>;
   /**
    * Lightweight activity feed for stats derivations: every recorded attempt
@@ -94,9 +136,7 @@ export type QuizRepository = {
    * single user's answers (beta scale); swap for an aggregate query if that
    * ever stops being true.
    */
-  findAnswerActivityByUser(
-    userId: number,
-  ): Promise<
+  findAnswerActivityByUser(userId: number): Promise<
     Array<{
       createdAt: Date;
       skillId: number | null;
@@ -110,12 +150,18 @@ export type QuizRepository = {
    * correct retake heals the question, a pending (ungraded) latest attempt
    * is not a mistake yet. Newest first.
    */
-  findWrongAnswersBySkill(skillId: number, userId: number): Promise<WrongAnswerRow[]>;
+  findWrongAnswersBySkill(
+    skillId: number,
+    userId: number,
+  ): Promise<WrongAnswerRow[]>;
   /**
    * Full attempt history per question of one user's skill, attempts oldest
    * first — the mastery ledger's raw material (review-schedule.ts). Every
    * graded and ungraded attempt counts; the pure scheduler decides what to
    * re-test.
    */
-  findReviewCandidatesBySkill(skillId: number, userId: number): Promise<ReviewCandidate[]>;
+  findReviewCandidatesBySkill(
+    skillId: number,
+    userId: number,
+  ): Promise<ReviewCandidate[]>;
 };
