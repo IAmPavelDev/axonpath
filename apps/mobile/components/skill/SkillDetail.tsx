@@ -30,9 +30,7 @@ const ClassItemSkeleton = () => (
   </View>
 );
 
-type ClassListRow =
-  | { kind: 'generating' }
-  | { kind: 'class'; classData: Class };
+type ClassListRow = { kind: 'generating' } | { kind: 'class'; classData: Class };
 
 export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const router = useRouter();
@@ -119,18 +117,12 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     onSuccess: invalidate,
   });
 
-  const {
-    mutate: retryGeneration,
-    isPending: retryPending,
-  } = useMutation({
+  const { mutate: retryGeneration, isPending: retryPending } = useMutation({
     mutationFn: () => rpc.skill.retry({ id: skillId }),
     onSuccess: invalidate,
   });
 
-  const {
-    mutate: setSkillMode,
-    isPending: modePending,
-  } = useMutation({
+  const { mutate: setSkillMode, isPending: modePending } = useMutation({
     mutationFn: (mode: 'AUTOMATIC' | 'MANUAL') => rpc.skill.setMode({ id: skillId, mode }),
     onSuccess: invalidate,
   });
@@ -210,7 +202,10 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     }
   };
 
-  const classRows: ClassListRow[] = sortedClasses.map((classData) => ({ kind: 'class', classData }));
+  const classRows: ClassListRow[] = sortedClasses.map((classData) => ({
+    kind: 'class',
+    classData,
+  }));
   // While a lesson generates, a skeleton row holds its place at the top of
   // the list (newest first) and is replaced by the real row on arrival.
   const listData: ClassListRow[] =
@@ -236,7 +231,11 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
         }
         ItemSeparatorComponent={() => <View className="border-hairline border-border" />}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor="hsl(0 0% 45%)" />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="hsl(0 0% 45%)"
+          />
         }
         ListHeaderComponent={
           <View>
@@ -272,6 +271,27 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                     editable={!isSaving}
                   />
                 </View>
+                {(skill.status === 'ACTIVE' || skill.status === 'PAUSED') && (
+                  <View className="gap-2">
+                    <Text variant="label">Lesson flow</Text>
+                    <SegmentedControl
+                      options={[
+                        { value: 'AUTOMATIC', label: 'Automatic' },
+                        { value: 'MANUAL', label: 'Manual' },
+                      ]}
+                      value={skill.mode}
+                      onChange={(value) => {
+                        if (value !== skill.mode) {
+                          setSkillMode(value);
+                        }
+                      }}
+                    />
+                    <Text variant="muted" className="text-[13px] leading-[18px]">
+                      Automatic queues the next lesson as soon as you finish one. Manual lets you
+                      pick each next lesson&apos;s direction yourself.
+                    </Text>
+                  </View>
+                )}
                 {topicError && (
                   <Text variant="muted" className="text-destructive">
                     {topicError.message}
@@ -313,13 +333,11 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 {skill.description.length > 0 && (
                   <Pressable
                     className="flex-row items-start gap-1"
-                    onPress={() => setDescriptionOpen((open) => !open)}
-                  >
+                    onPress={() => setDescriptionOpen((open) => !open)}>
                     <Text
                       variant="body"
                       className="flex-1 text-muted-foreground"
-                      numberOfLines={descriptionOpen ? undefined : 1}
-                    >
+                      numberOfLines={descriptionOpen ? undefined : 1}>
                       {skill.description}
                     </Text>
                     <Icon
@@ -343,37 +361,18 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                     </Button>
                   </View>
                 )}
-                {(skill.status === 'ACTIVE' || skill.status === 'PAUSED') && (
-                  <View className="gap-2 pt-1">
-                    <Text variant="label">Lesson flow</Text>
-                    <SegmentedControl
-                      options={[
-                        { value: 'AUTOMATIC', label: 'Automatic' },
-                        { value: 'MANUAL', label: 'Manual' },
-                      ]}
-                      value={skill.mode}
-                      onChange={(value) => {
-                        if (value !== skill.mode) {
-                          setSkillMode(value);
-                        }
-                      }}
-                    />
-                    {skill.mode === 'MANUAL' && skill.status === 'ACTIVE' && (
-                      <Button
-                        className="mt-1"
-                        disabled={modePending}
-                        onPress={() => router.push(`/skill/${skillId}/new-class`)}>
-                        <View className="flex-row items-center gap-2">
-                          <Icon as={Plus} size={16} strokeWidth={2} />
-                          <Text>
-                            {sortedClasses.length === 0
-                              ? 'Create your first class'
-                              : 'Add next class'}
-                          </Text>
-                        </View>
-                      </Button>
-                    )}
-                  </View>
+                {skill.mode === 'MANUAL' && skill.status === 'ACTIVE' && (
+                  <Button
+                    className="mt-1"
+                    disabled={modePending}
+                    onPress={() => router.push(`/skill/${skillId}/new-class`)}>
+                    <View className="flex-row items-center gap-2">
+                      <Icon as={Plus} size={16} strokeWidth={2} />
+                      <Text>
+                        {sortedClasses.length === 0 ? 'Create your first class' : 'Add next class'}
+                      </Text>
+                    </View>
+                  </Button>
                 )}
               </View>
             )}

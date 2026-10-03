@@ -1,7 +1,6 @@
 import { ClassConspect } from '@components/class/ClassConspect';
 import { QaComposer } from '@components/class/QaComposer';
 import { Quiz } from '@components/quiz/Quiz';
-import { QuizResult } from '@components/quiz/QuizResult';
 import { ScreenHeader } from '@components/screen-header';
 import { SegmentedControl } from '@atomics/segmented-control';
 import { Skeleton } from '@atomics/skeleton';
@@ -21,22 +20,15 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useQuizStore } from '@/store/quiz.store';
 import type { QuizSubmitResult } from '@/types/quiz';
 import type { ClassById } from '@/types/class';
 import rpc from '@/utils/rpc';
 import { useClassQa } from '@/hooks/use-class-qa';
+import type { Timeout } from '@/types/global';
 
 type Tab = 'conspect' | 'quiz';
-
-/**
- * Quiz-flow phase owned by this screen: 'quiz' → 'result' once the submit
- * result arrives (rendered full-screen from local state). Continue leaves
- * for the skill's lessons list — the backend composes the next lesson on
- * its own, surfaced by the skill's preparing status.
- */
-type Phase = 'quiz' | 'result';
 
 /** Collapse runs over the first 140px of scroll. */
 const COLLAPSE_RANGE = 140;
@@ -56,18 +48,6 @@ export default function ClassScreen() {
   }, [params.classId]);
 
   const [tab, setTab] = useState<Tab>('conspect');
-  const [phase, setPhase] = useState<Phase>('quiz');
-  const [quizResult, setQuizResult] = useState<QuizSubmitResult | null>(null);
-  const quizQuestions =
-    useQuizStore((state) => (classIdNum !== undefined ? state.questions[classIdNum] : undefined)) ??
-    [];
-
-  // router.replace to another lesson can reuse this screen instance —
-  // restart the quiz flow for the new lesson.
-  useEffect(() => {
-    setPhase('quiz');
-    setQuizResult(null);
-  }, [classIdNum]);
 
   const { data, isLoading, isError, error } = useQuery<ClassById, Error>({
     queryKey: ['classById', classIdNum],
@@ -116,21 +96,6 @@ export default function ClassScreen() {
     return (
       <View className="flex-1 items-center justify-center gap-4 px-8">
         <Text variant="muted">Failed to load class: {error?.message ?? 'Unknown error'}</Text>
-      </View>
-    );
-  }
-
-  if (phase === 'result' && quizResult) {
-    return (
-      <View className="flex-1">
-        <View className="px-6 pt-1">
-          <ScreenHeader onBack={() => router.back()} className="-mx-3" />
-        </View>
-        <QuizResult
-          result={quizResult}
-          questions={quizQuestions}
-          onContinue={() => router.replace(`/skill/${data.skillId}`)}
-        />
       </View>
     );
   }
@@ -188,10 +153,7 @@ export default function ClassScreen() {
       <View style={{ flex: 1, display: tab === 'quiz' ? 'flex' : 'none' }}>
         <QuizView
           classId={classIdNum}
-          onCompleted={(result) => {
-            setQuizResult(result);
-            setPhase('result');
-          }}
+          onContinue={() => router.replace(`/skill/${data.skillId}`)}
         />
       </View>
     </View>
@@ -228,6 +190,17 @@ function ConspectView({
     groupYs.current.set(index, entry);
   };
 
+  // Insertion animation window: conspect layout animations run only for ~2s
+  // after an ask, so tab flips and unrelated reflows never animate.
+  const [insertionFx, setInsertionFx] = useState(false);
+  const insertionFxTimer = useRef<Timeout>(0);
+  useEffect(() => () => clearTimeout(insertionFxTimer.current), []);
+  const pulseInsertionFx = () => {
+    setInsertionFx(true);
+    clearTimeout(insertionFxTimer.current);
+    insertionFxTimer.current = setTimeout(() => setInsertionFx(false), 2200);
+  };
+
   // Reading progress 0..1 for the current lesson.
   const progress = useSharedValue(0);
 
@@ -259,6 +232,7 @@ function ConspectView({
     qa.ask(anchor, question, selected ? excerpt : null);
     setComposer(null);
     setAnchorMode(false);
+    pulseInsertionFx();
     scrollToAnchor(anchor);
   };
 
@@ -289,17 +263,19 @@ function ConspectView({
         <ClassConspect
           contentMd={classData.contentMd}
           anchorMode={anchorMode}
-          onAnchorChunk={(index, excerpt) => setComposer({ anchor: index, excerpt, selected: false })}
+          onAnchorChunk={(index, excerpt) =>
+            setComposer({ anchor: index, excerpt, selected: false })
+          }
           qaByAnchor={qa.blocksByAnchor}
-          onAskSelection={(index, text) => setComposer({ anchor: index, excerpt: text, selected: true })}
+          animateInsertions={insertionFx}
+          onAskSelection={(index, text) =>
+            setComposer({ anchor: index, excerpt: text, selected: true })
+          }
           onRegisterChunkLayout={registerLayout('chunk')}
           onRegisterQaLayout={registerLayout('qa')}
           onFollowUp={(index, excerpt) => setComposer({ anchor: index, excerpt, selected: false })}
           onRetryTemp={qa.retryTemp}
-          onAskAgain={(index, question) => {
-            qa.ask(index, question);
-            scrollToAnchor(index);
-          }}
+          onAskAgain={(block) => qa.askAgain(block)}
         />
       </Animated.ScrollView>
 
@@ -343,19 +319,49 @@ function ConspectView({
   );
 }
 
-function QuizView({
-  classId,
-  onCompleted,
-}: {
-  classId: number;
-  onCompleted: (result: QuizSubmitResult) => void;
-}) {
+const GRADING_POLL_MS = 4000;
+/** Stop polling ~5 min in — a dead provider balance would otherwise spin forever. */
+const GRADING_POLL_MAX_MS = 5 * 60_000;
+
+function QuizView({ classId, onContinue }: { classId: number; onContinue: () => void }) {
+  const queryClient = useQueryClient();
+  // The just-submitted result seeds the page instantly; the server query is
+  // the durable truth (remounts, graded updates, in-flight polling).
+  const [submittedResult, setSubmittedResult] = useState<QuizSubmitResult | null>(null);
+  useEffect(() => setSubmittedResult(null), [classId]);
+
   const { data, isLoading } = useQuery({
     queryKey: ['quizByClassId', classId],
     queryFn: () => rpc.quiz.get({ classId }),
-    // Graded scores for open-ended answers land server-side after the
-    // submit; remounting this screen (returning to the lesson) pulls them.
     refetchOnMount: 'always',
+  });
+
+  // Submit lock + results on re-entry: a non-null server result means the
+  // quiz tab renders results, never the stepper. Polls only while open-ended
+  // grading is in flight, at a sane interval, capped in time.
+  const resultQuery = useQuery({
+    queryKey: ['quizResult', classId],
+    queryFn: () => rpc.quiz.result({ classId }),
+    refetchInterval: (query) => {
+      const result = query.state.data?.result;
+      if (!result?.perQuestion.some((p) => p.isCorrect === null)) return false;
+      return Date.now() - query.state.dataUpdatedAt > GRADING_POLL_MAX_MS ? false : GRADING_POLL_MS;
+    },
+  });
+
+  const submit = useMutation({
+    mutationFn: () => {
+      const submitted = useQuizStore
+        .getState()
+        .answers.filter((a): a is { questionId: number; answer: string } => a.answer !== null)
+        .map(({ questionId, answer }) => ({ questionId, answer }));
+      return rpc.quiz.submit({ classId, answers: submitted });
+    },
+    onSuccess: (result) => {
+      setSubmittedResult(result);
+      // Seed the query cache: results render now and the grading poll takes over.
+      queryClient.setQueryData(['quizResult', classId], { result });
+    },
   });
 
   if (isLoading || !data) {
@@ -373,5 +379,14 @@ function QuizView({
     );
   }
 
-  return <Quiz questions={data} classId={classId} onCompleted={onCompleted} />;
+  return (
+    <Quiz
+      questions={data}
+      classId={classId}
+      result={submittedResult ?? resultQuery.data?.result ?? null}
+      submitPending={submit.isPending}
+      onSubmit={() => submit.mutate()}
+      onContinue={onContinue}
+    />
+  );
 }

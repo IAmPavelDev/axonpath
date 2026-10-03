@@ -101,10 +101,18 @@ export function useClassQa(classId: number) {
     [askRequest, tempBlocks]
   );
 
-  /** Re-ask after a terminal FAILED server block: new request, new block. */
+  /**
+   * Restart a terminal FAILED server block in place: same id, back to
+   * PENDING. The server keeps the block (no duplicate cards below it); on
+   * request failure the block stays FAILED and simply remains retryable.
+   */
   const askAgain = useCallback(
-    (block: ClassQaBlock) => ask(block.anchorParagraph, block.question, block.anchorText),
-    [ask]
+    (block: ClassQaBlock) =>
+      rpc.class.qa
+        .retry({ classId, blockId: block.id })
+        .then(() => queryClient.invalidateQueries({ queryKey: ['classQa', classId] }))
+        .catch(() => {}),
+    [classId, queryClient]
   );
 
   // Document order: chunks ascend by index; within a chunk the server list is

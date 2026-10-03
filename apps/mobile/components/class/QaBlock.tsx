@@ -3,6 +3,7 @@ import { Button } from '@atomics/button';
 import { Text } from '@atomics/text';
 import { ConspectMarkdown } from '@/lib/conspect-markdown';
 import type { QaRenderItem } from '@/hooks/use-class-qa';
+import type { ClassQaBlock } from '@/types/class';
 import { Sparkles } from 'lucide-react-native';
 import { useColorScheme } from 'nativewind';
 import { FC } from 'react';
@@ -14,7 +15,8 @@ type Props = {
   excerpt: string;
   onFollowUp: (anchorParagraph: number, excerpt: string) => void;
   onRetryTemp: (tempId: number) => void;
-  onAskAgain: (anchorParagraph: number, question: string) => void;
+  /** Restarts a FAILED server block in place — same id, same anchor. */
+  onAskAgain: (block: ClassQaBlock) => void;
 };
 
 /**
@@ -32,8 +34,7 @@ export const QaBlock: FC<Props> = ({ item, excerpt, onFollowUp, onRetryTemp, onA
   const anchor = item.kind === 'temp' ? item.temp.anchorParagraph : item.block.anchorParagraph;
   // The stored verbatim selection wins over the chunk preview (Phase 8): the
   // card quotes exactly what the learner selected at ask time.
-  const quote =
-    (item.kind === 'temp' ? item.temp.anchorText : item.block.anchorText) ?? excerpt;
+  const quote = (item.kind === 'temp' ? item.temp.anchorText : item.block.anchorText) ?? excerpt;
 
   const failedServer = item.kind === 'server' && item.block.status === 'FAILED';
   const failedTemp = item.kind === 'temp' && item.temp.failed;
@@ -73,9 +74,7 @@ export const QaBlock: FC<Props> = ({ item, excerpt, onFollowUp, onRetryTemp, onA
             size="sm"
             className="mt-1 self-start px-0"
             onPress={() =>
-              item.kind === 'temp'
-                ? onRetryTemp(item.temp.tempId)
-                : onAskAgain(anchor, item.block.question)
+              item.kind === 'temp' ? onRetryTemp(item.temp.tempId) : onAskAgain(item.block)
             }>
             <Sparkles size={14} color={dark ? 'hsl(213 94% 68%)' : 'hsl(221 83% 47%)'} />
             <Text className="font-sans-semibold text-[14px] text-primary">Try again</Text>

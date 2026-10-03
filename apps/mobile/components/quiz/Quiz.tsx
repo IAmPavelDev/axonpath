@@ -5,43 +5,13 @@ import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Textarea } from '@atomics/textarea';
 import { QuestionType, Question as QuestionDataType, QuizSubmitResult } from '@/types/quiz';
 import { cn } from '@/lib/utils';
-import { THEME } from '@/lib/theme';
 import { useColorScheme } from 'nativewind';
-import rpc from '@/utils/rpc';
-import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, Check } from 'lucide-react-native';
-import { useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import {
-  FlatList,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-  type TextStyle,
-  type ScrollViewProps,
-} from 'react-native';
-import {
-  FC,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react';
-import { useQuizStore } from '@/store/quiz.store';
 import { codeSegments } from '@/lib/rich-text';
-import { Timeout } from '@/types/global';
-
-const AUTO_ADVANCE_MS = 340;
-
-/** Inline-code chip sizing inside quiz prose; mono face + colors come from codeSegments. */
-const QUESTION_CODE: TextStyle = { fontSize: 17, borderRadius: 5 };
-const CHOICE_CODE: TextStyle = { fontSize: 13, borderRadius: 4 };
+import { Check, X } from 'lucide-react-native';
+import { FC, useLayoutEffect } from 'react';
+import { Pressable, ScrollView, View, type TextStyle } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQuizStore } from '@/store/quiz.store';
 
 const TYPE_LABEL: Record<QuestionType, string> = {
   MULTIPLE_CHOICE: 'Multiple choice',
@@ -49,110 +19,46 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   OPEN_ENDED: 'Open answer',
 };
 
+/** Inline-code chip sizing inside quiz prose; mono face + colors come from codeSegments. */
+const QUESTION_CODE: TextStyle = { fontSize: 17, borderRadius: 5 };
+const CHOICE_CODE: TextStyle = { fontSize: 13, borderRadius: 4 };
+
+type QuestionResultEntry = QuizSubmitResult['perQuestion'][number];
+/**
+ * One page, two modes. Before submit: every question with its options/answer
+ * field in one scrollable list. After submit (`result` non-null): the same
+ * list locked, the options themselves carrying the verdict — green for the
+ * right answer, red for the learner's miss — plus a small Right/Wrong badge
+ * beside the question label ("Grading…" while an open-ended grade is in
+ * flight). No carousel — a plain vertical ScrollView keeps focus, scrolling
+ * and the keyboard interactions trivial and reliable.
+ */
 export const Quiz: FC<{
   questions: QuestionDataType[];
   classId: number;
-  /** Fired with the submit result; the parent screen renders the result page. */
-  onCompleted: (result: QuizSubmitResult) => void;
-}> = (props) => {
+  /** Non-null once the quiz is submitted — verdict mode, form locked. */
+  result: QuizSubmitResult | null;
+  submitPending: boolean;
+  onSubmit: () => void;
+  onContinue: () => void;
+}> = ({ questions, classId, result, submitPending, onSubmit, onContinue }) => {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const { colorScheme } = useColorScheme();
-  const { setQuestions, questions, answers, setAnswer } = useQuizStore();
-  const classQuestionsList = questions[props.classId] ?? [];
-  const [index, setIndex] = useState(0);
-  const listRef = useRef<FlatList<QuestionDataType>>(null);
-  const advanceTimer = useRef<Timeout>(0);
-  // RN 0.86 + React 19: VirtualizedList attaches its ScrollView ref via
-  // cloneElement, whose reserved `ref` never reaches the function-component
-  // ScrollViewWrapper — so the list's internal ref stays null and every
-  // programmatic scroll (scrollToIndex/scrollToOffset) silently no-ops.
-  // Capture the instance ourselves through the scrollViewRef prop instead.
-  const scrollRef = useRef<ScrollView | null>(null);
-  // RN's generated d.ts narrows RefSetter to RefObject; the runtime accepts a
-  // nullable-current ref object, hence the cast.
-  const renderScrollComponent = useCallback(
-    (props: ScrollViewProps) => (
-      <ScrollView {...props} scrollViewRef={scrollRef as RefObject<ScrollView>} />
-    ),
-    []
-  );
+  const { setQuestions, answers, setAnswer } = useQuizStore();
 
   useLayoutEffect(() => {
-    setQuestions(props.classId, props.questions);
-  }, [props.classId, props.questions]);
+    setQuestions(classId, questions);
+  }, [classId, questions]);
 
-  useEffect(() => () => clearTimeout(advanceTimer.current), []);
-
-  const progress = useSharedValue(0);
-  useEffect(() => {
-    progress.value = withTiming(
-      classQuestionsList.length ? (index + 1) / classQuestionsList.length : 0,
-      { duration: 260 }
-    );
-  }, [index, classQuestionsList.length, progress]);
-  const barStyle = useAnimatedStyle(() => ({
-    transform: [{ scaleX: progress.value }],
-  }));
-
-  const submit = useMutation({
-    mutationFn: () => {
-      const submitted = answers
-        .filter((a): a is { questionId: number; answer: string } => a.answer !== null)
-        .map(({ questionId, answer }) => ({ questionId, answer }));
-      return rpc.quiz.submit({ classId: props.classId, answers: submitted });
-    },
-    onSuccess: (result) => {
-      props.onCompleted(result);
-    },
-  });
-
-  const total = classQuestionsList.length;
+  const submitted = result !== null;
+  const answerOf = (questionId: number) =>
+    answers.find((a) => a.questionId === questionId)?.answer ?? null;
   const unanswered = answers.filter((a) => a.answer === null).length;
-  const isLast = index >= total - 1;
+  const entryOf = (questionId: number) =>
+    result?.perQuestion.find((p) => p.questionId === questionId);
+  const pendingGrading = submitted && result.perQuestion.some((p) => p.isCorrect === null);
 
-  const goTo = useCallback(
-    (page: number) => {
-      const target = Math.min(Math.max(0, page), Math.max(0, total - 1));
-      if (scrollRef.current) {
-        // Native: the list's internal scrollToIndex/scrollToOffset early-return
-        // on its lost ref, so scroll the ScrollView instance directly. Each
-        // page is exactly `width` wide (getItemLayout), so this is exact.
-        scrollRef.current.scrollTo({ x: target * width, y: 0, animated: true });
-      } else {
-        // Web (react-native-web): the list's own ref works there.
-        listRef.current?.scrollToOffset({ offset: target * width, animated: true });
-      }
-      setIndex(target);
-    },
-    [total, width]
-  );
-
-  const scheduleAdvance = useCallback(() => {
-    clearTimeout(advanceTimer.current);
-    advanceTimer.current = setTimeout(() => {
-      goTo(Math.min(index + 1, Math.max(0, total - 1)));
-    }, AUTO_ADVANCE_MS);
-  }, [goTo, index, total]);
-
-  const onMomentumScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const page = Math.round(event.nativeEvent.contentOffset.x / width);
-    if (page !== index && page >= 0 && page < total) {
-      setIndex(page);
-    }
-  };
-
-  const selectOption = (question: QuestionDataType, option: string) => {
-    const previous = answers.find((a) => a.questionId === question.id)?.answer ?? null;
-    const next = previous === option ? null : option;
-    setAnswer(question.id, next);
-    // Deselecting must not fling the user forward.
-    if (next !== null) {
-      scheduleAdvance();
-    }
-  };
-
-  if (total === 0) {
+  if (questions.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-8">
         <Text variant="muted">No questions for this lesson yet.</Text>
@@ -160,99 +66,112 @@ export const Quiz: FC<{
     );
   }
 
-  const answerOf = (questionId: number) =>
-    answers.find((a) => a.questionId === questionId)?.answer ?? null;
-
   return (
     <KeyboardAvoidingView style={{ flex: 1 }}>
-      <View className="h-1 bg-muted">
-        <Animated.View
-          style={[
-            {
-              flex: 1,
-              backgroundColor: THEME[colorScheme ?? 'light'].foreground,
-              transformOrigin: 'left',
-            },
-          ]}
-        />
-      </View>
-
-      <Text variant="meta" className="px-6 pb-2 pt-3 tabular-nums">
-        Question {index + 1} of {total}
-      </Text>
-
-      <FlatList
-        ref={listRef}
-        data={classQuestionsList}
-        renderScrollComponent={Platform.OS === 'web' ? undefined : renderScrollComponent}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        getItemLayout={(_, page) => ({ length: width, offset: width * page, index: page })}
-        onMomentumScrollEnd={onMomentumScrollEnd}
-        renderItem={({ item: question }) => (
-          <View style={{ width }} className="flex-1 px-6 pt-4">
-            <Text variant="label">{TYPE_LABEL[question.type]}</Text>
-            <Text className="mt-3 font-sans-medium text-[22px] leading-[30px] tracking-tight">
-              {codeSegments(question.text, colorScheme ?? 'light', { style: QUESTION_CODE })}
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24 }}
+        keyboardShouldPersistTaps="handled">
+        {submitted && (
+          <View className="pb-4">
+            <Text className="font-sans-medium text-[22px] leading-[28px] tracking-tight">
+              Quiz results
             </Text>
-
-            {question.type === QuestionType.OPEN_ENDED ? (
-              <Textarea
-                value={answerOf(question.id) ?? ''}
-                onChangeText={(value) => setAnswer(question.id, value)}
-                placeholder="Write your answer…"
-                className="mt-6 rounded-lg"
-              />
-            ) : (
-              <View className="mt-7 gap-3">
-                {(question.type === QuestionType.TRUE_FALSE
-                  ? ['True', 'False']
-                  : question.choices
-                ).map((option) => (
-                  <OptionTile
-                    key={option}
-                    label={option}
-                    selected={answerOf(question.id) === option}
-                    onPress={() => selectOption(question, option)}
-                  />
-                ))}
-              </View>
-            )}
+            <Text variant="muted" className="mt-1 tabular-nums">
+              {result.score} of {result.total} correct
+              {pendingGrading ? ' · open answers still grading' : ''}
+            </Text>
           </View>
         )}
-      />
+
+        {questions.map((question, position) => {
+          const entry = entryOf(question.id);
+          const verdict = submitted && entry ? verdictOf(entry) : null;
+          return (
+            <View
+              key={question.id}
+              className="border-hairline border-border py-5"
+              style={position === 0 ? { borderTopWidth: 0 } : undefined}>
+              <View className="flex-row items-center gap-2">
+                <Text variant="label" className="tabular-nums">
+                  {position + 1}/{questions.length} · {TYPE_LABEL[question.type]}
+                </Text>
+                {verdict && <VerdictBadge verdict={verdict} />}
+              </View>
+              <Text className="mt-3 font-sans-medium text-[22px] leading-[30px] tracking-tight">
+                {codeSegments(question.text, colorScheme ?? 'light', { style: QUESTION_CODE })}
+              </Text>
+
+              {question.type === QuestionType.OPEN_ENDED ? (
+                <Textarea
+                  value={
+                    (submitted
+                      ? (entry?.userAnswer ?? answerOf(question.id))
+                      : answerOf(question.id)) ?? ''
+                  }
+                  onChangeText={(value) => setAnswer(question.id, value)}
+                  placeholder="Write your answer…"
+                  editable={!submitted}
+                  className={cn(
+                    'mt-4 rounded-lg',
+                    verdict === 'right' && 'border-success',
+                    verdict === 'wrong' && 'border-destructive'
+                  )}
+                />
+              ) : (
+                <View className="mt-4 gap-3">
+                  {(question.type === QuestionType.TRUE_FALSE
+                    ? ['True', 'False']
+                    : question.choices
+                  ).map((option) => {
+                    // Post-submit the tiles carry the verdict themselves:
+                    // green = right answer, red = the learner's miss.
+                    const tone = !verdict
+                      ? undefined
+                      : option === entry?.correctAnswer
+                        ? ('success' as const)
+                        : option === entry?.userAnswer
+                          ? ('destructive' as const)
+                          : undefined;
+                    return (
+                      <OptionTile
+                        key={option}
+                        label={option}
+                        selected={answerOf(question.id) === option}
+                        tone={tone}
+                        disabled={submitted}
+                        onPress={() =>
+                          setAnswer(question.id, answerOf(question.id) === option ? null : option)
+                        }
+                      />
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </ScrollView>
 
       <View
         className="flex-row items-center gap-3 px-6 pt-3"
         style={{ paddingBottom: 16 + insets.bottom }}>
-        <Button
-          variant="outline"
-          size="icon"
-          accessibilityLabel="Previous question"
-          disabled={index === 0}
-          onPress={() => goTo(index - 1)}>
-          <Icon as={ArrowLeft} size={18} />
-        </Button>
-        {isLast ? (
+        {submitted ? (
+          <Button size="lg" className="flex-1" onPress={onContinue}>
+            <Text>Continue</Text>
+          </Button>
+        ) : (
           <Button
             size="lg"
             className="flex-1"
-            disabled={unanswered > 0 || submit.isPending}
-            onPress={() => submit.mutate()}>
+            disabled={unanswered > 0 || submitPending}
+            onPress={onSubmit}>
             <Text>
-              {submit.isPending
+              {submitPending
                 ? 'Checking…'
                 : unanswered > 0
                   ? `${unanswered} unanswered`
                   : 'Submit answers'}
             </Text>
-          </Button>
-        ) : (
-          <Button size="lg" className="flex-1" onPress={() => goTo(index + 1)}>
-            <Text>Next question</Text>
-            <Icon as={ArrowRight} size={16} className="text-primary-foreground" />
           </Button>
         )}
       </View>
@@ -260,34 +179,89 @@ export const Quiz: FC<{
   );
 };
 
+type QuestionVerdict = 'right' | 'wrong' | 'grading';
+
+const verdictOf = (entry: QuestionResultEntry): QuestionVerdict =>
+  entry.isCorrect === null ? 'grading' : entry.isCorrect ? 'right' : 'wrong';
+
+/**
+ * Small verdict beside the question label: green Right, red Wrong, muted
+ * Grading… while an open-ended AI grade is still in flight.
+ */
+const VerdictBadge: FC<{ verdict: QuestionVerdict }> = ({ verdict }) => (
+  <Text
+    variant="label"
+    className={cn(
+      verdict === 'right' && 'text-success',
+      verdict === 'wrong' && 'text-destructive',
+      verdict === 'grading' && 'text-muted-foreground'
+    )}>
+    {verdict === 'right' ? 'Right' : verdict === 'wrong' ? 'Wrong' : 'Grading…'}
+  </Text>
+);
 /**
  * Option tile. Selection is a full monochrome inversion — the strongest
- * binary signal this design system has, no color required.
+ * binary signal this design system has, no color required. Post-submit the
+ * tile carries the verdict instead: green = right answer, red = the miss.
  */
-const OptionTile: FC<{ label: string; selected: boolean; onPress: () => void }> = ({
-  label,
-  selected,
-  onPress,
-}) => {
+const VERDICT_TILE: Record<
+  'success' | 'destructive',
+  { tile: string; text: string; icon: string }
+> = {
+  success: {
+    tile: 'bg-success',
+    text: 'text-success-foreground',
+    icon: 'text-success-foreground',
+  },
+  destructive: {
+    tile: 'bg-destructive',
+    text: 'text-destructive-foreground',
+    icon: 'text-destructive-foreground',
+  },
+};
+
+const OptionTile: FC<{
+  label: string;
+  selected: boolean;
+  /** Post-submit verdict tone; set tiles render read-only colored. */
+  tone?: 'success' | 'destructive';
+  disabled?: boolean;
+  onPress: () => void;
+}> = ({ label, selected, tone, disabled = false, onPress }) => {
   const { colorScheme } = useColorScheme();
+  const styles = tone ? VERDICT_TILE[tone] : null;
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={selected ? { selected: true } : {}}
       onPress={onPress}
+      disabled={disabled}
       className={cn(
         'flex-row items-center gap-3 rounded-lg px-4 py-3.5',
-        selected ? 'bg-primary' : 'border border-foreground/15 bg-background active:bg-accent'
+        styles
+          ? styles.tile
+          : selected
+            ? 'bg-primary'
+            : 'border border-foreground/15 bg-background active:bg-accent'
       )}>
       <Text
         className={cn(
           'flex-1 text-[15px] leading-5',
-          selected ? 'text-primary-foreground' : 'text-foreground'
+          styles ? styles.text : selected ? 'text-primary-foreground' : 'text-foreground'
         )}>
-        {codeSegments(label, colorScheme ?? 'light', { style: CHOICE_CODE, monochrome: selected })}
+        {codeSegments(label, colorScheme ?? 'light', {
+          style: CHOICE_CODE,
+          monochrome: selected || !!styles,
+        })}
       </Text>
-      {selected && (
+      {styles && tone === 'success' && (
+        <Icon as={Check} size={16} className={styles.icon} strokeWidth={2.5} />
+      )}
+      {styles && tone === 'destructive' && (
+        <Icon as={X} size={16} className={styles.icon} strokeWidth={2.5} />
+      )}
+      {!styles && selected && (
         <Icon as={Check} size={16} className="text-primary-foreground" strokeWidth={2.5} />
       )}
     </Pressable>

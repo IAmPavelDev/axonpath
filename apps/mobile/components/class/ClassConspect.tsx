@@ -1,9 +1,11 @@
 import { chunkExcerpt, splitConspectChunks } from '@/lib/conspect-chunks';
 import { ConspectMarkdown } from '@/lib/conspect-markdown';
 import type { QaRenderItem } from '@/hooks/use-class-qa';
+import type { ClassQaBlock } from '@/types/class';
 import { QaBlock } from '@components/class/QaBlock';
 import { Fragment, FC, useMemo } from 'react';
 import { Text, TouchableWithoutFeedback, View } from 'react-native';
+import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
 
 type Props = {
   contentMd: string;
@@ -16,6 +18,12 @@ type Props = {
   onAnchorChunk?: (index: number, excerpt: string) => void;
   /** QA blocks grouped by anchorParagraph (client chunk index). */
   qaByAnchor?: Map<number, QaRenderItem[]>;
+  /**
+   * True for ~2s around an ask: conspect layout transitions run only inside
+   * this window, so a fresh QA group slides its neighbors down seamlessly
+   * while every unrelated reflow (tab flips, theme changes) stays instant.
+   */
+  animateInsertions?: boolean;
   /** Layout bookkeeping so the parent can scroll a fresh block into view. */
   onRegisterChunkLayout?: (index: number, y: number) => void;
   onRegisterQaLayout?: (index: number, y: number) => void;
@@ -23,7 +31,8 @@ type Props = {
   /** Long-press "Ask AI" on selected text: (chunk index, selected text). */
   onAskSelection?: (index: number, selectedText: string) => void;
   onRetryTemp?: (tempId: number) => void;
-  onAskAgain?: (anchorParagraph: number, question: string) => void;
+  /** Restarts a FAILED server block in place — same id, same anchor. */
+  onAskAgain?: (block: ClassQaBlock) => void;
 };
 
 /**
@@ -37,6 +46,7 @@ export const ClassConspect: FC<Props> = ({
   anchorMode = false,
   onAnchorChunk,
   qaByAnchor,
+  animateInsertions = false,
   onRegisterChunkLayout,
   onRegisterQaLayout,
   onFollowUp,
@@ -60,31 +70,40 @@ export const ClassConspect: FC<Props> = ({
     [qaByAnchor, chunks.length]
   );
 
+  // Layout transitions are only wired while `animateInsertions` is set.
+  const chunkLayout = animateInsertions ? LinearTransition.duration(280) : undefined;
+  const groupLayout = animateInsertions ? LinearTransition.duration(280) : undefined;
+  const itemEntering = animateInsertions ? FadeInDown.duration(240) : undefined;
+
   // A QA group renders only when it has blocks; its y offset is what the
   // parent scrolls to when a fresh block is inserted.
   const renderQaGroup = (anchor: number, items: QaRenderItem[] | undefined, excerpt: string) =>
     items?.length ? (
-      <View
+      <Animated.View
+        layout={groupLayout}
         onLayout={(e) => onRegisterQaLayout?.(anchor, e.nativeEvent.layout.y)}
         accessibilityLabel="Questions and answers about this passage">
         {items.map((item) => (
-          <QaBlock
-            key={item.key}
-            item={item}
-            excerpt={excerpt}
-            onFollowUp={onFollowUp ?? (() => {})}
-            onRetryTemp={onRetryTemp ?? (() => {})}
-            onAskAgain={onAskAgain ?? (() => {})}
-          />
+          <Animated.View key={item.key} entering={itemEntering} layout={groupLayout}>
+            <QaBlock
+              item={item}
+              excerpt={excerpt}
+              onFollowUp={onFollowUp ?? (() => {})}
+              onRetryTemp={onRetryTemp ?? (() => {})}
+              onAskAgain={onAskAgain ?? (() => {})}
+            />
+          </Animated.View>
         ))}
-      </View>
+      </Animated.View>
     ) : null;
 
   return (
     <View>
       {chunks.map((chunk, i) => (
         <Fragment key={i}>
-          <View onLayout={(e) => onRegisterChunkLayout?.(i, e.nativeEvent.layout.y)}>
+          <Animated.View
+            layout={chunkLayout}
+            onLayout={(e) => onRegisterChunkLayout?.(i, e.nativeEvent.layout.y)}>
             <TouchableWithoutFeedback
               disabled={!anchorMode}
               accessibilityRole="button"
@@ -100,7 +119,7 @@ export const ClassConspect: FC<Props> = ({
                 />
               </View>
             </TouchableWithoutFeedback>
-          </View>
+          </Animated.View>
           {renderQaGroup(i, qaByAnchor?.get(i), chunkExcerpt(chunk))}
         </Fragment>
       ))}
