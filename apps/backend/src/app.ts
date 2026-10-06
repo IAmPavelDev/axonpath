@@ -3,7 +3,7 @@ import type { FastifyServerFactoryHandler } from 'fastify';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { RPCHandler } from '@orpc/server/node';
-import { CORSPlugin } from '@orpc/server/plugins';
+import { BatchHandlerPlugin, CORSPlugin } from '@orpc/server/plugins';
 import sensible from '@fastify/sensible';
 import env from '@fastify/env';
 import { buildRouters } from '@router/index';
@@ -38,7 +38,14 @@ export const buildApp = async () => {
   const routers = buildRouters(container);
 
   const rpc = new RPCHandler(routers, {
-    plugins: [new CORSPlugin(), new ZodSmartCoercionPlugin()],
+    plugins: [
+      new CORSPlugin(),
+      new ZodSmartCoercionPlugin(),
+      // Mobile fires a screen's parallel queries in one tick; the batch plugin
+      // collapses them into a single HTTP round trip. Buffered mode:
+      // serverless-http / API Gateway cannot stream a batch response body.
+      new BatchHandlerPlugin(),
+    ],
   });
 
   const openAPIGenerator = new OpenAPIGenerator({
