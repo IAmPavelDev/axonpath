@@ -3,7 +3,7 @@ dist
 build
 .env
 .env.aws
-.env.aws.serverless
+.env.aws.serverless*
 
 apps/backend/src/prisma/generated
 
