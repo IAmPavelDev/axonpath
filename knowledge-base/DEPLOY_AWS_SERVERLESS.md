@@ -1,8 +1,15 @@
 # Axon — Serverless deployment (Lambda + API Gateway + Neon + Qdrant Cloud)
 
-> Written 2026-10-02. **Execution authority for the serverless cutover** — the
-> replacement for `DEPLOY_AWS_BETA.md` (EC2 t2.micro), which stays valid until
-> the cutover completes and the EC2 instance is terminated.
+> Written 2026-10-02. **Execution authority for the serverless deployment.**
+>
+> **2026-10-08 region move:** production runs in **eu-central-1** (API
+> `https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com`, Neon project
+> `ep-jolly-boat-b1hgyqni`, Qdrant on a second Qdrant Cloud account — the first
+> account's free tier allows a single cluster). Motivation: the single user sits
+> in EEST; measured RTT to us-east-1 was ~235 ms per request (~0.73 s fresh
+> HTTPS connection), which dominated perceived latency while Lambda itself
+> served warm requests in ~20 ms (p50). Secrets live in `.env.aws.serverless.eu`.
+> The old us-east-1 stack (`5m849jukxl…`) is retired after device verification.
 >
 > Cost decision (2026-10-02): the AWS account was created 2024-05-05, so the
 > classic 12-month free tier expired 2025-05-05 and the post-2025-07 credits
@@ -36,7 +43,7 @@ jobs (see `next-class-job.repository.ts`).
 2. Create a **Neon** project (neon.tech, free plan) → copy the **pooled**
    connection string → `DATABASE_URL`.
 3. Create a **Qdrant Cloud** free cluster → API key → `QDRANT_URL` + `QDRANT_API_KEY`.
-4. Fill `.env.aws.serverless` (template: `.env.aws.serverless.example`).
+4. Fill `.env.aws.serverless.eu` (template: `.env.aws.serverless.example`).
 
 ## 2. Provision (scripted)
 
@@ -48,7 +55,11 @@ Creates ECR repo `axon-backend`, roles `axon-lambda-role` / `axon-scheduler-role
 functions `axon-api` (30 s) + `axon-worker` (15 min), HTTP API `axon-http`
 (payload 1.0 — quick-create's 2.0 breaks serverless-http), schedule
 `axon-worker-tick`, $1 billing alarm (us-east-1; confirm the SNS email).
-Idempotent: re-runs update functions in place.
+Idempotent: re-runs update functions in place. Two ordering/creation gotchas,
+both fixed 2026-10-08: the script must run **before the first image push in a
+new region** (it creates the ECR repo), and it creates the **`$default` stage**
+the invoke URL serves through — without that stage every request 404s at the
+gateway and never reaches Lambda.
 
 ## 3. Build & push the image (every deploy)
 
