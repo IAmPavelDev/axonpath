@@ -1,4 +1,4 @@
-package com.axon.app
+package com.iampauld3v.axon
 
 import android.app.Application
 import android.content.res.Configuration

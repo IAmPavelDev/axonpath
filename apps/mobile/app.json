@@ -21,7 +21,7 @@
       "bundleIdentifier": "com.axon.app"
     },
     "android": {
-      "package": "com.axon.app",
+      "package": "com.iampauld3v.axon",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#405D82"

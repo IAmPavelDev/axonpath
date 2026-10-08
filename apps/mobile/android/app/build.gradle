@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.axon.app'
+    namespace 'com.iampauld3v.axon'
     defaultConfig {
-        applicationId 'com.axon.app'
+        applicationId 'com.iampauld3v.axon'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
