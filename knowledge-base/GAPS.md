@@ -77,6 +77,10 @@ production: (a) Play Store package is PERMANENT — either keep
 `com.iampauld3v.axon` as the final identity (recommended; already live on
 devices) or rename once more before the first store upload, never after;
 (b) old `com.axon.app` installs do NOT receive updates — manual reinstall of the
-final build; (c) Firebase auth is the JS SDK (API-key based), so no Firebase
-console change was needed or is needed later; (d) iOS `bundleIdentifier` still
+final build; (c) Firebase auth is the JS SDK, but GOOGLE sign-in is native
+(@react-native-google-signin) and needs an Android OAuth client per package id:
+register the app in Firebase console (axon-9e88e) with its SHA-1 — done
+2026-10-08 for com.iampauld3v.axon with the EAS release cert
+8d6cb4d85ce3ae0ec8c5d24159d2d3bb6011a1aa (error 10 before that). Any future
+package change or new signing key must repeat this; (d) iOS `bundleIdentifier` still
 `com.axon.app` (untouched) — align it in the same production pass if iOS ships.
