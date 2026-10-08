@@ -67,3 +67,16 @@ Qdrant `axon_vectors` (3072, Cosine); Postgres keeps relational metadata only. R
 
 ## 🟢 15. Build/dev reproducibility → closed (Phase 6: prod image + compose)
 
+
+## 🟠 16. Android package renamed for beta — production identity decision
+
+Beta-only rename `com.axon.app` → `com.iampauld3v.axon` (2026-10-08, dev branch):
+Google Play Protect flagged the generic `com.axon.app` + self-signed cert as a
+possible imitation app on every sideload install. Touch points when going to
+production: (a) Play Store package is PERMANENT — either keep
+`com.iampauld3v.axon` as the final identity (recommended; already live on
+devices) or rename once more before the first store upload, never after;
+(b) old `com.axon.app` installs do NOT receive updates — manual reinstall of the
+final build; (c) Firebase auth is the JS SDK (API-key based), so no Firebase
+console change was needed or is needed later; (d) iOS `bundleIdentifier` still
+`com.axon.app` (untouched) — align it in the same production pass if iOS ships.
