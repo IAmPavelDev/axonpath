@@ -13,7 +13,7 @@
   report the blocker, and let the user decide (e.g. they pause the exit node
   themselves, or you fall back to cached/base images).
 
-## Project state (actualized 2026-10-02)
+## Project state (actualized 2026-10-08)
 - Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
   `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth.
   Backend 286/286 tests and mobile `tsc --noEmit` green as of 2026-10-02.
@@ -28,13 +28,20 @@
 - TypeScript 7.0.2 upgrade committed (`d974bd2`). Durable Postgres job queue +
   sweeper landed in `5902e68`/`d6508e8`; sweeper gained `tickOnce`/`awaitRuns` and the
   setImmediate queue an `idle()` drain for the Lambda worker (2026-10-02).
-- Deployment (serverless, since 2026-10-02): Lambda `axon-api` (30 s) + `axon-worker`
+- Deployment (serverless, since 2026-10-02; **eu-central-1 since 2026-10-08** — the
+  us-east-1→eu-central-1 move was a latency fix: RTT from EEST drops ~235→~60 ms;
+  oRPC batch plugins cut screen-mount parallel queries to one HTTP round trip):
+  Lambda `axon-api` (30 s) + `axon-worker`
   (15 min, EventBridge `rate(1 minute)`) behind API Gateway HTTPS
-  (`https://5m849jukxl.execute-api.us-east-1.amazonaws.com`, baked into the APK via
-  `apps/mobile/eas.json`), Postgres on **Neon free** (pooled URL), vectors on **Qdrant
-  Cloud free**. One image serves both functions: `pnpm backend:image:lambda` → push to
-  ECR → `bash scripts/provision-serverless.sh` (idempotent, us-east-1). Secrets in
-  `.env.aws.serverless` (git-ignored; DATABASE_URL must stay quoted — the script
+  (`https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com`, baked into the APK via
+  `apps/mobile/eas.json`), Postgres on **Neon free** (pooled URL, project
+  `ep-jolly-boat-b1hgyqni`), vectors on **Qdrant Cloud free** (new account — the old
+  account's free tier allowed only one cluster). One image serves both functions:
+  `pnpm backend:image:lambda` → push to
+  ECR → `bash scripts/provision-serverless.sh` (idempotent, eu-central-1; run it
+  before the first push in a new region — it creates the ECR repo — and it creates
+  the `$default` stage the invoke URL needs). Secrets in
+  `.env.aws.serverless.eu` (git-ignored; DATABASE_URL must stay quoted — the script
   sources the file with bash). `docker-compose-prod.yaml` remains for a self-hosted
   fallback only. Old EC2 beta (`DEPLOY_AWS_BETA.md`) terminated 2026-10-02 after its
   data and vectors were migrated. Known limit: API Gateway caps requests at 30 s;
