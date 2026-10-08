@@ -116,6 +116,11 @@ if [ -z "$INTEGRATION_ID" ] || [ "$INTEGRATION_ID" = "None" ]; then
 fi
 aws $R apigatewayv2 create-route --api-id "$API_ID" --route-key "ANY /" --target "integrations/$INTEGRATION_ID" >/dev/null 2>&1 || true
 aws $R apigatewayv2 create-route --api-id "$API_ID" --route-key "ANY /{proxy+}" --target "integrations/$INTEGRATION_ID" >/dev/null 2>&1 || true
+# The invoke URL only serves traffic through the auto-deploying $default stage;
+# create-api without --target does not create one, and without it every request
+# 404s at the gateway ("Not Found" never reaching Lambda).
+aws $R apigatewayv2 create-stage --api-id "$API_ID" --stage-name '$default' --auto-deploy >/dev/null 2>&1 || \
+  aws $R apigatewayv2 update-stage --api-id "$API_ID" --stage-name '$default' --auto-deploy >/dev/null
 
 aws $R lambda add-permission --function-name axon-api --statement-id apigw-invoke \
   --action lambda:InvokeFunction --principal apigateway.amazonaws.com \
