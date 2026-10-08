@@ -56,3 +56,6 @@ yarn-error.log*
 
 # data dumps (user data, never commit)
 backups/
+
+# session worktrees
+.worktrees/
