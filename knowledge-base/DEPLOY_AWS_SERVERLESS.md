@@ -61,6 +61,42 @@ new region** (it creates the ECR repo), and it creates the **`$default` stage**
 the invoke URL serves through — without that stage every request 404s at the
 gateway and never reaches Lambda.
 
+## 2a. Observability (wired by the provision script)
+
+The script also configures logging/metrics/alarms (idempotent, re-run applies it
+to an existing stack):
+
+| Signal | Where | Notes |
+|---|---|---|
+| Requests | Log group `/axon/apigw/access` (30-day retention) | API GW access logs, JSON per request: requestId, method, routeKey, status, integration error |
+| Backend logs | `/aws/lambda/axon-api`, `/aws/lambda/axon-worker` (30-day retention) | pino JSON (`src/lib/logger.ts`); `role` field distinguishes api/worker; `LOG_LEVEL` env tunes verbosity (default `info`) |
+| RPC request line | same Lambda groups | `msg:"request"` with `method`, `url`, `status`, `durationMs`, `userId` (Firebase `sub`, decoded unverified for attribution) |
+| Errors | same Lambda groups | `level >= 50`; undeclared oRPC throws are captured (with stack) by the handler's `clientInterceptors` |
+| Metrics | CloudWatch `Axon/Api` (Requests, Server5xx), `Axon/Backend` (Errors) | metric filters on the log groups above; user counting is query-only (no distinct-count metric) |
+| Alarms | `axon-api-5xx` (≥5/5 min), `axon-backend-errors` (≥50/15 min) | SNS topic `axon-alerts` in the stack region when `ALERT_EMAIL` is set |
+
+CloudWatch Logs Insights queries (console → Logs → the log group → Insights):
+
+```sql
+-- Requests per day (log group: /axon/apigw/access)
+stats count(*) by bin(1d)
+
+-- Distinct active users per day (log group: /aws/lambda/axon-api)
+filter msg = "request"
+stats count_distinct(userId) by bin(1d)
+
+-- p95 API latency, 5-minute buckets (log group: /aws/lambda/axon-api)
+filter msg = "request"
+stats pct(durationMs, 95) by bin(5m)
+
+-- Latest errors (either function)
+filter level >= 50
+sort @timestamp desc | limit 50
+```
+
+Mobile crashes/errors land in **Firebase Crashlytics** (free, unlimited) with
+Analytics for user counts — see `apps/mobile/FIREBASE_SETUP.md` §Crashlytics.
+
 ## 3. Build & push the image (every deploy)
 
 ```sh

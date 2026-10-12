@@ -1,11 +1,14 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-10-02** (backend 39 files / 280 tests green, mobile
+> Status: **CURRENT as of 2026-10-12** (backend 46 test files / 310 tests green, mobile
 > `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A /
 > Ask-AI, skill.progress, AI token-usage capture + `usage.report`, `stats.overview`,
-> `skill.mistakes`, QA context layering + vector memory, and the **skill lesson-flow
+> `skill.mistakes`, QA context layering + vector memory, the **skill lesson-flow
 > modes** (AUTOMATIC/MANUAL candidate-direction picker + mastery-ledger spaced
-> review) shipped; live-verified by `e2e-manual-mode.mts` SMOKE_PASS 2026-10-02).
+> review), and **AI-attempt analytics + observability** (AiAttempt table, pino JSON
+> logs → CloudWatch metric filters/alarms/dashboards — `knowledge-base/ANALYTICS.md`;
+> mobile Firebase Crashlytics + Analytics) shipped; loop live-verified by
+> `e2e-manual-mode.mts` SMOKE_PASS 2026-10-02).
 > Execution authority for what is next:
 > `knowledge-base/BUSINESS_DECISIONS.md` §4 (post-backlog horizon — first levers landed,
 > see §4.4). Beta history:

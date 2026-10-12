@@ -5,8 +5,11 @@
 > header was stale on that point). This file was the 2026-09 gap analysis (pre-refactor file
 > references). All beta and post-beta gaps are closed; the post-backlog first levers
 > (BUSINESS_DECISIONS §4) landed 2026-10-01: AI token capture + `usage.report` (§4.2) and
-> `stats.overview` + `skill.mistakes` (§4.3) — feature work, not gap closures. Current-state
-> detail: `knowledge-base/ARCHITECTURE.md`; beta history: `knowledge-base/BETA_PLAN.md`.
+> `stats.overview` + `skill.mistakes` (§4.3) — feature work, not gap closures. Post-backlog
+> analytics landed 2026-10-11 (`knowledge-base/ANALYTICS.md`: AiAttempt recording, pino logs
+> → CloudWatch dashboards/alarms, mobile Firebase Crashlytics + Analytics) — also feature
+> work. Current-state detail: `knowledge-base/ARCHITECTURE.md`; beta history:
+> `knowledge-base/BETA_PLAN.md`.
 
 ## Status summary
 
