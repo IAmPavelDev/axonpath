@@ -60,3 +60,7 @@ backups/
 
 # session worktrees
 .worktrees/
+
+# dependabot export artifacts (downloaded from Actions, regeneratable)
+dependabot-alerts*/
+reports/
