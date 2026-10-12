@@ -1,9 +1,10 @@
 // Export Dependabot alerts to CSV via the GitHub GraphQL API.
 //
 // Drop-in replacement for ambilykk/dependabot-alert-export (unmaintained since
-// 2023, pinned to the retired node16 runner): same GraphQL query, same 19
-// columns, paginated 50 alerts per page. Runs on the built-in GITHUB_TOKEN,
-// which needs only `permissions: vulnerability-alerts: read` in the workflow.
+// 2023, pinned to the retired node16 runner): same GraphQL query and 18 CSV
+// columns — minus the action's `fixReason`, a field GitHub has since removed
+// from the RepositoryVulnerabilityAlert schema. Paginated 50 alerts per page.
+// Runs on the built-in GITHUB_TOKEN — needs only `vulnerability-alerts: read`.
 //
 // Usage: node export-dependabot-alerts.mjs [output.csv]
 // Env:   GH_TOKEN (required), REPOSITORY ("owner/name", required),
@@ -26,7 +27,7 @@ const fail = (msg) => {
   process.exit(1);
 };
 
-// Identical to ambilykk/dependabot-alert-export@v1.0.
+// Same query as ambilykk/dependabot-alert-export@v1.0, minus `fixReason`.
 const query = `query ($org_name: String! $repo_name: String! $pagination: String){
     repository(owner: $org_name name: $repo_name) {
       name
@@ -44,7 +45,6 @@ const query = `query ($org_name: String! $repo_name: String! $pagination: String
           dismissReason
           dismissComment
           fixedAt
-          fixReason
           dependencyScope
           repository{
             name
@@ -72,7 +72,7 @@ const query = `query ($org_name: String! $repo_name: String! $pagination: String
     }
   }`;
 
-// Same columns, same order, same labels as the original action.
+// Same columns as the original action, minus `Fix Reason` (dead schema field).
 const columns = [
   ["Owner", (n) => n.repository.owner.login],
   ["Repository Name", (n) => n.repository.name],
@@ -92,7 +92,6 @@ const columns = [
   ["Dismiss Reason", (n) => n.dismissReason],
   ["Dismiss Comment", (n) => n.dismissComment],
   ["Fixed At", (n) => n.fixedAt],
-  ["Fix Reason", (n) => n.fixReason],
 ];
 
 const csvEscape = (v) => {
