@@ -107,6 +107,29 @@ docker push <account>.dkr.ecr.<region>.amazonaws.com/axon-backend:lambda
 bash scripts/provision-serverless.sh   # re-run: updates both functions
 ```
 
+### 3a. CI autodeploy (push to `dev`)
+
+`.github/workflows/deploy.yml` builds the lambda image on GitHub runners,
+pushes it to ECR, updates both functions (`function-updated-v2` wait after
+each), and smoke-checks `/health`. Triggers on pushes to `dev` that touch
+backend code (docs/mobile-only pushes skip it); `workflow_dispatch` forces a
+run; a concurrency group serializes runs so two quick pushes cannot
+interleave. One-time setup (2026-10-12):
+
+```sh
+aws iam create-user --user-name axon-deploy
+aws iam put-user-policy --user-name axon-deploy --policy-name axon-deploy \
+  --policy-document file://scripts/axon-deploy-iam-policy.json
+aws iam create-access-key --user-name axon-deploy   # keys stored in git-ignored .env.axon-deploy
+```
+
+Then add two GitHub repo secrets (Settings → Secrets and actions → Actions →
+New repository secret), values from `.env.axon-deploy`:
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`. Region, ECR repo name, and the
+health URL are pinned in the workflow. Infra changes (roles, alarms, API
+shape) still go through `scripts/provision-serverless.sh` manually — CI only
+ships function code.
+
 ## 4. Data migration (during cutover window)
 
 ```sh

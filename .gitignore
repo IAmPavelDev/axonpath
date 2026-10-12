@@ -4,6 +4,7 @@ build
 .env
 .env.aws
 .env.aws.serverless*
+.env.axon-deploy
 
 apps/backend/src/prisma/generated
 
