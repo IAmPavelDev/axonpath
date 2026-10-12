@@ -35,6 +35,12 @@ import { getMineQaVectorsJobHandler } from "./mineQaVectorsJobHandler";
 import { getVectorizeClassContentJobHandler } from "./vectorizeClassContentJobHandler";
 import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
 import { getGenerateClassOptionsJobHandler } from "./generateClassOptionsJobHandler";
+import { getSkillRecommendationsJobHandler } from "./skill-recommendations-job-handler";
+import { getClassVideoClipsJobHandler } from "./class-video-clips-job-handler";
+import type { GenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
+import type { GenerateClassClips } from "@/modules/video/application/generate-class-clips";
+import { SKILL_RECOMMENDATIONS_JOB } from "@/modules/video/application/generate-skill-recommendations";
+import { CLASS_VIDEO_CLIPS_JOB } from "@/modules/video/application/generate-class-clips";
 
 /**
  * Job configuration: maps job names to their handlers. The composition root
@@ -51,6 +57,8 @@ export type JobRegistryDeps = {
   vectorizeClassContent: VectorizeClassContent;
   gradeOpenEnded: GradeOpenEnded;
   generateClassOptions: GenerateClassOptions;
+  generateSkillRecommendations: GenerateSkillRecommendations;
+  generateClassClips: GenerateClassClips;
 };
 
 export const makeJobHandlers = ({
@@ -62,6 +70,8 @@ export const makeJobHandlers = ({
   vectorizeClassContent,
   gradeOpenEnded,
   generateClassOptions,
+  generateSkillRecommendations,
+  generateClassClips,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
@@ -71,4 +81,8 @@ export const makeJobHandlers = ({
   [QA_BLOCK_VECTORS_JOB]: getMineQaVectorsJobHandler(mineQaVectors),
   [CLASS_CONTENT_VECTORS_JOB]: getVectorizeClassContentJobHandler(vectorizeClassContent),
   [GRADE_OPEN_ENDED_JOB]: getGradeOpenEndedJobHandler(gradeOpenEnded),
+  [SKILL_RECOMMENDATIONS_JOB]: getSkillRecommendationsJobHandler(
+    generateSkillRecommendations,
+  ),
+  [CLASS_VIDEO_CLIPS_JOB]: getClassVideoClipsJobHandler(generateClassClips),
 });

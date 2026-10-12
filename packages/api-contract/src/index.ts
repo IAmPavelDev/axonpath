@@ -9,6 +9,8 @@ import { quizContract, type QuizContractType } from "./contract/quiz.contract.js
 import { authContract, type AuthContractType } from "./contract/auth.contract.js";
 import { statsContract, type StatsContractType } from "./contract/stats.contract.js";
 import * as statsSchema from "./schema/stats.schema.js";
+import { videoContract, type VideoContractType } from "./contract/video.contract.js";
+import * as videoSchema from "./schema/video.schema.js";
 import { type Question } from "./schema/quiz.schema.js";
 
 export const contract = {
@@ -16,7 +18,8 @@ export const contract = {
   class: classContract,
   quiz: quizContract,
   auth: authContract,
-  stats: statsContract
+  stats: statsContract,
+  video: videoContract
 };
 
 export const schema = {
@@ -24,7 +27,8 @@ export const schema = {
   class: classSchema,
   quiz: quizSchema,
   auth: authSchema,
-  stats: statsSchema
+  stats: statsSchema,
+  video: videoSchema
 }
 
 export type { Question };
@@ -38,4 +42,5 @@ export type AppContract = {
   quiz: QuizContractType;
   auth: AuthContractType;
   stats: StatsContractType;
+  video: VideoContractType;
 }

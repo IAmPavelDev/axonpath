@@ -65,6 +65,9 @@ export default function ClassScreen() {
     queryFn: () => rpc.class.get({ id: classIdNum! }),
     enabled: classIdNum !== undefined,
     staleTime: 60_000,
+    // While video enrichment runs the lesson is gated; poll until it lands.
+    refetchInterval: (query) =>
+      query.state.data?.clipStatus === 'PENDING' ? 5_000 : false,
   });
 
   useEffect(() => {
@@ -308,7 +311,26 @@ function ConspectView({
 
   const ink = THEME[colorScheme];
   const accent = ink.primary;
+  const clipsByAnchor = useMemo(
+    () => new Map((classData.videoClips ?? []).map((clip) => [clip.anchorParagraph, clip])),
+    [classData.videoClips],
+  );
 
+  // Lesson gate: video enrichment is part of the lesson, so the reader stays
+  // behind this screen until clips settle. On give-up the status becomes
+  // SKIPPED and the lesson opens with no hint a video was ever planned.
+  if (classData.clipStatus === 'PENDING') {
+    return (
+      <View className="flex-1 items-center justify-center gap-3 px-8">
+        <Text variant="body" className="text-center">
+          Preparing your lesson…
+        </Text>
+        <Text variant="muted" className="text-center text-[13px]">
+          Finding a video that explains this well. Usually takes a minute.
+        </Text>
+      </View>
+    );
+  }
   return (
     <View className="flex-1">
       <View className="h-1 bg-muted">
@@ -327,6 +349,7 @@ function ConspectView({
             setComposer({ anchor: index, excerpt, selected: false })
           }
           qaByAnchor={qa.blocksByAnchor}
+          clipsByAnchor={clipsByAnchor}
           animateInsertions={insertionFx}
           onAskSelection={(index, text) =>
             setComposer({ anchor: index, excerpt: text, selected: true })

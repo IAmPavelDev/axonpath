@@ -6,6 +6,7 @@ import { Icon } from '@atomics/icon';
 import { ScreenHeader } from '@components/screen-header';
 import { Skeleton } from '@atomics/skeleton';
 import { Text } from '@atomics/text';
+import { RecommendationsList } from '@components/video/RecommendationsList';
 import { Textarea } from '@atomics/textarea';
 import { ClassListItem } from '@components/class/ClassList';
 import { Class } from '@/types/class';
@@ -33,6 +34,7 @@ const ClassItemSkeleton = () => (
 type ClassListRow = { kind: 'generating' } | { kind: 'class'; classData: Class };
 
 export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
+  const [tab, setTab] = useState<'lessons' | 'videos'>('lessons');
   const router = useRouter();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -214,7 +216,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   return (
     <KeyboardAvoidingView className="flex-1">
       <FlatList
-        data={listData}
+        data={tab === 'lessons' ? listData : []}
         keyExtractor={(row) =>
           row.kind === 'generating' ? 'generating' : row.classData.id.toString()
         }
@@ -377,18 +379,32 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
               </View>
             )}
             <View className="border-hairline border-border px-6 pb-2 pt-1">
-              <Text variant="label">Lessons</Text>
+              <SegmentedControl
+                options={[
+                  { value: 'lessons', label: 'Lessons' },
+                  { value: 'videos', label: 'Videos' },
+                ]}
+                value={tab}
+                onChange={(value) => setTab(value as 'lessons' | 'videos')}
+              />
+            </View>
+            <View className="border-hairline border-border px-6 pb-2 pt-3">
+              <Text variant="label">{tab === 'lessons' ? 'Lessons' : 'Recommended videos'}</Text>
             </View>
           </View>
         }
         ListEmptyComponent={
-          <View className="px-6 py-8">
-            <Text variant="muted">
-              {skill.mode === 'MANUAL'
-                ? 'No lessons yet — pick a direction for your first one.'
-                : 'No lessons yet.'}
-            </Text>
-          </View>
+          tab === 'videos' ? (
+            <RecommendationsList skillId={skillId} />
+          ) : (
+            <View className="px-6 py-8">
+              <Text variant="muted">
+                {skill.mode === 'MANUAL'
+                  ? 'No lessons yet — pick a direction for your first one.'
+                  : 'No lessons yet.'}
+              </Text>
+            </View>
+          )
         }
       />
     </KeyboardAvoidingView>

@@ -1082,6 +1082,8 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     vectorizeClassContent,
     gradeOpenEnded,
     generateClassOptions,
+    generateSkillRecommendations: async () => undefined,
+    generateClassClips: async () => undefined,
   });
 
   const runJob = async (jobName: string) => {

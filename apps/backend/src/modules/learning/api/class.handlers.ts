@@ -3,6 +3,7 @@ import { schema } from "@axon/api-contract";
 import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
 import { toORPCError } from "@/modules/platform/api/error-mapping";
 import { isErr } from "@/modules/platform/result";
+import type { VideoRepository } from "@/modules/video/domain/video-repos";
 import {
   makeGetClassById,
   makeGetClassList,
@@ -26,7 +27,10 @@ export type ClassApiDeps = GetClassListDeps &
   GetClassByIdDeps &
   AskClassQuestionDeps &
   RetryClassQuestionDeps &
-  ListClassQaDeps;
+  ListClassQaDeps & {
+    /** Video enrichment state + clips for the lesson gate. */
+    videoRepo: VideoRepository;
+  };
 
 export const makeClassHandlers = (deps: ClassApiDeps) => {
   const getClassList = makeGetClassList(deps);
@@ -48,7 +52,14 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
       if (isErr(result)) {
         throw toORPCError(result.error);
       }
-      return result.value;
+      const clipState = await deps.videoRepo.getClassClipState(input.id);
+      return {
+        ...result.value,
+        // PENDING gates the lesson on the client; SKIPPED renders the plain
+        // conspect with no hint videos were ever intended.
+        clipStatus: clipState.clipStatus,
+        videoClips: clipState.clips,
+      };
     }) satisfies OrpcHandler<
       z.infer<typeof schema.class.GetClassByIdInput>,
       z.infer<typeof schema.class.GetClassByIdOutput>

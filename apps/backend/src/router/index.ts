@@ -17,10 +17,16 @@ import {
   type StatsApiDeps,
 } from "@/modules/learning/api/stats.handlers";
 
+import {
+  makeVideoHandlers,
+  type VideoApiDeps,
+} from "@/modules/video/api/video.handlers";
+
 export type LearningApiDeps = SkillApiDeps &
   ClassApiDeps &
   QuizApiDeps &
-  StatsApiDeps;
+  StatsApiDeps &
+  VideoApiDeps;
 
 export const buildSkillRouter = (deps: SkillApiDeps) => {
   const handlers = makeSkillHandlers(deps);
@@ -77,6 +83,19 @@ export const buildStatsRouter = (deps: StatsApiDeps) => {
     report: rpc.stats.report.handler(handlers.report),
   };
 };
+export const buildVideoRouter = (deps: VideoApiDeps) => {
+  const handlers = makeVideoHandlers(deps);
+  return {
+    probe: rpc.video.probe.handler(handlers.probe),
+    recommendations: {
+      list: rpc.video.recommendations.list.handler(handlers.recommendationsList),
+      refresh: rpc.video.recommendations.refresh.handler(
+        handlers.recommendationsRefresh,
+      ),
+    },
+    sponsorSegments: rpc.video.sponsorSegments.handler(handlers.sponsorSegments),
+  };
+};
 
 export const buildRouters = (deps: LearningApiDeps) => ({
   skill: buildSkillRouter(deps),
@@ -84,4 +103,5 @@ export const buildRouters = (deps: LearningApiDeps) => ({
   quiz: buildQuizRouter(deps),
   auth: buildAuthRouter(),
   stats: buildStatsRouter(deps),
+  video: buildVideoRouter(deps),
 });

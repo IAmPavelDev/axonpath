@@ -11,6 +11,7 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         userId: input.userId,
         status: input.status,
         mode: input.mode,
+        recommendationsStatus: "PENDING",
       },
       select: { id: true, status: true },
     }),

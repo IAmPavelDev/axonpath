@@ -24,6 +24,21 @@ export const GetClassByIdOutput = z.object({
   skillId: z.number(),
   title: z.string(),
   contentMd: z.string(),
+  /** Video enrichment state: PENDING gates the lesson, SKIPPED renders plain. */
+  clipStatus: z.enum(["PENDING", "READY", "SKIPPED"]),
+  videoClips: z.array(
+    z.object({
+      id: z.number(),
+      anchorParagraph: z.number().int(),
+      videoId: z.string(),
+      title: z.string(),
+      channel: z.string(),
+      startSeconds: z.number(),
+      endSeconds: z.number(),
+      transcriptExcerpt: z.string().nullable(),
+      concept: z.string(),
+    }),
+  ),
 });
 
 export const ClassQaStatus = z.enum(["PENDING", "ANSWERED", "FAILED"]);

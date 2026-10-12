@@ -45,6 +45,8 @@ const startServer = async (): Promise<void> => {
     container.skillInitSweeper.start();
     container.skillOptionsSweeper.start();
     container.gradingSweeper.start();
+    container.recommendationsSweeper.start();
+    container.classClipsSweeper.start();
 
     app.log.info(`Server running in ${app.config.NODE_ENV} mode`);
     app.log.info(`Server listening at ${address}`);

@@ -27,7 +27,19 @@ import { makeGenerateClassOptions } from "@/modules/tutoring/application/generat
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { recordAiAttempt } from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 import { makeJobHandlers } from "@/modules/jobs/registry";
+import { makeYoutubeScraperClient } from "@/modules/video/infrastructure/youtube-scraper.client";
+import { makeGeminiVideoClient } from "@/modules/video/infrastructure/gemini-video.client";
+import { makeVideoRepository } from "@/modules/video/infrastructure/video.prisma.repo";
+import { makeSponsorClient } from "@/modules/video/infrastructure/sponsor.client";
+import { makeGenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
+import { makeGenerateClassClips } from "@/modules/video/application/generate-class-clips";
+import { makeRecommendationsSweeper } from "@/modules/jobs/recommendations-sweeper";
+import { makeClassClipsSweeper } from "@/modules/jobs/class-clips-sweeper";
+import type { RecommendationsSweeper } from "@/modules/jobs/recommendations-sweeper";
+import type { ClassClipsSweeper } from "@/modules/jobs/class-clips-sweeper";
 import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
+import type { GenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
+import type { GenerateClassClips } from "@/modules/video/application/generate-class-clips";
 import { makePrismaNextClassJobRepository } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
 import { makeNextClassReconciler } from "@/modules/jobs/next-class-reconciler";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
@@ -60,6 +72,10 @@ export type Container = LearningApiDeps & {
   skillInitSweeper: SkillInitSweeper;
   skillOptionsSweeper: SkillOptionsSweeper;
   gradingSweeper: GradingSweeper;
+  recommendationsSweeper: RecommendationsSweeper;
+  classClipsSweeper: ClassClipsSweeper;
+  generateSkillRecommendations: GenerateSkillRecommendations;
+  generateClassClips: GenerateClassClips;
   /**
    * Resolves when every setImmediate job — including follow-up jobs enqueued
    * by jobs — has settled. The Lambda worker drains on it before returning;
@@ -188,6 +204,18 @@ export const configureContainer = ({
     generateNextClass,
   });
 
+  const videoRepo = makeVideoRepository();
+  const generateSkillRecommendations = makeGenerateSkillRecommendations({
+    videoRepo,
+    search: makeYoutubeScraperClient(),
+    ai,
+  });
+  const generateClassClips = makeGenerateClassClips({
+    videoRepo,
+    search: makeYoutubeScraperClient(),
+    ai,
+    gemini: makeGeminiVideoClient(config.ai.GEMINI_API_KEY ?? ""),
+  });
   Object.assign(
     jobHandlers,
     makeJobHandlers({
@@ -199,6 +227,8 @@ export const configureContainer = ({
       vectorizeClassContent,
       gradeOpenEnded,
       generateClassOptions,
+      generateSkillRecommendations,
+      generateClassClips,
     }),
   );
 
@@ -222,6 +252,8 @@ export const configureContainer = ({
   // recovery exactly like the QA and next-class sweepers above.
   const skillInitSweeper = makeSkillInitSweeper({ skillRepo, jobs });
   const skillOptionsSweeper = makeSkillOptionsSweeper({ skillRepo, jobs });
+  const recommendationsSweeper = makeRecommendationsSweeper({ videoRepo, jobs });
+  const classClipsSweeper = makeClassClipsSweeper({ videoRepo, jobs });
   const gradingSweeper = makeGradingSweeper({ quizRepo, jobs });
 
   return {
@@ -232,6 +264,7 @@ export const configureContainer = ({
     quizRepo,
     eventRepo,
     vectorMetadata,
+    scraper: makeYoutubeScraperClient(),
     chatModel: config.ai.models.chat,
     embeddingModel: config.ai.models.embedding,
     getUsageReport,
@@ -242,6 +275,12 @@ export const configureContainer = ({
     nextClassSweeper,
     classQaSweeper,
     skillInitSweeper,
+    recommendationsSweeper,
+    classClipsSweeper,
+    videoRepo,
+    sponsor: makeSponsorClient(),
+    generateSkillRecommendations,
+    generateClassClips,
     skillOptionsSweeper,
     gradingSweeper,
   };

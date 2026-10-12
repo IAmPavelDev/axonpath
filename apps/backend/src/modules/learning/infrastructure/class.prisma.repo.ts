@@ -12,6 +12,7 @@ export const makePrismaClassRepository = (): ClassRepository => ({
           title: cls.title,
           contentMd: cls.contentMd,
           aiModel: cls.aiModel,
+          clipStatus: "PENDING",
         },
         select: { id: true },
       });

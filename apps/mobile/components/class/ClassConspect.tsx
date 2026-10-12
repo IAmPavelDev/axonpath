@@ -2,10 +2,20 @@ import { chunkExcerpt, splitConspectChunks } from '@/lib/conspect-chunks';
 import { ConspectMarkdown } from '@/lib/conspect-markdown';
 import type { QaRenderItem } from '@/hooks/use-class-qa';
 import type { ClassQaBlock } from '@/types/class';
+import { VideoPlayerCard } from '@components/video/VideoPlayerCard';
 import { QaBlock } from '@components/class/QaBlock';
 import { Fragment, FC, useMemo } from 'react';
 import { Text, TouchableWithoutFeedback, View } from 'react-native';
 import Animated, { FadeInDown, LinearTransition } from 'react-native-reanimated';
+
+/** One embedded lesson clip, keyed by its conspect chunk. */
+export type ConspectClip = {
+  videoId: string;
+  title: string;
+  channel: string;
+  startSeconds: number;
+  endSeconds: number;
+};
 
 type Props = {
   contentMd: string;
@@ -18,6 +28,8 @@ type Props = {
   onAnchorChunk?: (index: number, excerpt: string) => void;
   /** QA blocks grouped by anchorParagraph (client chunk index). */
   qaByAnchor?: Map<number, QaRenderItem[]>;
+  /** Lesson video clips grouped by anchorParagraph (client chunk index). */
+  clipsByAnchor?: Map<number, ConspectClip>;
   /**
    * True for ~2s around an ask: conspect layout transitions run only inside
    * this window, so a fresh QA group slides its neighbors down seamlessly
@@ -37,15 +49,14 @@ type Props = {
 
 /**
  * The conspect reader: renders the lesson as top-level chunks and interleaves
- * the Q&A blocks anchored after each chunk (document order: chunk, its QA
- * group, next chunk). Anchor indexes beyond the current chunk count (stale
- * server data) are appended after the last chunk so nothing disappears.
+ * QA groups and video clips at their anchors.
  */
 export const ClassConspect: FC<Props> = ({
   contentMd: raw,
   anchorMode = false,
   onAnchorChunk,
   qaByAnchor,
+  clipsByAnchor,
   animateInsertions = false,
   onRegisterChunkLayout,
   onRegisterQaLayout,
@@ -97,6 +108,21 @@ export const ClassConspect: FC<Props> = ({
       </Animated.View>
     ) : null;
 
+  const renderClip = (index: number) => {
+    const clip = clipsByAnchor?.get(index);
+    return clip ? (
+      <View className="pt-3">
+        <VideoPlayerCard
+          videoId={clip.videoId}
+          title={clip.title}
+          channel={clip.channel}
+          startSeconds={clip.startSeconds}
+          endSeconds={clip.endSeconds}
+        />
+      </View>
+    ) : null;
+  };
+
   return (
     <View>
       {chunks.map((chunk, i) => (
@@ -120,6 +146,7 @@ export const ClassConspect: FC<Props> = ({
               </View>
             </TouchableWithoutFeedback>
           </Animated.View>
+          {renderClip(i)}
           {renderQaGroup(i, qaByAnchor?.get(i), chunkExcerpt(chunk))}
         </Fragment>
       ))}

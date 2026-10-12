@@ -141,6 +141,8 @@ model Skill {
   status    SkillStatus     @default(DRAFT)
   mode      SkillMode       @default(AUTOMATIC)
   optionsState    NextClassOptionsState @default(NONE)
+  recommendationsStatus RecommendationsStatus?
+  recommendationsAttempts Int        @default(0)
   optionsStateAt  DateTime?
   requestId Int?            @unique
   classes   Class[]
@@ -150,6 +152,7 @@ model Skill {
   events    Event[]
   vectors   Vector[]
   nextClassOptions NextClassOption[]
+  recommendations  SkillRecommendation[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
 
@@ -169,10 +172,85 @@ model Class {
   vectors   Vector[]
   questions Question[]
   qaBlocks  ClassQaBlock[]
+  clipStatus ClassClipStatus @default(SKIPPED)
+  clipAttempts Int           @default(0)
+  clipLeaseAt DateTime?
+  videoClips ClassVideoClip[]
   createdAt DateTime   @default(now())
 
   @@unique([skillId, index])
   @@index([skillId, index])
+}
+
+enum ClassClipStatus {
+  PENDING
+  READY
+  SKIPPED
+}
+
+enum RecommendationsStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum VideoAssetStatus {
+  DISCOVERED
+  INDEXED
+  NO_TRANSCRIPT
+  FAILED
+}
+
+/// Cache of one YouTube video's fetched metadata + timestamped transcript.
+/// Keyed by videoId — replayed jobs and later lessons reuse it for free.
+model VideoAsset {
+  id              Int             @id @default(autoincrement())
+  videoId         String          @unique
+  title           String          @db.VarChar(255)
+  channel         String          @default("")
+  durationSeconds Int?
+  transcript      Json?
+  transcriptSource String?
+  status          VideoAssetStatus @default(DISCOVERED)
+  failureCount    Int             @default(0)
+  lastError       String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+/// Top-10 whole-video picks per skill for the Recommendations tab.
+model SkillRecommendation {
+  id              Int      @id @default(autoincrement())
+  skill           Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  skillId         Int
+  videoId         String
+  title           String   @db.VarChar(255)
+  channel         String   @default("")
+  durationSeconds Int?
+  rank            Int
+  score           Float?
+  createdAt       DateTime @default(now())
+
+  @@unique([skillId, videoId])
+  @@index([skillId, rank])
+}
+
+/// One lesson (class) video segment, anchored after a conspect block.
+model ClassVideoClip {
+  id                Int      @id @default(autoincrement())
+  class             Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classId           Int
+  anchorParagraph   Int
+  videoId           String
+  title             String   @db.VarChar(255)
+  channel           String   @default("")
+  startSeconds      Float
+  endSeconds        Float
+  transcriptExcerpt String?
+  concept           String   @default("")
+  createdAt         DateTime @default(now())
+
+  @@index([classId, anchorParagraph])
 }
 
 model Question {
