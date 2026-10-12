@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { firebaseAuth, firebaseConfigMissing } from '@/lib/firebase';
 import { getGoogleSignin, googleSignInConfigured } from '@/lib/google-signin';
+import { track } from '@/lib/analytics';
 import { KeyboardAvoidingView } from '@atomics/keyboard-avoiding-view';
 import { Button } from '@atomics/button';
 import { Input } from '@atomics/input';
@@ -77,6 +78,8 @@ export default function LoginScreen() {
       } else {
         await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
       }
+      // Explicit user action = a real login (token refreshes don't count).
+      void track('login', { method: mode === 'signup' ? 'signup_email' : 'email' });
       // onIdTokenChanged flips the auth store; the root layout swaps screens.
       router.replace('/');
     } catch (err) {
@@ -123,6 +126,7 @@ export default function LoginScreen() {
         firebaseAuth,
         GoogleAuthProvider.credential(idToken),
       );
+      void track('login', { method: 'google' });
       // onIdTokenChanged flips the auth store; the root layout swaps screens.
       router.replace('/');
     } catch (err) {

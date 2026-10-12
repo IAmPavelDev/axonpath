@@ -41,6 +41,50 @@ pnpm exec expo run:android   # from apps/mobile; builds, installs, starts Metro
 3. Authentication → Sign-in method → Google → copy the **Web client ID**
    (`...apps.googleusercontent.com`) into `EXPO_PUBLIC_FIREBASE_WEB_CLIENT_ID`.
 
+## Crashlytics (crash + error reporting, 2026-10-10)
+
+Replaced Sentry. `@react-native-firebase` v26 (app + crashlytics + analytics,
+TurboModules — requires the New Architecture, which this app enables). Wired:
+
+- `app.json`: `expo.android.googleServicesFile` + the three RNFirebase
+  plugins; `firebase.json` sets
+  `crashlytics_javascript_exception_handler_chaining_enabled: false`
+  (docs-recommended: on-by-default chaining duplicates release crashes without
+  the JS stack).
+- The Crashlytics module installs the global JS exception handler itself —
+  unhandled JS exceptions are recorded as fatal crashes with JS stack frames,
+  unhandled promise rejections as non-fatals (release builds only).
+- `store/auth.store.ts` binds `setUserId` (Crashlytics + Analytics) to the
+  Firebase uid on every auth change.
+
+One-time console steps (project axon-9e88e):
+
+1. Project settings → Your apps → **Add app → Android**, package
+   `com.iampauld3v.axon` → download `google-services.json` → save as
+   `apps/mobile/google-services.json` (committed; contains no secrets).
+2. Settings → Integrations → **Google Analytics → enable** (feeds Crashlytics
+   breadcrumbs; Analytics itself then gives DAU/retention for free).
+3. Apply the native changes (EAS does **not** prebuild the committed
+   `android/` dir):
+
+   ```sh
+   npx expo prebuild -p android --no-clean   # from apps/mobile
+   git checkout -- android/app/src/main/res/mipmap-* android/gradle.properties
+   ```
+
+   (the second line reverts the launcher-icon/whitespace churn prebuild
+   always regenerates).
+4. Rebuild + install (`pnpm exec expo run:android` or `eas build -p android
+   --profile preview`), then verify: Firebase console → **Crashlytics** →
+   force a test crash (`crash(getCrashlytics())` on a temp button) → restart
+   the app → report appears in ~5 min.
+
+Gotchas: the Crashlytics Gradle plugin is mandatory — without it the app
+crashes at startup ("Crashlytics build ID missing"). Debug builds don't
+upload by default; expo-dev-client swallows native crashes during dev — test
+on the preview/release APK. Android R8 mappings are uploaded automatically by
+the Gradle plugin (no dSYM-style step on Android).
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

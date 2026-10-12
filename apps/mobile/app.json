@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.iampauld3v.axon",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#405D82"
@@ -50,7 +51,10 @@
       ],
       "expo-font",
       "expo-splash-screen",
-      "expo-status-bar"
+      "expo-status-bar",
+      "@react-native-firebase/app",
+      "@react-native-firebase/crashlytics",
+      "@react-native-firebase/analytics"
     ],
     "experiments": {
       "typedRoutes": true

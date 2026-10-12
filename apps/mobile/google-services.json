@@ -1,0 +1,153 @@
+{
+  "project_info": {
+    "project_number": "711087014342",
+    "project_id": "axon-9e88e",
+    "storage_bucket": "axon-9e88e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:711087014342:android:af7d61d30971fefd99f2c7",
+        "android_client_info": {
+          "package_name": "com.axon.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "711087014342-4fj4j6sfou3nsk3ca6qm14d762rngj40.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.app",
+            "certificate_hash": "cb3b5a6f61676a6359d3b6c7231ceac970104b49"
+          }
+        },
+        {
+          "client_id": "711087014342-p7k4701ic25bav3nvk49djkt6db2npio.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "711087014342-r1vl47fc5pahd1m441nvs0t4ko4rtchl.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.app",
+            "certificate_hash": "8d6cb4d85ce3ae0ec8c5d24159d2d3bb6011a1aa"
+          }
+        },
+        {
+          "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6-9y2N0rcH7xLSAy8OTLP-nFx0i1jefg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:711087014342:android:df5df18c395a2fc699f2c7",
+        "android_client_info": {
+          "package_name": "com.axon.name"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "711087014342-aj8jns2rd8bn1qlphuij2fto8cie5m2i.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.name",
+            "certificate_hash": "cb3b5a6f61676a6359d3b6c7231ceac970104b49"
+          }
+        },
+        {
+          "client_id": "711087014342-k4kdr76uaeitg7j8bbd6dnhmrl5tief0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.name",
+            "certificate_hash": "8570ca950611794b249c5590e0e5a6146bc0be9b"
+          }
+        },
+        {
+          "client_id": "711087014342-vsivho4su94cgfaro305apn8gjf6ms1m.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.axon.name",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6-9y2N0rcH7xLSAy8OTLP-nFx0i1jefg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:711087014342:android:641027f4ff70e39b99f2c7",
+        "android_client_info": {
+          "package_name": "com.iampauld3v.axon"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "711087014342-pu8fuu0qol2v38i43aa8ose1581qo04h.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.iampauld3v.axon",
+            "certificate_hash": "8d6cb4d85ce3ae0ec8c5d24159d2d3bb6011a1aa"
+          }
+        },
+        {
+          "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6-9y2N0rcH7xLSAy8OTLP-nFx0i1jefg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

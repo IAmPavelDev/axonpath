@@ -10,6 +10,7 @@ import { Text } from '@atomics/text';
 import { BackHandler, Pressable, View } from 'react-native';
 import { Sparkles, X } from 'lucide-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import Animated, {
   clamp,
   interpolate,
@@ -20,6 +21,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { track } from '@/lib/analytics';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useQuizStore } from '@/store/quiz.store';
 import type { QuizSubmitResult } from '@/types/quiz';
@@ -49,12 +51,68 @@ export default function ClassScreen() {
 
   const [tab, setTab] = useState<Tab>('conspect');
 
+  // Behavior analytics state. `progress` lives here (not in ConspectView)
+  // so the tab-change handler can read scroll progress synchronously.
+  const progress = useSharedValue(0);
+  const classViewAt = useRef(Date.now());
+  const conspectFocusAt = useRef(Date.now());
+  const quizFocusAt = useRef<number | null>(null);
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
+
   const { data, isLoading, isError, error } = useQuery<ClassById, Error>({
     queryKey: ['classById', classIdNum],
     queryFn: () => rpc.class.get({ id: classIdNum! }),
     enabled: classIdNum !== undefined,
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (data) {
+      void track('class_view', {
+        class_id: classIdNum,
+        skill_id: data.skillId,
+      });
+    }
+  }, [data, classIdNum]);
+
+  // Leaving the screen mid-read still reports the reading session.
+  useEffect(
+    () => () => {
+      if (tabRef.current === 'conspect') {
+        void track('conspect_read', {
+          class_id: classIdNum,
+          seconds: Math.round((Date.now() - conspectFocusAt.current) / 1000),
+          scroll_progress: Math.round(progress.value * 100) / 100,
+        });
+      }
+    },
+    // Unmount-only: the refs above are stable mirrors.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const handleTabChange = (next: Tab) => {
+    if (next === tab) return;
+    const now = Date.now();
+    if (tab === 'conspect') {
+      void track('conspect_read', {
+        class_id: classIdNum,
+        seconds: Math.round((now - conspectFocusAt.current) / 1000),
+        scroll_progress: Math.round(progress.value * 100) / 100,
+      });
+    }
+    if (next === 'quiz') {
+      void track('quiz_opened', {
+        class_id: classIdNum,
+        seconds_since_class_view: Math.round((now - classViewAt.current) / 1000),
+      });
+      quizFocusAt.current = now;
+    } else if (next === 'conspect') {
+      conspectFocusAt.current = now;
+    }
+    setTab(next);
+  };
 
   const scrollY = useSharedValue(0);
   const [expandedHeight, setExpandedHeight] = useState(EXPANDED_HEIGHT_FALLBACK);
@@ -141,18 +199,19 @@ export default function ClassScreen() {
             { value: 'quiz', label: 'Quiz' },
           ]}
           value={tab}
-          onChange={setTab}
+          onChange={handleTabChange}
         />
       </View>
 
       {/* Both views stay mounted (hidden with display) so scroll position,
           reading progress and quiz answers survive tab flips. */}
       <View style={{ flex: 1, display: tab === 'conspect' ? 'flex' : 'none' }}>
-        <ConspectView classData={data} scrollY={scrollY} colorScheme={colorScheme ?? 'light'} />
+        <ConspectView classData={data} scrollY={scrollY} progress={progress} colorScheme={colorScheme ?? 'light'} />
       </View>
       <View style={{ flex: 1, display: tab === 'quiz' ? 'flex' : 'none' }}>
         <QuizView
           classId={classIdNum}
+          quizFocusAt={quizFocusAt}
           onContinue={() => router.replace(`/skill/${data.skillId}`)}
         />
       </View>
@@ -163,10 +222,13 @@ export default function ClassScreen() {
 function ConspectView({
   classData,
   scrollY,
+  progress,
   colorScheme,
 }: {
   classData: ClassById;
   scrollY: SharedValue<number>;
+  /** Owned by ClassScreen so analytics can read it on tab flips. */
+  progress: SharedValue<number>;
   colorScheme: 'light' | 'dark';
 }) {
   const scrollRef = useRef<Animated.ScrollView>(null);
@@ -201,8 +263,6 @@ function ConspectView({
     insertionFxTimer.current = setTimeout(() => setInsertionFx(false), 2200);
   };
 
-  // Reading progress 0..1 for the current lesson.
-  const progress = useSharedValue(0);
 
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollY.value = event.contentOffset.y;
@@ -323,7 +383,16 @@ const GRADING_POLL_MS = 4000;
 /** Stop polling ~5 min in — a dead provider balance would otherwise spin forever. */
 const GRADING_POLL_MAX_MS = 5 * 60_000;
 
-function QuizView({ classId, onContinue }: { classId: number; onContinue: () => void }) {
+function QuizView({
+  classId,
+  quizFocusAt,
+  onContinue,
+}: {
+  classId: number;
+  /** Set when the learner switches to the quiz tab; null = never opened. */
+  quizFocusAt: MutableRefObject<number | null>;
+  onContinue: () => void;
+}) {
   const queryClient = useQueryClient();
   // The just-submitted result seeds the page instantly; the server query is
   // the durable truth (remounts, graded updates, in-flight polling).
@@ -355,7 +424,17 @@ function QuizView({ classId, onContinue }: { classId: number; onContinue: () => 
         .getState()
         .answers.filter((a): a is { questionId: number; answer: string } => a.answer !== null)
         .map(({ questionId, answer }) => ({ questionId, answer }));
-      return rpc.quiz.submit({ classId, answers: submitted });
+      const startedAt = quizFocusAt.current;
+      // One-page quiz: no per-question timers exist, so the total quiz time
+      // is distributed evenly — the per-answer sum reconstructs the total.
+      const perAnswerMs =
+        startedAt !== null && submitted.length > 0
+          ? Math.round((Date.now() - startedAt) / submitted.length)
+          : undefined;
+      return rpc.quiz.submit({
+        classId,
+        answers: submitted.map((a) => ({ ...a, timeSpentMs: perAnswerMs })),
+      });
     },
     onSuccess: (result) => {
       setSubmittedResult(result);
@@ -363,6 +442,20 @@ function QuizView({ classId, onContinue }: { classId: number; onContinue: () => 
       queryClient.setQueryData(['quizResult', classId], { result });
     },
   });
+    // Quiz-completion analytics: one event per fully-graded submit.
+    useEffect(() => {
+      const result = resultQuery.data?.result;
+      if (!result || quizFocusAt.current === null) return;
+      if (result.perQuestion.some((p) => p.isCorrect === null)) return;
+      const startedAt = quizFocusAt.current;
+      quizFocusAt.current = null;
+      void track('quiz_completed', {
+        class_id: classId,
+        seconds: Math.round((Date.now() - startedAt) / 1000),
+        correct: result.perQuestion.filter((p) => p.isCorrect === true).length,
+        total: result.perQuestion.length,
+      });
+    }, [resultQuery.data, classId, quizFocusAt]);
 
   if (isLoading || !data) {
     return (

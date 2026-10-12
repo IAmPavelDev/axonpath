@@ -15,11 +15,12 @@ import { useAuthStore } from '@/store/auth.store';
 import { Appearance, Platform } from 'react-native';
 import { ThemeProvider } from "expo-router/react-navigation";
 import { PortalHost } from '@rn-primitives/portal';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'nativewind';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { trackScreen } from '@/lib/analytics';
 
 export {
   // Catch any errors thrown by the Layout component.
@@ -36,6 +37,12 @@ export default function RootLayout() {
   const hydrate = useThemeMode((s) => s.hydrate);
   const authStatus = useAuthStore((s) => s.status);
   const initAuth = useAuthStore((s) => s.init);
+  const pathname = usePathname();
+
+  // Screen analytics: native auto-reporting cannot see JS routes.
+  useEffect(() => {
+    if (authStatus === 'signedIn') void trackScreen(pathname);
+  }, [pathname, authStatus]);
 
   // 'system' must resolve to a concrete scheme so NativeWind's JS state and
   // its CSS variables can never disagree. RN 0.86 can report 'unspecified'
@@ -118,3 +125,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+

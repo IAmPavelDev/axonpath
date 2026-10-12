@@ -1,3 +1,8 @@
+import {
+  getAnalytics,
+  setUserId as setAnalyticsUserId,
+} from '@react-native-firebase/analytics';
+import { getCrashlytics, setUserId } from '@react-native-firebase/crashlytics';
 import { onIdTokenChanged, signOut, type User } from 'firebase/auth';
 import { create } from 'zustand';
 import { firebaseAuth, firebaseConfigMissing } from '@/lib/firebase';
@@ -26,6 +31,14 @@ export const useAuthStore = create<AuthStore>((set) => ({
       return () => {};
     }
     return onIdTokenChanged(firebaseAuth, (user) => {
+      // Attribute crashes + analytics to the signed-in Firebase user; an
+      // empty id clears the binding on sign-out.
+      try {
+        void setUserId(getCrashlytics(), user?.uid ?? '').catch(() => {});
+        void setAnalyticsUserId(getAnalytics(), user?.uid ?? '').catch(() => {});
+      } catch {
+        // Native Firebase modules absent (e.g. Expo Go) — nothing to bind.
+      }
       set({ status: user ? 'signedIn' : 'signedOut', user });
     });
   },

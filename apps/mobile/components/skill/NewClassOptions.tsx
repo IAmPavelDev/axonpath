@@ -6,6 +6,7 @@ import { Icon } from '@atomics/icon';
 import { schema } from '@axon/api-contract';
 import type { z } from 'zod';
 import rpc from '@/utils/rpc';
+import { track } from '@/lib/analytics';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { ChevronDown, Plus } from 'lucide-react-native';
@@ -148,6 +149,8 @@ export const NewClassOptions: FC<{ skillId: number }> = ({ skillId }) => {
   const choose = () => {
     const target = expandedText.trim();
     if (target.length > 0 && !createClass.isPending) {
+      // Manual-mode demand signal: how often learners pick a direction.
+      void track('generation_requested', { skill_id: skillId });
       createClass.mutate(target);
     }
   };
