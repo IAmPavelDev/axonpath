@@ -16,8 +16,8 @@
   "license": "ISC",
   "packageManager": "pnpm@10.14.0",
   "dependencies": {
-    "@orpc/contract": "^1.8.6",
-    "@orpc/server": "^1.8.5",
+    "@orpc/contract": "^1.15.6",
+    "@orpc/server": "^1.15.6",
     "zod": "^4.1.5"
   },
   "devDependencies": {

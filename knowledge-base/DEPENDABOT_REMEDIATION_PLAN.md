@@ -87,43 +87,53 @@ warns. The fastify 5.12.2 bump covers find-my-way (it declares `^9.6.0`).
 
 ### Batch B — transitive patch sweep (most of the 111)
 
-`pnpm audit --fix` (pnpm ≥ 10) writes `pnpm.overrides` into the root
-package.json for every advisory with a compatible patched version, then
-`pnpm install` applies them. Review the overrides diff before committing —
-they pin floors, which is fine for security but should be pruned later when
-parents update naturally.
+**Do not use `pnpm audit --fix` on pnpm 10.14.0.** It writes selector-keyed
+overrides (`pkg@<range: '>=fix'`) into pnpm-workspace.yaml, but that pnpm
+version's resolver ignores them (only plain-key entries reach the lockfile),
+and the lockfile settings-hash then reports "up to date", silently skipping
+re-resolution. Verified empirically 2026-10-12; works as documented from
+pnpm 12.x per the settings docs.
+
+What works instead — in-range sweep of the flagged packages (parents with
+`^` ranges re-resolve to patched versions):
 
 ```bash
-pnpm audit --fix
-pnpm install
-pnpm --filter @axon/api-contract build && pnpm --filter @axon/backend test
-pnpm --filter @axon/mobile exec tsc --noEmit
+pnpm -r update @xmldom/xmldom ajv brace-expansion browserslist compression \
+  decode-uri-component esbuild fast-uri glob js-yaml linkify-it markdown-it \
+  minimatch nanoid picomatch postcss postcss-selector-parser rollup \
+  shell-quote source-map-js undici ws yaml
 ```
 
-Expected to clear ~25 of the 34 packages, including shell-quote, @xmldom,
-postcss, nanoid, minimatch, glob, browserslist, rollup, undici, js-yaml, yaml.
+Cleared 25 of 34 packages (111 → 19 advisories), including the CRITICAL
+shell-quote (react-devtools-core, dev-only anyway), @xmldom, postcss, nanoid,
+minimatch, glob, browserslist, rollup, js-yaml, yaml, markdown-it, linkify-it,
+compression, ajv, fast-uri, picomatch, brace-expansion, source-map-js, ws.
 
 ### Batch C — forced-major transitive bumps (judgment calls)
 
-These need overrides that jump a major, outside the parent's declared range:
+Resolved dispositions (verified against installed parents + registry):
 
-| Package | Fix | Parent pins (verified in node_modules) | Call |
-|---|---|---|---|
-| @grpc/grpc-js 1.9.16 | ≥ 1.13.6 | @firebase/firestore pins `~1.9.0` — forced | try `pnpm up -r @react-native-firebase/*` first (newer firebase may pull grpc 1.13); else override to `^1.13.6` — same major, then smoke-test Firestore login on device |
-| deepmerge-ts 7.1.5 → 8 | major | @prisma/config pins exact `7.1.5` | defer — revisit at the prisma major upgrade; advisory is config-parse stack exhaustion, build-time only |
-| esbuild 0.27.7 → 0.28.1 | minor | vite 8.3.0 has it as peer (multi-version: tsx pulls 0.25.9 too) | defer — LOW, dev-only; refreshes itself at the next vitest/tsx update |
-| uuid 7.0.3 → 11.1.1 | major | xcode plugin pins `^7.0.3` — forced | override acceptable (build-time only); run `expo prebuild` to confirm, else revert and dismiss |
-| braces, node-forge | — | no patch exists upstream | dismiss (Batch D) |
+| Package | Parent pins | Disposition |
+|---|---|---|
+| @grpc/grpc-js 1.9.16 | firestore pins `~1.9.0`; latest qdrant-of-its-line firestore 4.18.0 still does | not reachable — app never imports `firebase/firestore`, so grpc-js is never bundled into the APK. Dismiss with that reason; reopen if Firestore gets adopted |
+| undici 7.29.0 | @qdrant/js-client-rest 1.19.0 (latest) pins EXACT `7.29.0` | defer — advisory is undici's WebSocket path; qdrant REST client doesn't use WebSockets. Revisit at the next qdrant client release |
+| decode-uri-component 0.2.2 | expo-router → query-string owns it | defer — ReDoS needs attacker-controlled percent-encoding in local deep links; low reachability |
+| deepmerge-ts 7.1.5 | @prisma/config pins exact `7.1.5` | defer — revisit at the prisma major upgrade; build-time only |
+| esbuild 0.27.7 | vite 8.3 peer (tsx pulls 0.25.9 too) | defer — LOW, dev-only; refreshes at next vitest/tsx update |
+| uuid 7.0.3 | xcode plugin pins `^7.0.3` | defer — fix is uuid 11 major; only worth an override + `expo prebuild` test if ever bundled |
+| postcss-selector-parser 6.1.4 | tailwindcss pins `^6` | defer — fix is 7.x major; build-time quadratic complexity only |
+| braces, node-forge | no patch exists upstream | dismiss (Batch D) |
 
-After B, re-run `pnpm audit --json` — whatever remains open is exactly this
-table; decide each explicitly.
+### Batch D — dismiss three advisories (user action, needs GitHub auth)
 
-### Batch D — dismiss the two no-patch advisories
+GitHub UI → Security → Dependabot alerts → Dismiss, with custom comments:
 
-GitHub UI → Security → Dependabot alerts → braces / node-forge → Dismiss →
-reason "Fix started later" is wrong here; use a custom comment:
-`No patched release exists; dev/build-time dependency only (nodemon>chokidar /
-expo>@expo/cli). Re-open when upstream ships a fix.`
+- `braces` / `node-forge`: `No patched release exists; dev/build-time
+  dependency only (nodemon>chokidar / expo>@expo/cli). Re-open when upstream
+  ships a fix.`
+- `@grpc/grpc-js`: `firebase/firestore chain is never imported by the app, so
+  grpc-js is not bundled in release builds. Reopen if Firestore is adopted.`
+
 Dismissal via REST also works: `PATCH /repos/IAmPavelDev/axonpath/dependabot/alerts/{N}`
 with `{"state":"dismissed","dismissed_reason":"no_fix","dismissed_comment":"..."}`.
 GitHub auto-reopens alerts if a fix lands later.
@@ -134,12 +144,13 @@ GitHub auto-reopens alerts if a fix lands later.
 pnpm --filter @axon/api-contract build
 pnpm --filter @axon/backend test
 pnpm --filter @axon/mobile exec tsc --noEmit
-pnpm audit   # expect: only the 2 dismissed + any deferred from Batch C
+pnpm audit   # expect: the 9 documented modules above, nothing else
 ```
 
 Then push to `dev` — `deploy.yml` auto-deploys and smoke-tests `/health` on
 Lambda. Re-run the export workflow (Actions → dependabot-alert-export) and
-re-download the CSV: OPEN should be 0 (2 rows become DISMISSED).
+re-download the CSV: the 3 dismissed alerts become DISMISSED; the 6 defers
+stay OPEN by explicit decision until their unblock events land.
 
 ### Prevention (optional, one file)
 

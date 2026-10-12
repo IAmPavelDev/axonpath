@@ -14,7 +14,7 @@
     "@axon/api-contract": "workspace:*",
     "@expo-google-fonts/source-sans-3": "^0.4.1",
     "@expo/metro-runtime": "^57.0.16",
-    "@orpc/client": "^1.8.5",
+    "@orpc/client": "^1.15.6",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-firebase/analytics": "^26.4.0",
     "@react-native-firebase/app": "^26.4.0",
