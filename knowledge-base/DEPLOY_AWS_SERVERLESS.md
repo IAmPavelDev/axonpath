@@ -114,7 +114,11 @@ pushes it to ECR, updates both functions (`function-updated-v2` wait after
 each), and smoke-checks `/health`. Triggers on pushes to `dev` that touch
 backend code (docs/mobile-only pushes skip it); `workflow_dispatch` forces a
 run; a concurrency group serializes runs so two quick pushes cannot
-interleave. One-time setup (2026-10-12):
+interleave. The build sets `provenance: false` / `sbom: false` on purpose:
+buildx attestations make the pushed image an OCI *index*, which Lambda's
+`UpdateFunctionCode` rejects ("The image manifest, config or layer media type
+… is not supported") — local `docker push` never produces an index, so this
+only ever broke CI. One-time setup (2026-10-12):
 
 ```sh
 aws iam create-user --user-name axon-deploy
