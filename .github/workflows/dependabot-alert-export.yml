@@ -1,0 +1,36 @@
+name: dependabot-alert-export
+
+# Weekly CSV export of Dependabot alerts as a build artifact. Replaces the
+# unmaintained ambilykk/dependabot-alert-export marketplace action (node16-only,
+# retired runner). Uses the built-in GITHUB_TOKEN — no PAT or secrets needed.
+on:
+  schedule:
+    - cron: "23 4 * * 1" # Mondays 04:23 UTC
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/dependabot-alert-export.yml"
+      - ".github/scripts/export-dependabot-alerts.mjs"
+
+permissions:
+  vulnerability-alerts: read
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Export Dependabot alerts to CSV
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: node .github/scripts/export-dependabot-alerts.mjs reports/dependabot-alerts.csv
+
+      - name: Upload vulnerability report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependabot-alerts
+          path: reports/dependabot-alerts.csv
