@@ -1,10 +1,7 @@
 packages:
-- apps/*
-- packages/*
+  - apps/*
+  - packages/*
 allowNonAppliedPatches: true
 nodeLinker: hoisted
 patchedDependencies:
   '@rob117/react-native-selectable-text': patches/@rob117__react-native-selectable-text.patch
-overrides:
-  undici: '>=7.29.1'
-  decode-uri-component: '>=0.5.0'

@@ -87,42 +87,48 @@ warns. The fastify 5.12.2 bump covers find-my-way (it declares `^9.6.0`).
 
 ### Batch B — transitive patch sweep (most of the 111)
 
-**Do not use `pnpm audit --fix` on pnpm 10.14.0.** It writes selector-keyed
-overrides (`pkg@<range: '>=fix'`) into pnpm-workspace.yaml, but that pnpm
-version's resolver ignores them (only plain-key entries reach the lockfile),
-and the lockfile settings-hash then reports "up to date", silently skipping
-re-resolution. Verified empirically 2026-10-12; works as documented from
-pnpm 12.x per the settings docs.
+**pnpm 10.14.0 ignores `overrides` in pnpm-workspace.yaml whenever root
+`package.json` has a `resolutions` field** — the yarn-compat `resolutions`
+block (added in f351f53 for lightningcss) shadows the workspace overrides
+entirely, so `pnpm audit --fix`-written overrides are silently dropped and
+fresh resolutions stamp only the `resolutions` entries into the lockfile.
+`pnpm audit --fix` is therefore doubly useless here. Discovered 2026-10-12:
+every override attempt "skipped resolution" until the floors were written
+into `resolutions` itself and the lockfile deleted for a fresh resolve.
 
-What works instead — in-range sweep of the flagged packages (parents with
-`^` ranges re-resolve to patched versions):
+**Applied fix (commit round 2):** floors live in root `package.json`
+`resolutions`: undici `^7.29.1`, deepmerge-ts `^8.0.0`,
+decode-uri-component `^0.5.0`, esbuild `^0.28.1` (lightningcss pin kept).
+Caret-locks matter: a bare `>=` floor lets the override jump majors
+(sandbox showed undici resolving to 8.x under `>=7.29.1`).
+
+For the remaining in-range sweep (no override needed — parents with `^`
+ranges re-resolve to patched versions):
 
 ```bash
 pnpm -r update @xmldom/xmldom ajv brace-expansion browserslist compression \
-  decode-uri-component esbuild fast-uri glob js-yaml linkify-it markdown-it \
-  minimatch nanoid picomatch postcss postcss-selector-parser rollup \
-  shell-quote source-map-js undici ws yaml
+  fast-uri glob js-yaml linkify-it markdown-it minimatch nanoid picomatch \
+  postcss rollup shell-quote source-map-js ws yaml
 ```
 
-Cleared 25 of 34 packages (111 → 19 advisories), including the CRITICAL
+Cleared 21 of 34 packages (111 → 19 advisories), including the CRITICAL
 shell-quote (react-devtools-core, dev-only anyway), @xmldom, postcss, nanoid,
 minimatch, glob, browserslist, rollup, js-yaml, yaml, markdown-it, linkify-it,
 compression, ajv, fast-uri, picomatch, brace-expansion, source-map-js, ws.
 
 ### Batch C — forced-major transitive bumps (judgment calls)
-
-Resolved dispositions (verified against installed parents + registry):
+Final dispositions after the resolutions fix (verified against installed
+parents + registry):
 
 | Package | Parent pins | Disposition |
 |---|---|---|
-| @grpc/grpc-js 1.9.16 | firestore pins `~1.9.0`; latest qdrant-of-its-line firestore 4.18.0 still does | not reachable — app never imports `firebase/firestore`, so grpc-js is never bundled into the APK. Dismiss with that reason; reopen if Firestore gets adopted |
-| undici 7.29.0 | @qdrant/js-client-rest 1.19.0 (latest) pins EXACT `7.29.0` | defer — advisory is undici's WebSocket path; qdrant REST client doesn't use WebSockets. Revisit at the next qdrant client release |
-| decode-uri-component 0.2.2 | expo-router → query-string owns it | defer — ReDoS needs attacker-controlled percent-encoding in local deep links; low reachability |
-| deepmerge-ts 7.1.5 | @prisma/config pins exact `7.1.5` | defer — revisit at the prisma major upgrade; build-time only |
-| esbuild 0.27.7 | vite 8.3 peer (tsx pulls 0.25.9 too) | defer — LOW, dev-only; refreshes at next vitest/tsx update |
-| uuid 7.0.3 | xcode plugin pins `^7.0.3` | defer — fix is uuid 11 major; only worth an override + `expo prebuild` test if ever bundled |
-| postcss-selector-parser 6.1.4 | tailwindcss pins `^6` | defer — fix is 7.x major; build-time quadratic complexity only |
-| braces, node-forge | no patch exists upstream | dismiss (Batch D) |
+| undici 7.29.0 | qdrant 1.19.0 (latest) pins exact `7.29.0` | **FIXED via resolutions** → 7.30.0 (stays on 7.x); advisory is undici's WebSocket path, unused by the REST client anyway |
+| deepmerge-ts 7.1.5 | @prisma/config pins exact `7.1.5` | **FIXED via resolutions** → 8.0.2; verified via `prisma generate` + full backend battery |
+| decode-uri-component 0.2.2 | expo-router → query-string owns it | **FIXED via resolutions** → 0.5.0 |
+| esbuild 0.27.7 | vite 8.3 peer (tsx pulls 0.25.9 too) | **FIXED via resolutions** → 0.28.2; verified via full vitest run |
+| postcss-selector-parser 6.1.4 | tailwindcss pins `^6` | defer — fix is 7.x major; forcing it risks the mobile tailwind build. Build-time quadratic complexity only |
+| uuid 7.0.3 | xcode plugin pins `^7.0.3` | defer — fix is uuid 11 major; the advisory path (v3/v5/v6 with `buf`) is never exercised by xcode, build-time only |
+| @grpc/grpc-js, braces, node-forge | grpc: firestore pins `~1.9.0` and app never imports firestore; others: no patch exists | dismissed on GitHub ("Not used" / "Tolerable risk") |
 
 ### Batch D — dismiss three advisories (user action, needs GitHub auth)
 
@@ -144,13 +150,15 @@ GitHub auto-reopens alerts if a fix lands later.
 pnpm --filter @axon/api-contract build
 pnpm --filter @axon/backend test
 pnpm --filter @axon/mobile exec tsc --noEmit
-pnpm audit   # expect: the 9 documented modules above, nothing else
+pnpm audit   # expect: postcss-selector-parser + uuid only (2 advisories);
+            # grpc-js/braces/node-forge also appear in audit but are dismissed on GitHub
 ```
 
 Then push to `dev` — `deploy.yml` auto-deploys and smoke-tests `/health` on
 Lambda. Re-run the export workflow (Actions → dependabot-alert-export) and
-re-download the CSV: the 3 dismissed alerts become DISMISSED; the 6 defers
-stay OPEN by explicit decision until their unblock events land.
+re-download the CSV: the 2 dismissed-by-fix-cycle-1 and 3 dismissals show as
+DISMISSED; only postcss-selector-parser + uuid stay OPEN until tailwindcss
+and expo release compatible parents.
 
 ### Prevention (optional, one file)
 
