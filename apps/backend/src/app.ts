@@ -1,5 +1,5 @@
 import fastify from 'fastify';
-import type { FastifyServerFactoryHandler } from 'fastify';
+import type { FastifyError, FastifyServerFactoryHandler } from 'fastify';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { RPCHandler } from '@orpc/server/node';
@@ -282,7 +282,7 @@ export const buildApp = async () => {
   });
 
   // Error handler
-  app.setErrorHandler(async (error, request, reply) => {
+  app.setErrorHandler(async (error: FastifyError, request, reply) => {
     app.log.error(error);
 
     const statusCode = error.statusCode || 500;
