@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import {
   GRADE_OPEN_ENDED_JOB,
@@ -38,12 +40,9 @@ export const makeGradingSweeper = ({
         jobs.enqueue(GRADE_OPEN_ENDED_JOB, {
           answerIds: ids,
         } satisfies GradeOpenEndedJobPayload);
-        console.warn(
-          { requeued: ids },
-          "Requeued lost open-ended grading jobs",
-        );
+        logger.warn({ requeued: ids }, "Requeued lost open-ended grading jobs");
       }
     } catch (err) {
-      console.error({ err }, "Grading sweep failed");
+      logger.error({ err }, "Grading sweep failed");
     }
   });

@@ -52,6 +52,7 @@ const makeDeps = (
   };
 
   const deps: GenerateInitialSkillDeps = {
+    recordAiAttempt: () => {},
     ai: {
       generateJson: async (_input, request) => {
         state.aiCalls.push({

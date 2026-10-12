@@ -9,6 +9,13 @@
  * omits an author label breaks a test-asserted contract.
  */
 
+
+/**
+ * Bump on every prompt-text/schema/persona change. Stamped onto every
+ * AiAttempt row so effectiveness (parse-failure rate, attempts, latency)
+ * is comparable across prompt iterations.
+ */
+export const PROMPT_VERSION = "2026-10-10.1";
 import type { ReviewItem } from "@/modules/learning/domain/quiz/review-schedule";
 
 /** Verbatim fence: text inside is exactly the labeled author's words. */

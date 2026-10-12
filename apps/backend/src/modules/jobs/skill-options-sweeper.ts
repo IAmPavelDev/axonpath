@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { SKILL_CLASS_OPTIONS_JOB } from "@/modules/tutoring/application/generate-class-options";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
@@ -34,12 +36,9 @@ export const makeSkillOptionsSweeper = ({
         });
       }
       if (stale.length > 0) {
-        console.warn(
-          { requeued: stale.map((skill) => skill.id) },
-          "Requeued lost skill-class-options jobs",
-        );
+        logger.warn({ requeued: stale.map((skill) => skill.id) }, "Requeued lost skill-class-options jobs");
       }
     } catch (err) {
-      console.error({ err }, "Skill-options sweep failed");
+      logger.error({ err }, "Skill-options sweep failed");
     }
   });

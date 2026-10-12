@@ -347,3 +347,44 @@ model NextClassJob {
   status    NextClassJobStatus @default(PENDING)
   createdAt DateTime           @default(now())
 }
+
+/**
+ * One row per AI provider call attempt, written fire-and-forget at the point
+ * the outcome is known (never gates the learner flow). The grain that makes
+ * prompt/parser changes measurable: success rate, attempts-to-success, parse
+ * failures, latency and token spend — all sliceable by promptVersion /
+ * parserVersion. Audit events (SKILL_CREATED, QA_ANSWERED, ...) stay the
+ * raw-output record; this is the aggregated metrics record.
+ */
+model AiAttempt {
+  id               Int      @id @default(autoincrement())
+  userId           Int?
+  /**
+   * init_skill | skill_description | next_class | class_options |
+   * grade_open | qa_answer
+   */
+  operation        String
+  /**
+   * 1-based attempt within one operation invocation. Cross-invocation job
+   * retries (e.g. next-class's 3 sweeper attempts) surface as separate
+   * invocations — each row's outcome still tells the whole story.
+   */
+  attempt          Int
+  /**
+   * ok | parse_failed | empty | length_capped | transport_error |
+   * balance_error
+   */
+  outcome          String
+  model            String
+  latencyMs        Int
+  promptTokens     Int?
+  completionTokens Int?
+  rawChars         Int?
+  promptVersion    String
+  parserVersion    String
+  errorKind        String?
+  createdAt        DateTime @default(now())
+
+  @@index([operation, createdAt])
+  @@index([promptVersion, outcome])
+}

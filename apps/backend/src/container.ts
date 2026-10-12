@@ -25,6 +25,7 @@ import {
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeGenerateClassOptions } from "@/modules/tutoring/application/generate-class-options";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
+import { recordAiAttempt } from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 import { makeJobHandlers } from "@/modules/jobs/registry";
 import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
 import { makePrismaNextClassJobRepository } from "@/modules/jobs/infrastructure/next-class-job.prisma.repo";
@@ -103,6 +104,7 @@ export const configureContainer = ({
 
   const generateInitialSkill = makeGenerateInitialSkill({
     ai,
+    recordAiAttempt,
     retrieveContext,
     skillRepo,
     classRepo,
@@ -117,6 +119,7 @@ export const configureContainer = ({
 
   const generateNextClass = makeGenerateNextClass({
     ai,
+    recordAiAttempt,
     retrieveContext,
     skillRepo,
     classRepo,
@@ -130,6 +133,7 @@ export const configureContainer = ({
 
   const generateClassOptions = makeGenerateClassOptions({
     ai,
+    recordAiAttempt,
     retrieveContext,
     skillRepo,
     optionRepo,
@@ -141,6 +145,7 @@ export const configureContainer = ({
 
   const answerClassQuestion = makeAnswerClassQuestion({
     ai,
+    recordAiAttempt,
     qaRepo,
     classRepo,
     skillRepo,
@@ -175,7 +180,7 @@ export const configureContainer = ({
     embeddingModel: config.ai.models.embedding,
   });
 
-  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
+  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo, recordAiAttempt });
 
   const nextClassJobs = makePrismaNextClassJobRepository();
   const nextClassWorker = makeNextClassWorker({

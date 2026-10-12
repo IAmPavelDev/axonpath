@@ -24,6 +24,10 @@ import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repo
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { NewVector, VectorStoreError } from "@/modules/memory/ports";
+import {
+  outcomeForError,
+  type RecordAiAttempt,
+} from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 
 export type ParsedInitSkill = {
   classTitle: string;
@@ -41,6 +45,7 @@ export type GenerateInitialSkillError =
 
 export type GenerateInitialSkillDeps = {
   ai: AiPort;
+  recordAiAttempt: RecordAiAttempt;
   retrieveContext: (input: {
     userId: number;
     query: string;
@@ -86,6 +91,7 @@ export type GenerateInitialSkill = (
  * records ERROR_OCCURRED (the job handler logs the error itself).
  */
 export const makeGenerateInitialSkill = ({
+  recordAiAttempt,
   ai,
   retrieveContext,
   skillRepo,
@@ -109,6 +115,7 @@ export const makeGenerateInitialSkill = ({
     }
 
     // 1. Description (best-effort: failure yields "" and still updates).
+    const descriptionStartedAt = Date.now();
     const descriptionResult = await ai.generateJson(
       {
         system: DESCRIPTION_SYSTEM,
@@ -118,6 +125,24 @@ export const makeGenerateInitialSkill = ({
         schemaName: "skill_description",
         responseSchema: SKILL_DESCRIPTION_SCHEMA,
       },
+    );
+    recordAiAttempt(
+      descriptionResult.ok
+        ? {
+            userId: input.userId,
+            operation: "skill_description",
+            outcome: "ok",
+            latencyMs: Date.now() - descriptionStartedAt,
+            promptTokens: descriptionResult.value.usage?.promptTokens,
+            completionTokens: descriptionResult.value.usage?.completionTokens,
+            rawChars: descriptionResult.value.raw.length,
+          }
+        : {
+            userId: input.userId,
+            operation: "skill_description",
+            ...outcomeForError(descriptionResult.error),
+            latencyMs: Date.now() - descriptionStartedAt,
+          },
     );
 
     let description = "";
@@ -156,13 +181,19 @@ export const makeGenerateInitialSkill = ({
       topic: input.topic,
       priorContext,
     });
-
+    const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: TUTOR_SYSTEM, prompt },
       { schemaName: "init_skill", responseSchema: INIT_SKILL_SCHEMA },
     );
 
     if (!generation.ok) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "init_skill",
+        ...outcomeForError(generation.error),
+        latencyMs: Date.now() - generationStartedAt,
+      });
       return { ok: false, error: generation.error };
     }
     let parsed: ParsedInitSkill;
@@ -181,6 +212,14 @@ export const makeGenerateInitialSkill = ({
         contextSnippets: raw.contextSnippets ?? [],
       };
     } catch (error) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "init_skill",
+        outcome: "parse_failed",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: error instanceof Error ? error.message : String(error),
+      });
       return {
         ok: false,
         error: {
@@ -194,6 +233,14 @@ export const makeGenerateInitialSkill = ({
     // way forward. Fail the generation instead of persisting a hollow
     // class (the skill settles FAILED; the client offers a retry).
     if (parsed.questions.length === 0) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "init_skill",
+        outcome: "empty",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: "model returned no questions",
+      });
       return {
         ok: false,
         error: {
@@ -202,6 +249,16 @@ export const makeGenerateInitialSkill = ({
         },
       };
     }
+
+    recordAiAttempt({
+      userId: input.userId,
+      operation: "init_skill",
+      outcome: "ok",
+      latencyMs: Date.now() - generationStartedAt,
+      promptTokens: generation.value.usage?.promptTokens,
+      completionTokens: generation.value.usage?.completionTokens,
+      rawChars: generation.value.raw.length,
+    });
 
     // 4. Audit SKILL_CREATED with the full request + response for debugging.
     await eventRepo.record({

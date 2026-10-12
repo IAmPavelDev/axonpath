@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
 
 /**
@@ -30,14 +32,14 @@ export const makeSetImmediateJobQueue = (
     enqueue: (jobName, payload) => {
       const handler = handlers[jobName];
       if (!handler) {
-        console.error({ jobName }, "Background job handler not registered");
+        logger.error({ jobName }, "Background job handler not registered");
         return;
       }
 
       pending += 1;
       setImmediate(() => {
         Promise.resolve(handler(payload as never)).then(settle, (err) => {
-          console.error({ err, jobName }, "Background job failed");
+          logger.error({ err, jobName }, "Background job failed");
           settle();
         });
       });

@@ -102,7 +102,7 @@ const makeFakeDeps = (options: {
     },
   };
 
-  const deps: GradeOpenEndedDeps = { ai, quizRepo };
+  const deps: GradeOpenEndedDeps = { ai, quizRepo, recordAiAttempt: () => {} };
   return {
     deps,
     gradeRows,

@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import {
   NEXT_CLASS_LEASE_MINUTES,
@@ -66,15 +68,12 @@ export const makeNextClassSweeper = ({
           // Server: detached — a generation runs minutes; the next tick
           // must not wait.
           run(claim).catch((err) => {
-            console.error(
-              { err, skillId: claim.skillId },
-              "Next-class job crashed",
-            );
+            logger.error({ err, skillId: claim.skillId }, "Next-class job crashed");
           });
         }
       }
     } catch (err) {
-      console.error({ err }, "Next-class sweep failed");
+      logger.error({ err }, "Next-class sweep failed");
     } finally {
       sweeping = false;
     }

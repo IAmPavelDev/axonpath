@@ -7,6 +7,10 @@ import {
 } from "@/modules/tutoring/domain/prompts";
 import { OPTIONS_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
+import {
+  outcomeForError,
+  type RecordAiAttempt,
+} from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 import type { Clock } from "@/modules/platform/ports/clock";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type {
@@ -34,6 +38,7 @@ export type GenerateClassOptionsError =
 
 export type GenerateClassOptionsDeps = {
   ai: AiPort;
+  recordAiAttempt: RecordAiAttempt;
   /** Same retrieval seam generate-next-class uses; degrades to [] itself. */
   retrieveContext: (input: {
     userId: number;
@@ -69,6 +74,7 @@ export type GenerateClassOptions = (
 export const makeGenerateClassOptions =
   ({
     ai,
+    recordAiAttempt,
     retrieveContext,
     skillRepo,
     optionRepo,
@@ -128,6 +134,7 @@ export const makeGenerateClassOptions =
       review,
     });
 
+    const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: OPTIONS_SYSTEM, prompt },
       { schemaName: "class_options", responseSchema: CLASS_OPTIONS_SCHEMA },
@@ -139,6 +146,12 @@ export const makeGenerateClassOptions =
     };
 
     if (!generation.ok) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "class_options",
+        ...outcomeForError(generation.error),
+        latencyMs: Date.now() - generationStartedAt,
+      });
       await skillRepo.update(input.skillId, failureState);
       await eventRepo.record({
         skillId: input.skillId,
@@ -157,6 +170,7 @@ export const makeGenerateClassOptions =
     // Untrusted model output: keep only non-empty string targets, capped at
     // 3 (rank follows response order). An empty set degrades to FAILED.
     let targets: string[] = [];
+    let parseFailed = false;
     try {
       const parsed = extractJsonObject(generation.value.raw) as {
         targets?: unknown;
@@ -167,10 +181,19 @@ export const makeGenerateClassOptions =
         .filter((target) => target.length > 0)
         .slice(0, 3);
     } catch {
+      parseFailed = true;
       targets = [];
     }
 
     if (targets.length === 0) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "class_options",
+        outcome: parseFailed ? "parse_failed" : "empty",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: parseFailed ? "unparsable JSON" : "no valid targets in response",
+      });
       const error = {
         kind: "AiResponseInvalid",
         detail: "no valid targets in response",

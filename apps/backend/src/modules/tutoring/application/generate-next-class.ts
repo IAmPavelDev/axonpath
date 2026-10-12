@@ -14,6 +14,10 @@ import {
   toGeneratedQuestion,
   type GeneratedQuestion,
 } from "@/modules/tutoring/domain/parse";
+import {
+  outcomeForError,
+  type RecordAiAttempt,
+} from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 import type { Clock } from "@/modules/platform/ports/clock";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
@@ -64,6 +68,7 @@ export type HistoryHit = {
 
 export type GenerateNextClassDeps = {
   ai: AiPort;
+  recordAiAttempt: RecordAiAttempt;
   /** No excludeSkillId: this skill's own history is wanted here. */
   retrieveContext: (input: {
     userId: number;
@@ -119,6 +124,7 @@ export type GenerateNextClass = (
 export const makeGenerateNextClass =
   ({
     ai,
+    recordAiAttempt,
     retrieveContext,
     skillRepo,
     classRepo,
@@ -245,11 +251,18 @@ export const makeGenerateNextClass =
       review,
     });
 
+    const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: TUTOR_SYSTEM, prompt },
       { schemaName: "next_class", responseSchema: NEXT_CLASS_SCHEMA },
     );
     if (!generation.ok) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "next_class",
+        ...outcomeForError(generation.error),
+        latencyMs: Date.now() - generationStartedAt,
+      });
       await settlePhase();
       return { ok: false, error: generation.error };
     }
@@ -270,6 +283,14 @@ export const makeGenerateNextClass =
         contextSnippets: raw.contextSnippets ?? [],
       };
     } catch (error) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "next_class",
+        outcome: "parse_failed",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: error instanceof Error ? error.message : String(error),
+      });
       await settlePhase();
       return {
         ok: false,
@@ -284,6 +305,14 @@ export const makeGenerateNextClass =
     // answers through the newest class, which can never happen. Fail the
     // generation instead of persisting a hollow class.
     if (parsed.questions.length === 0) {
+      recordAiAttempt({
+        userId: input.userId,
+        operation: "next_class",
+        outcome: "empty",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: "model returned no questions",
+      });
       await settlePhase();
       return {
         ok: false,
@@ -293,6 +322,16 @@ export const makeGenerateNextClass =
         },
       };
     }
+
+    recordAiAttempt({
+      userId: input.userId,
+      operation: "next_class",
+      outcome: "ok",
+      latencyMs: Date.now() - generationStartedAt,
+      promptTokens: generation.value.usage?.promptTokens,
+      completionTokens: generation.value.usage?.completionTokens,
+      rawChars: generation.value.raw.length,
+    });
 
     // Audit CLASS_GENERATED with the full request + response for debugging.
     await eventRepo.record({

@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import { ok, type Result } from "@/modules/platform/result";
 import type { AiPort } from "@/modules/tutoring/ports";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
@@ -7,6 +9,10 @@ import {
   buildGradingPrompt,
 } from "@/modules/tutoring/domain/prompts";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
+import {
+  outcomeForError,
+  type RecordAiAttempt,
+} from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 
 export const GRADE_OPEN_ENDED_JOB = "grade-open-ended";
 
@@ -17,7 +23,11 @@ export type GradeOpenEndedJobPayload = {
 
 export const GRADE_FAILED_FEEDBACK = "Grading failed — resubmit to re-grade.";
 
-export type GradeOpenEndedDeps = { ai: AiPort; quizRepo: QuizRepository };
+export type GradeOpenEndedDeps = {
+  ai: AiPort;
+  quizRepo: QuizRepository;
+  recordAiAttempt: RecordAiAttempt;
+};
 
 export type GradeOpenEnded = (
   input: GradeOpenEndedJobPayload,
@@ -140,7 +150,7 @@ const parseGrading = (raw: string): Map<number, Grade> | null => {
  * GRADE_FAILED_FEEDBACK, so nothing stays silently pending forever.
  */
 export const makeGradeOpenEnded =
-  ({ ai, quizRepo }: GradeOpenEndedDeps) =>
+  ({ ai, quizRepo, recordAiAttempt }: GradeOpenEndedDeps) =>
   async (input: GradeOpenEndedJobPayload): Promise<Result<void, never>> => {
     if (input.answerIds.length === 0) {
       return ok(undefined);
@@ -168,29 +178,56 @@ export const makeGradeOpenEnded =
     // entry. Absent results after both attempts stay failed.
     let grades: Map<number, Grade> | null = null;
     for (let attempt = 0; attempt < 2 && !grades; attempt++) {
+      const attemptStartedAt = Date.now();
+      const attemptTag = attempt + 1;
       try {
         const generation = await ai.generateJson(
           { system: GRADER_SYSTEM, prompt },
           { schemaName: "grading", responseSchema: GRADING_SCHEMA },
         );
         if (!generation.ok) {
-          console.warn(
-            { attempt, error: generation.error },
-            "Open-ended grading generation failed",
-          );
+          logger.warn({ attempt, error: generation.error }, "Open-ended grading generation failed");
+          recordAiAttempt({
+            operation: "grade_open",
+            attempt: attemptTag,
+            ...outcomeForError(generation.error),
+            latencyMs: Date.now() - attemptStartedAt,
+          });
           continue;
         }
         grades = parseGrading(generation.value.raw);
         if (!grades) {
-          console.warn(
-            { attempt, raw: generation.value.raw.slice(0, 500) },
-            "Open-ended grading response unparsable",
-          );
+          logger.warn({ attempt, raw: generation.value.raw.slice(0, 500) }, "Open-ended grading response unparsable");
+          recordAiAttempt({
+            operation: "grade_open",
+            attempt: attemptTag,
+            outcome: "parse_failed",
+            latencyMs: Date.now() - attemptStartedAt,
+            promptTokens: generation.value.usage?.promptTokens,
+            completionTokens: generation.value.usage?.completionTokens,
+            rawChars: generation.value.raw.length,
+          });
+        } else {
+          recordAiAttempt({
+            operation: "grade_open",
+            attempt: attemptTag,
+            outcome: "ok",
+            latencyMs: Date.now() - attemptStartedAt,
+            promptTokens: generation.value.usage?.promptTokens,
+            completionTokens: generation.value.usage?.completionTokens,
+            rawChars: generation.value.raw.length,
+          });
         }
       } catch (error) {
         // Transport failure: the second attempt gets a fresh generation;
         // whatever is still missing settles failed below.
-        console.warn({ attempt, error }, "Open-ended grading call threw");
+        logger.warn({ attempt, error }, "Open-ended grading call threw");
+        recordAiAttempt({
+          operation: "grade_open",
+          attempt: attemptTag,
+          ...outcomeForError(error),
+          latencyMs: Date.now() - attemptStartedAt,
+        });
       }
     }
 

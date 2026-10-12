@@ -232,6 +232,7 @@ const makeDeps = (
   };
 
   const deps: AnswerClassQuestionDeps = {
+    recordAiAttempt: () => {},
     ai,
     qaRepo,
     classRepo,

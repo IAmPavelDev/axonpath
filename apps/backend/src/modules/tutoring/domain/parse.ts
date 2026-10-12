@@ -6,6 +6,13 @@ import type { QuestionType } from "@/prisma/generated";
  * prose instead of JSON, renamed fields, invented keys).
  */
 
+/**
+ * Bump on every parsing change (extraction, coercion, leniency). Stamped
+ * onto every AiAttempt row next to PROMPT_VERSION so a parse-failure-rate
+ * delta attributes to the parser vs the prompt.
+ */
+export const PARSER_VERSION = "2026-10-10.1";
+
 export type GeneratedQuestion = {
   type: QuestionType;
   text: string;

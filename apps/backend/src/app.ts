@@ -3,6 +3,9 @@ import type { FastifyServerFactoryHandler } from 'fastify';
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { RPCHandler } from '@orpc/server/node';
+import { ORPCError } from '@orpc/server';
+import { decodeJwt } from 'jose';
+import { logger } from '@/lib/logger';
 import { BatchHandlerPlugin, CORSPlugin } from '@orpc/server/plugins';
 import sensible from '@fastify/sensible';
 import env from '@fastify/env';
@@ -46,6 +49,26 @@ export const buildApp = async () => {
       // serverless-http / API Gateway cannot stream a batch response body.
       new BatchHandlerPlugin(),
     ],
+    // Procedure-level error capture: oRPC turns undeclared throws into an
+    // INTERNAL response without logging anything, so this is the only place
+    // the actual error (with stack) reaches CloudWatch. Client-fault 4xx
+    // (expired/malformed token → UNAUTHORIZED, missing rows → NOT_FOUND) is
+    // a routine outcome — debug keeps it queryable without inflating the
+    // Axon/Backend Errors metric; undeclared throws and 5xx log at error.
+    clientInterceptors: [
+      async (options) => {
+        try {
+          return await options.next();
+        } catch (error) {
+          if (error instanceof ORPCError && error.status < 500) {
+            logger.debug({ err: error, path: options.path }, 'RPC client error');
+          } else {
+            logger.error({ err: error, path: options.path }, 'RPC error');
+          }
+          throw error;
+        }
+      },
+    ],
   });
 
   const openAPIGenerator = new OpenAPIGenerator({
@@ -62,14 +85,36 @@ export const buildApp = async () => {
     res: ServerResponse,
     fastifyHandler: FastifyServerFactoryHandler,
   ): Promise<void> => {
+    const startedAt = Date.now();
     try {
       // Handle RPC routes first
       const { matched: rpcMatched } = await rpc.handle(req, res, {
         context: { headers: req.headers },
         prefix: '/rpc',
       });
-
       if (rpcMatched) {
+        // Fastify's request logger never sees this path (raw router bypass),
+        // so this line is the API's access log in CloudWatch: request
+        // counts, latency, and distinct users via count_distinct(userId).
+        const authHeader = req.headers.authorization;
+        let userId: string | undefined;
+        if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+          try {
+            userId = decodeJwt(authHeader.slice('Bearer '.length).trim()).sub;
+          } catch {
+            // Malformed token — auth middleware will have rejected it; the
+            // request line still logs, just without user attribution.
+          }
+        }
+        const log = {
+          method: req.method,
+          url: req.url,
+          status: res.statusCode,
+          durationMs: Date.now() - startedAt,
+          userId,
+        };
+        if (res.statusCode >= 500) logger.error(log, 'request');
+        else logger.info(log, 'request');
         return;
       }
 
@@ -144,7 +189,7 @@ export const buildApp = async () => {
       // Let Fastify handle all other routes (including /health)
       fastifyHandler(req, res);
     } catch (error) {
-      console.error('Server factory error:', error);
+      logger.error({ err: error }, 'Server factory error');
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Internal server error' }));
@@ -153,7 +198,7 @@ export const buildApp = async () => {
   };
 
   const app = fastify({
-    logger: true,
+    loggerInstance: logger,
     serverFactory: (fastifyHandler) => {
       const server = createServer(
         {

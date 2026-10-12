@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { CLASS_QA_ANSWER_JOB } from "@/modules/tutoring/application/answer-class-question";
 import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class-qa.repository";
@@ -54,10 +56,7 @@ export const makeClassQaSweeper = ({
         maxRequeues: CLASS_QA_MAX_REQUEUES,
       });
       if (failed > 0) {
-        console.error(
-          { failed },
-          "Class-qa blocks exhausted their requeues; marked FAILED",
-        );
+        logger.error({ failed }, "Class-qa blocks exhausted their requeues; marked FAILED");
       }
       const stranded = await qaRepo.claimStranded({
         olderThan,
@@ -68,7 +67,7 @@ export const makeClassQaSweeper = ({
         jobs.enqueue(CLASS_QA_ANSWER_JOB, { blockId: block.id });
       }
     } catch (err) {
-      console.error({ err }, "Class-qa sweep failed");
+      logger.error({ err }, "Class-qa sweep failed");
     } finally {
       sweeping = false;
     }

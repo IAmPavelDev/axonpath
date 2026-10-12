@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import { buildApp } from "@/app";
 
 // Server mode: long-lived listener (EC2 container today, dev compose). The
@@ -49,7 +51,7 @@ const startServer = async (): Promise<void> => {
     app.log.info(`Health check: ${address}/health`);
     app.log.info(`Documentation: ${address}/`);
   } catch (err) {
-    console.error("Failed to start server: " + err);
+    logger.error("Failed to start server: " + err);
     process.exit(1);
   }
 };

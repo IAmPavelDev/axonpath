@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { ClassQaAnswerJobPayload } from "@/modules/tutoring/application/answer-class-question";
 import type { AnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 
@@ -13,10 +15,7 @@ export const getAnswerClassQuestionJobHandler = (
   return async (payload: ClassQaAnswerJobPayload) => {
     const result = await answerClassQuestion(payload);
     if (!result.ok) {
-      console.error(
-        { blockId: payload.blockId, error: result.error },
-        "Class Q&A answer job failed",
-      );
+      logger.error({ blockId: payload.blockId, error: result.error }, "Class Q&A answer job failed");
     }
   };
 };

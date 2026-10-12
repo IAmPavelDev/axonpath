@@ -67,10 +67,12 @@ env_json() {
     --arg firebase "$FIREBASE_PROJECT_ID" \
     --arg zai "$ZAI_API_KEY" \
     --arg gemini "$GEMINI_API_KEY" \
+    --arg logLevel "${LOG_LEVEL:-info}" \
     '{ Variables: {
         LAMBDA_ROLE: $role, NODE_ENV: "production", APP_PORT: "3001",
         DATABASE_URL: $db, QDRANT_URL: $qdrantUrl, QDRANT_API_KEY: $qdrantKey,
-        FIREBASE_PROJECT_ID: $firebase, ZAI_API_KEY: $zai, GEMINI_API_KEY: $gemini } }'
+        FIREBASE_PROJECT_ID: $firebase, ZAI_API_KEY: $zai, GEMINI_API_KEY: $gemini,
+        LOG_LEVEL: $logLevel } }'
 }
 
 upsert_function() { # name role timeout-seconds
@@ -79,6 +81,9 @@ upsert_function() { # name role timeout-seconds
     echo "updating $name"
     aws $R lambda update-function-configuration --function-name "$name" \
       --timeout "$timeout" --memory-size 1024 --environment "$(env_json "$fn_role")" >/dev/null
+    # Config and code updates cannot overlap on one function — wait for the
+    # configuration change to settle before pushing the new image.
+    aws $R lambda wait function-updated-v2 --function-name "$name" >/dev/null
     aws $R lambda update-function-code --function-name "$name" \
       --image-uri "$ECR_URI:$IMAGE_TAG" >/dev/null
   else
@@ -125,6 +130,64 @@ aws $R apigatewayv2 create-stage --api-id "$API_ID" --stage-name '$default' --au
 aws $R lambda add-permission --function-name axon-api --statement-id apigw-invoke \
   --action lambda:InvokeFunction --principal apigateway.amazonaws.com \
   --source-arn "arn:aws:execute-api:$AWS_REGION:$ACCOUNT_ID:$API_ID/*/*" >/dev/null 2>&1 || true
+
+# --------------------------------------------------- Observability (logging)
+say "Observability: access logs, metric filters, alarms"
+# API GW access logs — the request-level audit trail (status counts, 5xx).
+ACCESS_LOG_GROUP="/axon/apigw/access"
+ACCESS_LOG_ARN="arn:aws:logs:$AWS_REGION:$ACCOUNT_ID:log-group:$ACCESS_LOG_GROUP"
+if [ "$(aws $R logs describe-log-groups --log-group-name-prefix "$ACCESS_LOG_GROUP" \
+  --query 'logGroups[0].logGroupName' --output text)" = "None" ]; then
+  aws $R logs create-log-group --log-group-name "$ACCESS_LOG_GROUP" >/dev/null
+fi
+aws $R logs put-retention-policy --log-group-name "$ACCESS_LOG_GROUP" \
+  --retention-in-days 30 >/dev/null
+# shellcheck disable=SC2016  # $context.* is API GW log-format syntax, not shell
+ACCESS_FORMAT='{ "requestId":"$context.requestId","ip":"$context.identity.sourceIp","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","routeKey":"$context.routeKey","status":"$context.status","responseLength":"$context.responseLength","integrationErr":"$context.integration.error","errorMsg":"$context.error.message" }'
+# Shorthand "K=V,K=V" breaks on the commas inside the Format JSON — pass it
+# as proper JSON built by jq instead.
+ACCESS_SETTINGS="$(jq -n --arg arn "$ACCESS_LOG_ARN" --arg fmt "$ACCESS_FORMAT" \
+  '{DestinationArn: $arn, Format: $fmt}')"
+aws $R apigatewayv2 update-stage --api-id "$API_ID" --stage-name '$default' \
+  --access-log-settings "$ACCESS_SETTINGS" >/dev/null
+# Lambda logs: 30-day retention (groups exist only after the first invocation).
+for FN in axon-api axon-worker; do
+  aws $R logs put-retention-policy --log-group-name "/aws/lambda/$FN" \
+    --retention-in-days 30 >/dev/null 2>&1 || true
+done
+
+# Metrics feed CloudWatch alarms/dashboards without log queries:
+#   Axon/Api Requests     — every request (empty pattern matches all lines)
+#   Axon/Api Server5xx    — 5xx responses
+#   Axon/Backend Errors   — pino level >= 50 (error|fatal) from either function
+put_metric_filter() { # name log-group pattern namespace metric-name
+  aws $R logs put-metric-filter --log-group-name "$2" --filter-name "$1" \
+    --filter-pattern "$3" --metric-transformations \
+    "metricNamespace=$4,metricName=$5,metricValue=1,defaultValue=0" >/dev/null
+}
+put_metric_filter axon-apigw-requests "$ACCESS_LOG_GROUP" "" "Axon/Api" Requests
+put_metric_filter axon-apigw-5xx "$ACCESS_LOG_GROUP" '{ $.status = 5* }' "Axon/Api" Server5xx
+
+# App alarms share ALERT_EMAIL but get their own regional topic (the billing
+# topic lives in us-east-1, the metrics in $AWS_REGION).
+if [ -n "$ALERT_EMAIL" ]; then
+  APP_TOPIC_ARN="$(aws $R sns create-topic --name axon-alerts --query TopicArn --output text)"
+  aws $R sns subscribe --topic-arn "$APP_TOPIC_ARN" --protocol email \
+    --notification-endpoint "$ALERT_EMAIL" >/dev/null
+  aws $R cloudwatch put-metric-alarm --alarm-name axon-api-5xx \
+    --metric-name Server5xx --namespace Axon/Api --statistic Sum \
+    --period 300 --evaluation-periods 1 --threshold 5 \
+    --comparison-operator GreaterThanOrEqualToThreshold \
+    --treat-missing-data notBreaching \
+    --alarm-actions "$APP_TOPIC_ARN" >/dev/null
+  aws $R cloudwatch put-metric-alarm --alarm-name axon-backend-errors \
+    --metric-name Errors --namespace Axon/Backend --statistic Sum \
+    --period 900 --evaluation-periods 1 --threshold 50 \
+    --comparison-operator GreaterThanOrEqualToThreshold \
+    --treat-missing-data notBreaching \
+    --alarm-actions "$APP_TOPIC_ARN" >/dev/null
+  echo "confirm the SNS subscription email for $ALERT_EMAIL (axon-alerts)"
+fi
 
 # ------------------------------------------------ EventBridge Scheduler tick
 say "EventBridge Scheduler (worker tick, every minute)"
@@ -174,4 +237,4 @@ ENDPOINT="https://$API_ID.execute-api.$AWS_REGION.amazonaws.com"
 say "Done"
 echo "API endpoint : $ENDPOINT  (health: $ENDPOINT/health)"
 echo "Functions    : axon-api (30s), axon-worker (15min, rate(1 minute))"
-echo "Next         : pg_dump EC2 → Neon, qdrant-migrate.mts → Qdrant Cloud, eas.json URL, EAS build"
+echo "Logs/Metrics : /axon/apigw/access + /aws/lambda/axon-* | Axon/Api, Axon/Backend"

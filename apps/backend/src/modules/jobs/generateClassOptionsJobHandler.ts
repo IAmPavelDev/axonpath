@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type {
   GenerateClassOptions,
   SkillClassOptionsJobPayload,
@@ -14,10 +16,7 @@ export const getGenerateClassOptionsJobHandler = (
   return async (payload: SkillClassOptionsJobPayload) => {
     const result = await generateClassOptions(payload);
     if (!result.ok) {
-      console.error(
-        { ...payload, error: result.error },
-        "Class-options generation failed; skill options state is FAILED",
-      );
+      logger.error({ ...payload, error: result.error }, "Class-options generation failed; skill options state is FAILED");
     }
   };
 };

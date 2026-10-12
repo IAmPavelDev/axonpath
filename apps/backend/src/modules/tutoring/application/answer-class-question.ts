@@ -11,6 +11,10 @@ import type { ClassContentVectorsJobPayload } from "@/modules/memory/application
 import { QA_BLOCK_VECTORS_JOB } from "@/modules/memory/application/mine-qa-vectors";
 import { QA_TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import {
+  outcomeForError,
+  type RecordAiAttempt,
+} from "@/modules/tutoring/infrastructure/ai-attempt.repo";
+import {
   buildQaAnswerPrompt,
   type QaHistoryEntry,
 } from "@/modules/tutoring/domain/prompts";
@@ -34,6 +38,7 @@ export type AnswerClassQuestionError =
 
 export type AnswerClassQuestionDeps = {
   ai: AiPort;
+  recordAiAttempt: RecordAiAttempt;
   qaRepo: ClassQaRepository;
   classRepo: ClassRepository;
   skillRepo: SkillRepository;
@@ -88,6 +93,7 @@ const resolveAnchorExcerpt = (
  */
 export const makeAnswerClassQuestion =
   ({
+    recordAiAttempt,
     ai,
     qaRepo,
     classRepo,
@@ -162,23 +168,48 @@ export const makeAnswerClassQuestion =
       crossHits,
     });
 
+    const generationStartedAt = Date.now();
     const generation = await ai.generateText({
       system: QA_TUTOR_SYSTEM,
       prompt,
     });
     if (!generation.ok) {
+      recordAiAttempt({
+        userId: block.userId,
+        operation: "qa_answer",
+        ...outcomeForError(generation.error),
+        latencyMs: Date.now() - generationStartedAt,
+      });
       await qaRepo.markFailed(block.id);
       return { ok: false, error: generation.error };
     }
 
     const answer = generation.value.raw.trim();
     if (answer.length === 0) {
+      recordAiAttempt({
+        userId: block.userId,
+        operation: "qa_answer",
+        outcome: "empty",
+        latencyMs: Date.now() - generationStartedAt,
+        rawChars: generation.value.raw.length,
+        errorKind: "empty completion",
+      });
       await qaRepo.markFailed(block.id);
       return {
         ok: false,
         error: { kind: "AiResponseInvalid", detail: "empty completion" },
       };
     }
+
+    recordAiAttempt({
+      userId: block.userId,
+      operation: "qa_answer",
+      outcome: "ok",
+      latencyMs: Date.now() - generationStartedAt,
+      promptTokens: generation.value.usage?.promptTokens,
+      completionTokens: generation.value.usage?.completionTokens,
+      rawChars: generation.value.raw.length,
+    });
 
     await qaRepo.answer(block.id, { answer, aiModel: chatModel });
 

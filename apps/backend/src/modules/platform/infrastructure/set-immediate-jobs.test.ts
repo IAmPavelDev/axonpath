@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { logger } from "@/lib/logger";
 import { makeSetImmediateJobQueue } from "@/modules/platform/infrastructure/set-immediate-jobs";
 
 afterEach(() => {
@@ -52,7 +53,7 @@ describe("makeSetImmediateJobQueue idle drain", () => {
   });
 
   it("drains even when a job fails (failure is logged, never propagated)", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const queue = makeSetImmediateJobQueue({
       boom: async () => {
         throw new Error("boom");

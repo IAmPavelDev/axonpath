@@ -138,6 +138,7 @@ export type LoopHarness = {
   };
   deps: {
     ai: AiPort;
+    recordAiAttempt: () => void;
     retrieveContext: (input: {
       userId: number;
       query: string;
@@ -876,6 +877,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
 
   const deps: LoopHarness["deps"] = {
     ai,
+    recordAiAttempt: () => {},
     retrieveContext,
     skillRepo,
     optionRepo: nextClassOptions,
@@ -1056,10 +1058,11 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     skillRepo,
   });
   const retrieveQaContext = makeRetrieveQaContext({ ai, vectorStore });
-  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo });
+  const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo, recordAiAttempt: () => {} });
   const generateClassOptions = makeGenerateClassOptions(deps);
   const answerClassQuestion = makeAnswerClassQuestion({
     ai,
+    recordAiAttempt: () => {},
     qaRepo,
     classRepo,
     skillRepo,

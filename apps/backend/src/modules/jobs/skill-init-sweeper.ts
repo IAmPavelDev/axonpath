@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { SKILL_INIT_JOB } from "@/modules/learning/application/commands/create-skill";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
@@ -39,12 +41,9 @@ export const makeSkillInitSweeper = ({
         });
       }
       if (claimed.length > 0) {
-        console.warn(
-          { requeued: claimed.map((skill) => skill.id) },
-          "Requeued lost skill-init jobs",
-        );
+        logger.warn({ requeued: claimed.map((skill) => skill.id) }, "Requeued lost skill-init jobs");
       }
     } catch (err) {
-      console.error({ err }, "Skill-init sweep failed");
+      logger.error({ err }, "Skill-init sweep failed");
     }
   });

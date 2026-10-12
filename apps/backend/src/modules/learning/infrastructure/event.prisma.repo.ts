@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import { EventType, Prisma } from "@/prisma/generated";
 import { prisma } from "@/modules/platform/infrastructure/prisma";
 import type {
@@ -18,7 +20,7 @@ export const makePrismaEventRepository = (): EventRepository => ({
       });
     } catch (err) {
       // Audit events must never gate the flow that produced them.
-      console.error({ err, eventType: event.type, skillId: event.skillId }, "Failed to record event");
+      logger.error({ err, eventType: event.type, skillId: event.skillId }, "Failed to record event");
     }
   },
 

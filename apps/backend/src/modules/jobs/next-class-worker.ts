@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import type { GenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import type {
   NextClassJobClaim,
@@ -43,21 +45,15 @@ export const makeNextClassWorker = ({
       return;
     }
 
-    console.error(
-      {
-        skillId: claim.skillId,
-        userId: claim.userId,
-        error: result.error,
-        attempt: claim.attempts,
-      },
-      "Next-class generation failed; skill stays ACTIVE",
-    );
+    logger.error({
+      skillId: claim.skillId,
+      userId: claim.userId,
+      error: result.error,
+      attempt: claim.attempts,
+    }, "Next-class generation failed; skill stays ACTIVE");
 
     if (claim.attempts >= MAX_NEXT_CLASS_ATTEMPTS) {
-      console.error(
-        { skillId: claim.skillId },
-        `Next-class generation giving up after ${claim.attempts} attempts`,
-      );
+      logger.error({ skillId: claim.skillId }, `Next-class generation giving up after ${claim.attempts} attempts`);
       await nextClassJobs.release(claim);
       return;
     }

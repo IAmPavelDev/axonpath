@@ -73,6 +73,7 @@ const makeDeps = (
   };
 
   const deps: GenerateClassOptionsDeps = {
+    recordAiAttempt: () => {},
     ai: {
       generateJson: async (input, request) => {
         if (request.schemaName === "class_options") {
