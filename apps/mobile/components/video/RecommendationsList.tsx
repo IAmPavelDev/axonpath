@@ -22,7 +22,7 @@ export const RecommendationsList: FC<{ skillId: number }> = ({ skillId }) => {
   });
 
   const refresh = () => {
-    void rpc.video.recommendations.refresh({ skillId }).then(() => query.refetch());
+    void rpc.video.recommendations.refresh({ skillId }).finally(() => query.refetch());
   };
 
   if (query.isLoading || query.data?.status === 'PENDING') {
@@ -38,6 +38,19 @@ export const RecommendationsList: FC<{ skillId: number }> = ({ skillId }) => {
         <Text variant="muted" className="text-center">
           Generating…
         </Text>
+      </View>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <View className="items-center gap-3 px-6 py-10">
+        <Text variant="muted" className="text-center">
+          Could not load video recommendations right now.
+        </Text>
+        <Button size="sm" onPress={() => void query.refetch()}>
+          <Text>Try again</Text>
+        </Button>
       </View>
     );
   }
