@@ -24,4 +24,5 @@ export const workerHandler = async (): Promise<void> => {
   await container.gradingSweeper.tickOnce();
   await container.recommendationsSweeper.tickOnce();
   await container.classClipsSweeper.tickOnce();
+  await container.jobQueueIdle();
 };

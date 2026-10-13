@@ -48,7 +48,7 @@ jobs (see `next-class-job.repository.ts`).
 ## 2. Provision (scripted)
 
 ```sh
-AWS_REGION=<region> ALERT_EMAIL=<you> bash scripts/provision-serverless.sh
+ENV_FILE=.env.aws.serverless.eu AWS_REGION=eu-central-1 ALERT_EMAIL=<you> bash scripts/provision-serverless.sh
 ```
 
 Creates ECR repo `axon-backend`, roles `axon-lambda-role` / `axon-scheduler-role`,
