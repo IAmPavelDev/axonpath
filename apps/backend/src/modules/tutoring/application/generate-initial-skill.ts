@@ -1,3 +1,9 @@
+import {
+  generationFailed,
+  generationStarted,
+  generationSucceeded,
+} from "@/lib/generation-logger";
+
 import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
 import type { Result } from "@/modules/platform/result";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
@@ -344,11 +350,40 @@ export const makeGenerateInitialSkill = ({
   return async (
     input: GenerateInitialSkillInput,
   ): Promise<Result<void, GenerateInitialSkillError>> => {
+    generationStarted({
+      pipeline: "skill_init",
+      skillId: input.skillId,
+      skillName: input.topic,
+      userId: input.userId,
+    });
+    const startedAt = Date.now();
     const result = await attempt(input);
     if (result.ok) {
       await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+      generationSucceeded(
+        {
+          pipeline: "skill_init",
+          skillId: input.skillId,
+          skillName: input.topic,
+          userId: input.userId,
+        },
+        { durationMs: Date.now() - startedAt },
+      );
     } else {
       await skillRepo.update(input.skillId, { status: SkillStatus.FAILED });
+      generationFailed(
+        {
+          pipeline: "skill_init",
+          skillId: input.skillId,
+          skillName: input.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - startedAt,
+          errorKind: result.error.kind,
+          errorDetail: result.error.detail,
+        },
+      );
       await eventRepo.record({
         skillId: input.skillId,
         userId: input.userId,

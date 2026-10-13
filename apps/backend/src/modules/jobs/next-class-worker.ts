@@ -34,6 +34,7 @@ export const makeNextClassWorker = ({
   generateNextClass: GenerateNextClass;
 }): NextClassWorker => {
   const run = async (claim: NextClassJobClaim): Promise<void> => {
+    const startedAt = Date.now();
     const result = await generateNextClass({
       skillId: claim.skillId,
       userId: claim.userId,
@@ -50,10 +51,18 @@ export const makeNextClassWorker = ({
       userId: claim.userId,
       error: result.error,
       attempt: claim.attempts,
+      maxAttempts: MAX_NEXT_CLASS_ATTEMPTS,
+      durationMs: Date.now() - startedAt,
     }, "Next-class generation failed; skill stays ACTIVE");
 
     if (claim.attempts >= MAX_NEXT_CLASS_ATTEMPTS) {
-      logger.error({ skillId: claim.skillId }, `Next-class generation giving up after ${claim.attempts} attempts`);
+      logger.error({
+        skillId: claim.skillId,
+        userId: claim.userId,
+        error: result.error,
+        attempt: claim.attempts,
+        maxAttempts: MAX_NEXT_CLASS_ATTEMPTS,
+      }, `Next-class generation giving up after ${claim.attempts} attempts; will re-arm via reconciliation once the skill settles ACTIVE`);
       await nextClassJobs.release(claim);
       return;
     }

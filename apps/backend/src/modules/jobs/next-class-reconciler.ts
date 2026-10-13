@@ -1,3 +1,5 @@
+import { logger } from "@/lib/logger";
+
 import { SkillMode, SkillStatus } from "@/prisma/generated";
 import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
@@ -61,6 +63,12 @@ export const makeNextClassReconciler =
         continue;
       }
 
+      logger.info({
+        pipeline: "next_class",
+        skillId: skill.id,
+        skillName: skill.topic,
+        userId: skill.userId,
+      }, "Next-class generation re-armed by reconciler");
       await nextClassJobs.enqueue({ skillId: skill.id, userId: skill.userId });
       await skillRepo.update(skill.id, { status: SkillStatus.GENERATING });
     }

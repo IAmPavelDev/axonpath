@@ -1,3 +1,10 @@
+import {
+  generationFailed,
+  generationSkipped,
+  generationStarted,
+  generationSucceeded,
+} from "@/lib/generation-logger";
+
 import { EventType, NextClassOptionsState, SkillStatus } from "@/prisma/generated";
 import { err, ok, type Result } from "@/modules/platform/result";
 import type { AiPort } from "@/modules/tutoring/ports";
@@ -84,10 +91,29 @@ export const makeGenerateClassOptions =
     clock,
   }: GenerateClassOptionsDeps): GenerateClassOptions =>
   async (input) => {
+    generationStarted({
+      pipeline: "class_options",
+      skillId: input.skillId,
+      userId: input.userId,
+    });
+    const pipelineStartedAt = Date.now();
     const skill = await skillRepo.findById(input.skillId);
     if (!skill) {
+      generationFailed(
+        { pipeline: "class_options", skillId: input.skillId, userId: input.userId },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "SkillNotFound",
+        },
+      );
       return err({ kind: "SkillNotFound", skillId: input.skillId });
     }
+    const logCtx = {
+      pipeline: "class_options",
+      skillId: input.skillId,
+      skillName: skill.topic,
+      userId: input.userId,
+    } as const;
 
     if (skill.status !== SkillStatus.ACTIVE) {
       if (skill.optionsState === NextClassOptionsState.PENDING) {
@@ -96,6 +122,13 @@ export const makeGenerateClassOptions =
           optionsStateAt: null,
         });
       }
+      generationSkipped(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          reason: `skill status ${skill.status} is not ACTIVE`,
+        },
+      );
       return ok(undefined);
     }
 
@@ -164,6 +197,14 @@ export const makeGenerateClassOptions =
           error: generation.error,
         },
       });
+      generationFailed(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: generation.error.kind,
+          errorDetail: generation.error.detail,
+        },
+      );
       return { ok: false, error: generation.error };
     }
 
@@ -211,6 +252,14 @@ export const makeGenerateClassOptions =
           error,
         },
       });
+      generationFailed(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "AiResponseInvalid",
+          errorDetail: parseFailed ? "unparsable JSON" : "no valid targets in response",
+        },
+      );
       return { ok: false, error };
     }
 
@@ -237,6 +286,9 @@ export const makeGenerateClassOptions =
         response: generation.value.raw,
       },
     });
-
+    generationSucceeded(
+      logCtx,
+      { durationMs: Date.now() - pipelineStartedAt, count: targets.length },
+    );
     return ok(undefined);
   };

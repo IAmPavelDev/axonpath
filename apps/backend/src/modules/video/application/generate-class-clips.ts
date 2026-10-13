@@ -1,3 +1,10 @@
+import {
+  generationFailed,
+  generationSkipped,
+  generationStarted,
+  generationSucceeded,
+} from "@/lib/generation-logger";
+
 import type { AiPort } from "@/modules/tutoring/ports";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
 import type { GeminiVideoClient } from "@/modules/video/infrastructure/gemini-video.client";
@@ -70,8 +77,22 @@ export const makeGenerateClassClips =
     candidatesPerConcept = 2,
   }: GenerateClassClipsDeps) =>
   async (input: { classId: number }): Promise<void> => {
+    const pipelineStartedAt = Date.now();
     const klass = await videoRepo.findClassForClips(input.classId);
-    if (!klass) return; // class deleted mid-enrichment
+    if (!klass) {
+      generationSkipped(
+        { pipeline: "class_clips", classId: input.classId },
+        { durationMs: Date.now() - pipelineStartedAt, reason: "class deleted mid-enrichment" },
+      );
+      return;
+    }
+    const logCtx = {
+      pipeline: "class_clips",
+      classId: input.classId,
+      className: klass.title,
+      skillName: klass.skillTopic,
+    } as const;
+    generationStarted(logCtx);
 
     const planResult = await ai.generateJson(
       {
@@ -93,7 +114,17 @@ export const makeGenerateClassClips =
         responseSchema: PLAN_SCHEMA as Record<string, unknown>,
       },
     );
-    if (!planResult.ok) return; // planner failed — sweeper retries within budget
+    if (!planResult.ok) {
+      generationFailed(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: planResult.error.kind,
+          errorDetail: planResult.error.detail,
+        },
+      );
+      return; // planner failed — sweeper retries within budget
+    }
 
     const plan = extractJsonObject(planResult.value.raw) as ParsedPlan | null;
     const rawConcepts = Array.isArray(plan?.concepts) ? plan.concepts : [];
@@ -109,6 +140,13 @@ export const makeGenerateClassClips =
       .slice(0, maxConcepts ?? 2);
 
     if (plan?.helps !== true || concepts.length === 0) {
+      generationSkipped(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          reason: "model decided videos would not help this lesson",
+        },
+      );
       await videoRepo.setClipStatus(input.classId, "SKIPPED");
       return;
     }
@@ -164,8 +202,19 @@ export const makeGenerateClassClips =
     if (clips.length === 0) {
       // Nothing usable surfaced this pass — leave PENDING so the sweeper can
       // retry; the attempts budget turns it SKIPPED silently in the end.
+      generationSkipped(
+        logCtx,
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          reason: "no usable video clips surfaced; leaving PENDING for retry",
+        },
+      );
       return;
     }
     await videoRepo.replaceClassClips(input.classId, clips);
     await videoRepo.setClipStatus(input.classId, "READY");
+    generationSucceeded(
+      logCtx,
+      { durationMs: Date.now() - pipelineStartedAt, count: clips.length },
+    );
   };

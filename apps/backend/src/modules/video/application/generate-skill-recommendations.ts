@@ -1,3 +1,10 @@
+import {
+  generationFailed,
+  generationSkipped,
+  generationStarted,
+  generationSucceeded,
+} from "@/lib/generation-logger";
+
 import type { AiPort } from "@/modules/tutoring/ports";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
 import type { RankedRecommendation } from "@/modules/video/domain/video-enrichment";
@@ -44,20 +51,50 @@ type ParsedRerank = { ranked?: unknown };
 export const makeGenerateSkillRecommendations =
   ({ videoRepo, search, ai, maxAttempts = 3 }: GenerateSkillRecommendationsDeps) =>
   async (input: { skillId: number }): Promise<void> => {
+    const pipelineStartedAt = Date.now();
     const state = await videoRepo.getRecommendationsState(input.skillId);
     if (state.status === "READY") return; // job replay no-op
     if (state.attempts > maxAttempts) {
+      generationFailed(
+        { pipeline: "recommendations", skillId: input.skillId },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "AttemptsExhausted",
+          attempt: state.attempts,
+          maxAttempts,
+        },
+      );
       await videoRepo.setRecommendationsStatus(input.skillId, "FAILED");
       return;
     }
     const topic = await videoRepo.findSkillTopic(input.skillId);
     if (!topic) return; // skill vanished (deleted mid-enrichment)
 
+    generationStarted({
+      pipeline: "recommendations",
+      skillId: input.skillId,
+      skillName: topic,
+    });
+
     const searchResult = await search.searchYouTube(`${topic} tutorial explained`, {
       innertubeApiKey: null,
       innertubeClientVersion: null,
     });
     if (!searchResult.ok) {
+      generationFailed(
+        {
+          pipeline: "recommendations",
+          skillId: input.skillId,
+          skillName: topic,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: searchResult.error.kind,
+          errorDetail: searchResult.error.detail,
+          attempt: state.attempts,
+          maxAttempts,
+        },
+      );
       if (state.attempts >= maxAttempts) {
         await videoRepo.setRecommendationsStatus(input.skillId, "FAILED");
       }
@@ -81,8 +118,17 @@ export const makeGenerateSkillRecommendations =
       });
     });
 
-    // Search worked but everything ranked away — still READY, with an empty
-    // list the tab renders as "no videos found for this topic yet".
+    generationSucceeded(
+      {
+        pipeline: "recommendations",
+        skillId: input.skillId,
+        skillName: topic,
+      },
+      {
+        durationMs: Date.now() - pipelineStartedAt,
+        count: items.slice(0, 10).length,
+      },
+    );
     await videoRepo.replaceRecommendations(input.skillId, items.slice(0, 10));
     await videoRepo.setRecommendationsStatus(input.skillId, "READY");
   };

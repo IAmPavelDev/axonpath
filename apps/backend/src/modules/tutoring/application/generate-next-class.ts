@@ -1,3 +1,11 @@
+import { logger } from "@/lib/logger";
+import {
+  generationFailed,
+  generationSkipped,
+  generationStarted,
+  generationSucceeded,
+} from "@/lib/generation-logger";
+
 import { EventType, SkillStatus, VectorSource } from "@/prisma/generated";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectorize-class-content";
@@ -139,7 +147,20 @@ export const makeGenerateNextClass =
     input: GenerateNextClassInput,
   ): Promise<Result<void, GenerateNextClassError>> => {
     const skill = await skillRepo.findById(input.skillId);
+  generationStarted({
+    pipeline: "next_class",
+    skillId: input.skillId,
+    userId: input.userId,
+  });
+  const pipelineStartedAt = Date.now();
     if (!skill) {
+      generationFailed(
+        { pipeline: "next_class", skillId: input.skillId, userId: input.userId },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "SkillNotFound",
+        },
+      );
       return err({ kind: "SkillNotFound", skillId: input.skillId });
     }
 
@@ -152,11 +173,35 @@ export const makeGenerateNextClass =
       skill.status !== SkillStatus.ACTIVE &&
       skill.status !== SkillStatus.GENERATING
     ) {
+      generationSkipped(
+        {
+          pipeline: "next_class",
+          skillId: input.skillId,
+          skillName: skill.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          reason: `skill status ${skill.status} is neither ACTIVE nor GENERATING`,
+        },
+      );
       return ok(undefined);
     }
 
     const last = await classRepo.findTopBySkill(input.skillId);
     if (!last && input.target === undefined) {
+      generationFailed(
+        {
+          pipeline: "next_class",
+          skillId: input.skillId,
+          skillName: skill.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "NoClassesYet",
+        },
+      );
       return err({ kind: "NoClassesYet", skillId: input.skillId });
     }
 
@@ -187,6 +232,18 @@ export const makeGenerateNextClass =
         input.userId,
       );
       if (answeredIndex !== null && last && last.index > answeredIndex) {
+        generationSkipped(
+          {
+            pipeline: "next_class",
+            skillId: input.skillId,
+            skillName: skill.topic,
+            userId: input.userId,
+          },
+          {
+            durationMs: Date.now() - pipelineStartedAt,
+            reason: "newest class not answered through yet (retake dedup)",
+          },
+        );
         await settlePhase();
         return ok(undefined);
       }
@@ -263,6 +320,19 @@ export const makeGenerateNextClass =
         ...outcomeForError(generation.error),
         latencyMs: Date.now() - generationStartedAt,
       });
+      generationFailed(
+        {
+          pipeline: "next_class",
+          skillId: input.skillId,
+          skillName: skill.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: generation.error.kind,
+          errorDetail: generation.error.detail,
+        },
+      );
       await settlePhase();
       return { ok: false, error: generation.error };
     }
@@ -291,6 +361,19 @@ export const makeGenerateNextClass =
         rawChars: generation.value.raw.length,
         errorKind: error instanceof Error ? error.message : String(error),
       });
+      generationFailed(
+        {
+          pipeline: "next_class",
+          skillId: input.skillId,
+          skillName: skill.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "AiResponseInvalid",
+          errorDetail: error instanceof Error ? error.message : String(error),
+        },
+      );
       await settlePhase();
       return {
         ok: false,
@@ -313,6 +396,19 @@ export const makeGenerateNextClass =
         rawChars: generation.value.raw.length,
         errorKind: "model returned no questions",
       });
+      generationFailed(
+        {
+          pipeline: "next_class",
+          skillId: input.skillId,
+          skillName: skill.topic,
+          userId: input.userId,
+        },
+        {
+          durationMs: Date.now() - pipelineStartedAt,
+          errorKind: "AiResponseInvalid",
+          errorDetail: "model returned no questions",
+        },
+      );
       await settlePhase();
       return {
         ok: false,
@@ -389,6 +485,19 @@ export const makeGenerateNextClass =
         vectorInputs.map((vector) => vector.text),
       );
       if (!embeddings.ok) {
+        generationFailed(
+          {
+            pipeline: "next_class",
+            skillId: input.skillId,
+            skillName: skill.topic,
+            userId: input.userId,
+          },
+          {
+            durationMs: Date.now() - pipelineStartedAt,
+            errorKind: embeddings.error.kind,
+            errorDetail: embeddings.error.detail,
+          },
+        );
         await settlePhase();
         return { ok: false, error: embeddings.error };
       }
@@ -409,11 +518,37 @@ export const makeGenerateNextClass =
         })),
       );
       if (!recorded.ok) {
+        generationFailed(
+          {
+            pipeline: "next_class",
+            skillId: input.skillId,
+            skillName: skill.topic,
+            userId: input.userId,
+          },
+          {
+            durationMs: Date.now() - pipelineStartedAt,
+            errorKind: recorded.error.kind,
+            errorDetail: recorded.error.detail,
+          },
+        );
         await settlePhase();
         return { ok: false, error: recorded.error };
       }
     }
 
     await settlePhase();
+    generationSucceeded(
+      {
+        pipeline: "next_class",
+        skillId: input.skillId,
+        skillName: skill.topic,
+        userId: input.userId,
+      },
+      {
+        durationMs: Date.now() - pipelineStartedAt,
+        classId: createdClass.id,
+        className: parsed.classTitle,
+      },
+    );
     return ok(undefined);
   };
