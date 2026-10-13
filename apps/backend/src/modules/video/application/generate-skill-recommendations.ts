@@ -1,6 +1,5 @@
 import {
   generationFailed,
-  generationSkipped,
   generationStarted,
   generationSucceeded,
 } from "@/lib/generation-logger";
