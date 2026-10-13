@@ -14,7 +14,10 @@ const serverlessHttp = require('serverless-http') as typeof import('serverless-h
 
 const handler = new RPCHandler(
   {
-    echo: async (input: unknown) => input,
+    echo: async (input: unknown) => {
+      console.log('ECHO PROCEDURE CALLED, input:', JSON.stringify(input));
+      return input;
+    },
   },
   { plugins: [new BatchHandlerPlugin(), new CORSPlugin()] },
 );
@@ -34,7 +37,10 @@ const event = {
   isBase64Encoded: false,
 };
 
-const result = (await invoke(event as any, {} as any)) as any;
+const result = (await Promise.race([
+  invoke(event as any, {} as any) as any,
+  new Promise((resolve) => setTimeout(() => resolve({ statusCode: 'TIMEOUT', body: 'invoke never settled' }), 5000)),
+])) as any;
 console.log('STATUS:', result.statusCode);
 console.log('BODY:', String(result.body).slice(0, 200));
 process.exit(0);
