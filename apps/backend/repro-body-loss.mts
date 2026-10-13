@@ -20,6 +20,11 @@ const { buildApp } = require('./src/app.js') as typeof import('./src/app.js');
 const serverlessHttp = require('serverless-http') as typeof import('serverless-http');
 
 const { handleRequest, app } = await buildApp();
+app.post('/debug-echo', async (request: any) => ({
+  body: request.body ?? null,
+  rawBody: String((request.raw as any).body ?? ''),
+  rawHeaders: (request.raw as any).headers,
+}));
 await app.ready();
 const fastifyRouting = (
   app as unknown as { routing: (req: any, res: any) => void }
@@ -51,3 +56,8 @@ const result = (await invoke(event as any, {} as any)) as any;
 console.log('STATUS:', result.statusCode);
 console.log('BODY:', String(result.body).slice(0, 300));
 process.exit(0);
+
+const echoEvent = { ...event, routeKey: 'POST /debug-echo', rawPath: '/debug-echo', requestContext: { http: { method: 'POST', path: '/debug-echo' } } };
+const echoResult = (await invoke(echoEvent as any, {} as any)) as any;
+console.log('ECHO STATUS:', echoResult.statusCode);
+console.log('ECHO BODY:', String(echoResult.body).slice(0, 400));
