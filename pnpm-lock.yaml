@@ -39,16 +39,16 @@ importers:
         specifier: ^5.2.0
         version: 5.2.0(@sinclair/typebox@0.34.41)
       '@orpc/client':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6
       '@orpc/openapi':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6(fastify@5.12.5)(ws@8.22.0)
       '@orpc/server':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6(fastify@5.12.5)(ws@8.22.0)
       '@orpc/zod':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6(@orpc/contract@1.15.6)(@orpc/server@1.15.6(fastify@5.12.5)(ws@8.22.0))(fastify@5.12.5)(ws@8.22.0)(zod@4.1.5)
       '@prisma/client':
         specifier: 6.19.3
@@ -263,10 +263,10 @@ importers:
   packages/api-contract:
     dependencies:
       '@orpc/contract':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6
       '@orpc/server':
-        specifier: ^1.15.6
+        specifier: ^1.8.6
         version: 1.15.6(fastify@5.12.5)(ws@8.22.0)
       zod:
         specifier: ^4.1.5
