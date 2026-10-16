@@ -4,6 +4,7 @@ import {
   generationStarted,
   generationSucceeded,
 } from "@/lib/generation-logger";
+import { logger } from "@/lib/logger";
 
 import type { AiPort } from "@/modules/tutoring/ports";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
@@ -139,6 +140,15 @@ export const makeGenerateClassClips =
       .filter((concept) => concept.query.length > 0)
       .slice(0, maxConcepts ?? 2);
 
+    logger.info(
+      {
+        ...logCtx,
+        helps: plan?.helps === true,
+        concepts: concepts.map((concept) => concept.query),
+      },
+      "class_clips.plan",
+    );
+
     if (plan?.helps !== true || concepts.length === 0) {
       generationSkipped(
         logCtx,
@@ -157,7 +167,18 @@ export const makeGenerateClassClips =
         innertubeApiKey: null,
         innertubeClientVersion: null,
       });
-      if (!searchResult.ok) continue;
+      if (!searchResult.ok) {
+        logger.warn(
+          {
+            ...logCtx,
+            concept: concept.query,
+            errorKind: searchResult.error.kind,
+            detail: searchResult.error.detail,
+          },
+          "class_clips.search_failed",
+        );
+        continue;
+      }
       const candidates = searchResult.value
         .filter(
           (hit) =>
@@ -165,6 +186,18 @@ export const makeGenerateClassClips =
             (hit.durationSeconds ?? 0) <= MAX_CANDIDATE_SECONDS,
         )
         .slice(0, candidatesPerConcept ?? 2);
+      logger.info(
+        {
+          ...logCtx,
+          concept: concept.query,
+          hits: searchResult.value.length,
+          candidates: candidates.map((candidate) => ({
+            videoId: candidate.videoId,
+            durationSeconds: candidate.durationSeconds,
+          })),
+        },
+        "class_clips.candidates",
+      );
 
       for (const candidate of candidates) {
         await videoRepo.upsertVideoAsset({
@@ -178,13 +211,45 @@ export const makeGenerateClassClips =
           concept: concept.query,
           lessonTitle: klass.title,
         });
-        if (!selection.ok || !selection.value.found) continue;
+        if (!selection.ok) {
+          logger.warn(
+            {
+              ...logCtx,
+              concept: concept.query,
+              videoId: candidate.videoId,
+              errorKind: selection.error.kind,
+              detail: selection.error.detail,
+              httpStatus: selection.error.httpStatus,
+            },
+            "class_clips.segment_selection_failed",
+          );
+          continue;
+        }
+        if (!selection.value.found) {
+          logger.info(
+            { ...logCtx, concept: concept.query, videoId: candidate.videoId },
+            "class_clips.segment_not_found",
+          );
+          continue;
+        }
         const window = clampClipWindow(
           selection.value.startSeconds,
           selection.value.endSeconds,
           candidate.durationSeconds,
         );
-        if (!window) continue;
+        if (!window) {
+          logger.info(
+            {
+              ...logCtx,
+              videoId: candidate.videoId,
+              startSeconds: selection.value.startSeconds,
+              endSeconds: selection.value.endSeconds,
+              durationSeconds: candidate.durationSeconds,
+            },
+            "class_clips.clip_window_rejected",
+          );
+          continue;
+        }
         clips.push({
           anchorParagraph: concept.anchorParagraph,
           videoId: candidate.videoId,

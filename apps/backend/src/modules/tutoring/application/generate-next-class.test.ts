@@ -138,6 +138,7 @@ const makeDeps = (
       listByStatus: async () => {
         throw new Error("not used in next-class tests");
       },
+      settleStaleGenerating: async () => [],
       claimStaleInit: async () => {
         throw new Error("not used in next-class tests");
       },

@@ -77,6 +77,16 @@ export type SkillRepository = {
     olderThan: Date,
   ): Promise<Array<{ id: number; userId: number; topic: string }>>;
   /**
+   * Recovery net for a GENERATING skill whose generation pipeline died after
+   * persisting a class but before settling (crash between class-create and
+   * settle — e.g. an expired Prisma transaction on the API). Legal GENERATING
+   * states always own either zero classes (init, claimStaleInit's case) or a
+   * live NextClassJob marker (the adaptive loop), so a stale GENERATING skill
+   * with a class and no marker is abandoned. Settles it ACTIVE — the lesson
+   * exists and the loop re-arms on the next submit.
+   */
+  settleStaleGenerating(olderThan: Date): Promise<number[]>;
+  /**
    * MANUAL skills whose candidate-options job was lost: optionsState still
    * PENDING past `olderThan`. Plain read — re-enqueueing while a run is in
    * flight is benign (the job's writes are last-wins), and every terminal

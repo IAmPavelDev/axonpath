@@ -200,6 +200,7 @@ const makeDeps = (
     listByStatus: async () => {
       throw new Error("not used in answer tests");
     },
+    settleStaleGenerating: async () => [],
     claimStaleInit: async () => {
       throw new Error("not used in answer tests");
     },

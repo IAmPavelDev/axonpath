@@ -52,6 +52,7 @@ const makeFakeDeps = (
     listByStatus: async () => {
       throw new Error("not used in retry tests");
     },
+    settleStaleGenerating: async () => [],
     claimStaleInit: async () => {
       throw new Error("not used in retry tests");
     },

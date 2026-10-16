@@ -62,6 +62,7 @@ const makeDeps = (
     listByStatus: async () => {
       throw new Error("not used");
     },
+    settleStaleGenerating: async () => [],
     claimStaleInit: async () => {
       throw new Error("not used");
     },

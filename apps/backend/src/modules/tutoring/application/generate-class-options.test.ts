@@ -117,6 +117,7 @@ const makeDeps = (
         overrides.skill === undefined ? SKILL : overrides.skill,
       listByUser: async () => [],
       listByStatus: async () => [],
+      settleStaleGenerating: async () => [],
       claimStaleInit: async () => [],
       listStalePendingOptions: async () => [],
     },

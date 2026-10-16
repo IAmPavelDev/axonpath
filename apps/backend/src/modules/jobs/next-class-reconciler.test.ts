@@ -63,6 +63,7 @@ const makeDeps = ({
             learnedPoints: 0,
             lastActivityAt: null,
           })),
+      settleStaleGenerating: async () => [],
       claimStaleInit: async () => notUsed("claimStaleInit"),
       listStalePendingOptions: async () => notUsed("listStalePendingOptions"),
     } satisfies SkillRepository,

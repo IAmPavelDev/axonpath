@@ -61,6 +61,7 @@ const makeDeps = (skill: SkillFake | null = SKILL) => {
       findById: async () => skill,
       listByUser: async () => [],
       listByStatus: async () => [],
+      settleStaleGenerating: async () => [],
       claimStaleInit: async () => [],
       listStalePendingOptions: async () => [],
     },

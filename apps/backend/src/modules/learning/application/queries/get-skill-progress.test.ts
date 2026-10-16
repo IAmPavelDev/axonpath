@@ -50,6 +50,7 @@ const makeFakeDeps = (options: {
     findById: async () => skill,
     listByUser: unused,
     listByStatus: unused,
+    settleStaleGenerating: async () => [],
     claimStaleInit: unused,
     listStalePendingOptions: unused,
   };

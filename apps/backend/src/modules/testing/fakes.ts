@@ -418,6 +418,23 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return claimed;
     },
+    settleStaleGenerating: async () => {
+      // No clock in the harness: every abandoned GENERATING skill (has a
+      // class, no live next-class marker) is settled; tests control the
+      // preconditions via state setup, mirroring claimStaleInit.
+      const settled: number[] = [];
+      for (const skill of state.skills.values()) {
+        if (skill.status !== SkillStatus.GENERATING) continue;
+        const hasClass = [...state.classes.values()].some(
+          (cls) => cls.skillId === skill.id,
+        );
+        if (!hasClass) continue;
+        if (nextClassJobRows.has(skill.id)) continue;
+        skill.status = SkillStatus.ACTIVE;
+        settled.push(skill.id);
+      }
+      return settled;
+    },
     listStalePendingOptions: async (olderThan) =>
       [...state.skills.values()]
         .filter(

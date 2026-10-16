@@ -147,6 +147,7 @@ const makeFakeRepos = (
     }),
     listByUser: async () => [],
     listByStatus: async () => [],
+    settleStaleGenerating: async () => [],
     claimStaleInit: async () => [],
     listStalePendingOptions: async () => [],
   };

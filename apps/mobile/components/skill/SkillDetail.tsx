@@ -208,10 +208,12 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     kind: 'class',
     classData,
   }));
-  // While a lesson generates, a skeleton row holds its place at the top of
-  // the list (newest first) and is replaced by the real row on arrival.
+  // While a lesson generates, the list is ONLY the skeleton row: a Class row
+  // is persisted before its content (conspect + clip enrichment) settles, and
+  // rendering it early shows a dead card beside the loading placeholder.
+  // Real rows replace the skeleton when the skill leaves GENERATING.
   const listData: ClassListRow[] =
-    skill.status === 'GENERATING' ? [{ kind: 'generating' }, ...classRows] : classRows;
+    skill.status === 'GENERATING' ? [{ kind: 'generating' }] : classRows;
 
   return (
     <KeyboardAvoidingView className="flex-1">

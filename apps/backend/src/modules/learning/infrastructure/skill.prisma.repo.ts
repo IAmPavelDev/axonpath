@@ -216,6 +216,22 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
       RETURNING skill."id", skill."userId", skill."topic"
     `,
 
+  settleStaleGenerating: async (olderThan) => {
+    const rows = await prisma.$queryRaw<Array<{ id: number }>>`
+      UPDATE "Skill" AS skill
+      SET "status" = 'ACTIVE', "updatedAt" = NOW()
+      WHERE skill."status" = 'GENERATING'
+        AND skill."updatedAt" < ${olderThan}
+        AND EXISTS (SELECT 1 FROM "Class" AS klass WHERE klass."skillId" = skill."id")
+        AND NOT EXISTS (
+          SELECT 1 FROM "NextClassJob" AS job
+          WHERE job."skillId" = skill."id" AND job."status" IN ('PENDING', 'PROCESSING')
+        )
+      RETURNING skill."id"
+    `;
+    return rows.map((row) => row.id);
+  },
+
   listStalePendingOptions: (olderThan) =>
     prisma.skill.findMany({
       where: {

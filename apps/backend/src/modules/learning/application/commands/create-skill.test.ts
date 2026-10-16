@@ -27,6 +27,7 @@ const makeFakeDeps = () => {
     listByStatus: async () => {
       throw new Error("not used in create tests");
     },
+    settleStaleGenerating: async () => [],
     claimStaleInit: async () => {
       throw new Error("not used in create tests");
     },

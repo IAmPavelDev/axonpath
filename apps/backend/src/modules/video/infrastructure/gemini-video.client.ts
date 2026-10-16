@@ -7,6 +7,11 @@ import type { ClipSelection } from "@/modules/video/domain/video-enrichment";
  * 2026-10-12 probe's scraping paths are dead from Lambda IPs). One static
  * pass returns a bounded, JSON-mode answer: the timestamped segment that
  * fully explains the concept, or found=false.
+ *
+ * The model is the `gemini-flash-latest` ALIAS, not a pinned version: pinned
+ * versions die for newer accounts ("gemini-2.5-flash is no longer available
+ * to new users" — 404 from the 2026-10-13 prod account) while the alias
+ * keeps tracking a live one.
  */
 export type GeminiVideoClient = {
   selectClipSegment(input: {
@@ -23,9 +28,10 @@ export type GeminiVideoError = {
 };
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
-const TIMEOUT_MS = 120_000; // static video passes run 30–90 s on 10-min clips
+/** Static video passes run 30–90 s on 10-min clips. */
+const TIMEOUT_MS = 120_000;
 
-export const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL ?? "gemini-2.5-flash";
+export const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL ?? "gemini-flash-latest";
 
 export const buildClipSelectionPrompt = (concept: string, lessonTitle: string): string =>
   [

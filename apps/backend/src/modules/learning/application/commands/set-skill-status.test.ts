@@ -40,6 +40,7 @@ const makeFakeDeps = (skill: SkillCoreRow | null) => {
     findById: async () => skill,
     listByUser: unused,
     listByStatus: unused,
+    settleStaleGenerating: async () => [],
     claimStaleInit: unused,
     listStalePendingOptions: unused,
   };

@@ -6,10 +6,15 @@ import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 
 const makeDeps = (
   claimed: Array<{ id: number; userId: number; topic: string }>,
+  settled: number[] = [],
 ) => {
   const claimStaleInit = vi.fn(async (_olderThan: Date) => claimed);
+  const settleStaleGenerating = vi.fn(async (_olderThan: Date) => settled);
   const enqueued: { jobName: string; payload: unknown }[] = [];
-  const skillRepo: Pick<SkillRepository, "claimStaleInit"> = { claimStaleInit };
+  const skillRepo: Pick<SkillRepository, "claimStaleInit" | "settleStaleGenerating"> = {
+    claimStaleInit,
+    settleStaleGenerating,
+  };
   const jobs: JobQueuePort = {
     enqueue: (jobName, payload) => {
       enqueued.push({ jobName, payload });
@@ -18,6 +23,7 @@ const makeDeps = (
   return {
     sweeper: makeSkillInitSweeper({ skillRepo, jobs }),
     claimStaleInit,
+    settleStaleGenerating,
     enqueued,
   };
 };
@@ -55,10 +61,11 @@ describe("skillInitSweeper", () => {
   });
 
   it("survives a repo failure instead of crashing the tick", async () => {
-    const skillRepo: Pick<SkillRepository, "claimStaleInit"> = {
+    const skillRepo: Pick<SkillRepository, "claimStaleInit" | "settleStaleGenerating"> = {
       claimStaleInit: async () => {
         throw new Error("neon hiccup");
       },
+      settleStaleGenerating: async () => [],
     };
     const enqueued: { jobName: string; payload: unknown }[] = [];
     const sweeper = makeSkillInitSweeper({
@@ -70,5 +77,27 @@ describe("skillInitSweeper", () => {
 
     await expect(sweeper.tickOnce()).resolves.toBeUndefined();
     expect(enqueued).toEqual([]);
+  });
+
+  it("settles abandoned GENERATING skills (class exists, no marker) ACTIVE", async () => {
+    const { sweeper, settleStaleGenerating } = makeDeps([], [22]);
+
+    await sweeper.tickOnce();
+
+    expect(settleStaleGenerating).toHaveBeenCalledWith(expect.any(Date));
+    const cutoff = settleStaleGenerating.mock.calls[0][0];
+    expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(INIT_STALE_MS);
+  });
+
+  it("survives a settle failure instead of crashing the tick", async () => {
+    const skillRepo: Pick<SkillRepository, "claimStaleInit" | "settleStaleGenerating"> = {
+      claimStaleInit: async () => [],
+      settleStaleGenerating: async () => {
+        throw new Error("neon hiccup");
+      },
+    };
+    const sweeper = makeSkillInitSweeper({ skillRepo, jobs: { enqueue: () => undefined } });
+
+    await expect(sweeper.tickOnce()).resolves.toBeUndefined();
   });
 });
