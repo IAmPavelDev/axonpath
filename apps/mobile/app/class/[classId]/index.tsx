@@ -1,5 +1,6 @@
 import { ClassConspect } from '@components/class/ClassConspect';
 import { QaComposer } from '@components/class/QaComposer';
+import { ConspectPlayButton } from '@components/class/ConspectPlayButton';
 import { Quiz } from '@components/quiz/Quiz';
 import { ScreenHeader } from '@components/screen-header';
 import { SegmentedControl } from '@atomics/segmented-control';
@@ -28,6 +29,7 @@ import type { QuizSubmitResult } from '@/types/quiz';
 import type { ClassById } from '@/types/class';
 import rpc from '@/utils/rpc';
 import { useClassQa } from '@/hooks/use-class-qa';
+import { useConspectSpeech } from '@/hooks/use-conspect-speech';
 import type { Timeout } from '@/types/global';
 
 type Tab = 'conspect' | 'quiz';
@@ -209,7 +211,13 @@ export default function ClassScreen() {
       {/* Both views stay mounted (hidden with display) so scroll position,
           reading progress and quiz answers survive tab flips. */}
       <View style={{ flex: 1, display: tab === 'conspect' ? 'flex' : 'none' }}>
-        <ConspectView classData={data} scrollY={scrollY} progress={progress} colorScheme={colorScheme ?? 'light'} />
+        <ConspectView
+          classData={data}
+          scrollY={scrollY}
+          progress={progress}
+          colorScheme={colorScheme ?? 'light'}
+          visible={tab === 'conspect'}
+        />
       </View>
       <View style={{ flex: 1, display: tab === 'quiz' ? 'flex' : 'none' }}>
         <QuizView
@@ -227,15 +235,19 @@ function ConspectView({
   scrollY,
   progress,
   colorScheme,
+  visible,
 }: {
   classData: ClassById;
   scrollY: SharedValue<number>;
   /** Owned by ClassScreen so analytics can read it on tab flips. */
   progress: SharedValue<number>;
   colorScheme: 'light' | 'dark';
+  /** False while the quiz tab covers this view (display flip, still mounted). */
+  visible: boolean;
 }) {
   const scrollRef = useRef<Animated.ScrollView>(null);
   const qa = useClassQa(classData.id);
+  const speech = useConspectSpeech(classData.contentMd, visible);
 
   // Anchor mode: pill → banner → every chunk is tap-to-anchor; the composer
   // opens on the chosen chunk. Follow-ups reuse the composer without mode.
@@ -350,6 +362,11 @@ function ConspectView({
           }
           qaByAnchor={qa.blocksByAnchor}
           clipsByAnchor={clipsByAnchor}
+          speechView={
+            speech.wordIndex >= 0
+              ? { plan: speech.plan, activeWordIndex: speech.wordIndex }
+              : undefined
+          }
           animateInsertions={insertionFx}
           onAskSelection={(index, text) =>
             setComposer({ anchor: index, excerpt: text, selected: true })
@@ -391,6 +408,10 @@ function ConspectView({
           {anchorMode ? 'Cancel' : 'Ask AI'}
         </Text>
       </Pressable>
+
+      {!anchorMode && speech.hasAudio ? (
+        <ConspectPlayButton status={speech.status} onPress={speech.toggle} />
+      ) : null}
 
       <QaComposer
         visible={composer !== null}

@@ -8,6 +8,7 @@
     "ios": "expo start -c --ios",
     "web": "expo start -c --web",
     "theme:check": "node scripts/check-theme-lockstep.mjs",
+    "test": "vitest run",
     "clean": "rm -rf .expo node_modules"
   },
   "dependencies": {
@@ -34,6 +35,7 @@
     "expo-font": "~57.0.4",
     "expo-linking": "~57.0.10",
     "expo-router": "~57.0.22",
+    "expo-speech": "^57.0.3",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
@@ -62,7 +64,8 @@
     "@types/react": "~19.2.18",
     "prettier": "^3.6.2",
     "prettier-plugin-tailwindcss": "^0.6.14",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
   },
   "private": true
 }
