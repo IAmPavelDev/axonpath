@@ -1,5 +1,5 @@
-import { EditSkillTopic } from '@components/skill/EditTopic';
+import { CreateSkill } from '@components/skill/CreateSkill';
 
 export default function Route() {
-  return <EditSkillTopic />;
+  return <CreateSkill />;
 }

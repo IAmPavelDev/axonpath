@@ -9,7 +9,6 @@ import type {
 } from "@/modules/learning/domain/skill/skill.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
-import { SkillMode } from "@/prisma/generated";
 
 /** 2026-09-30 is a Wednesday (ISO week Mon 2026-09-28 … Sun 2026-10-04). */
 const at = (iso: string): Date => new Date(iso);
@@ -19,7 +18,6 @@ const skill = (overrides: Partial<SkillListItem> = {}): SkillListItem => ({
   topic: "SQL joins",
   description: "",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
   userId: 7,
   requestId: null,
   createdAt: at("2026-09-01T00:00:00Z"),
@@ -66,9 +64,7 @@ const makeDeps = (
     claimStaleInit: async () => {
       throw new Error("not used");
     },
-    listStalePendingOptions: async () => {
-      throw new Error("not used");
-    },
+    claimStaleFirstLesson: async () => [],
   };
   const quizRepo: Pick<QuizRepository, "findAnswerActivityByUser"> = {
     findAnswerActivityByUser: async () => options.activity ?? [],

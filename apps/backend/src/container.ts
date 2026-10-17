@@ -1,7 +1,6 @@
 import { config } from "@/modules/platform/config";
 import { makeSystemClock } from "@/modules/platform/ports/clock";
 import { makePrismaSkillRepository } from "@/modules/learning/infrastructure/skill.prisma.repo";
-import { makePrismaNextClassOptionRepository } from "@/modules/learning/infrastructure/next-class-option.prisma.repo";
 import { makePrismaClassRepository } from "@/modules/learning/infrastructure/class.prisma.repo";
 import { makePrismaClassQaRepository } from "@/modules/learning/infrastructure/class-qa.prisma.repo";
 import { makePrismaQuizRepository } from "@/modules/learning/infrastructure/quiz.prisma.repo";
@@ -16,14 +15,14 @@ import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-
 import { makeMineQaVectors } from "@/modules/memory/application/mine-qa-vectors";
 import { makeVectorizeClassContent } from "@/modules/memory/application/vectorize-class-content";
 import { makeGradeOpenEnded } from "@/modules/tutoring/application/grade-open-ended";
-import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
+import { makeGenerateSkillMetadata } from "@/modules/tutoring/application/generate-skill-metadata";
+import { makeGenerateFirstLesson } from "@/modules/tutoring/application/generate-first-lesson";
 import { makeZaiAi } from "@/modules/tutoring/infrastructure/zai.client";
 import {
   makeGetUsageReport,
   type GetUsageReport,
 } from "@/modules/learning/application/queries/get-usage-report";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
-import { makeGenerateClassOptions } from "@/modules/tutoring/application/generate-class-options";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { recordAiAttempt } from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 import { makeJobHandlers } from "@/modules/jobs/registry";
@@ -56,10 +55,6 @@ import {
   type SkillInitSweeper,
 } from "@/modules/jobs/skill-init-sweeper";
 import {
-  makeSkillOptionsSweeper,
-  type SkillOptionsSweeper,
-} from "@/modules/jobs/skill-options-sweeper";
-import {
   makeGradingSweeper,
   type GradingSweeper,
 } from "@/modules/jobs/grading-sweeper";
@@ -70,7 +65,6 @@ export type Container = LearningApiDeps & {
   nextClassSweeper: NextClassSweeper;
   classQaSweeper: ClassQaSweeper;
   skillInitSweeper: SkillInitSweeper;
-  skillOptionsSweeper: SkillOptionsSweeper;
   gradingSweeper: GradingSweeper;
   recommendationsSweeper: RecommendationsSweeper;
   classClipsSweeper: ClassClipsSweeper;
@@ -91,7 +85,6 @@ export const configureContainer = ({
 }: { sweeperMode?: "server" | "worker" } = {}): Container => {
   const skillRepo = makePrismaSkillRepository();
   const classRepo = makePrismaClassRepository();
-  const optionRepo = makePrismaNextClassOptionRepository();
   const qaRepo = makePrismaClassQaRepository();
   const quizRepo = makePrismaQuizRepository();
   const eventRepo = makePrismaEventRepository();
@@ -118,7 +111,15 @@ export const configureContainer = ({
     skillRepo,
   });
 
-  const generateInitialSkill = makeGenerateInitialSkill({
+  const generateSkillMetadata = makeGenerateSkillMetadata({
+    ai,
+    recordAiAttempt,
+    skillRepo,
+    eventRepo,
+    chatModel: config.ai.models.chat,
+  });
+
+  const generateFirstLesson = makeGenerateFirstLesson({
     ai,
     recordAiAttempt,
     retrieveContext,
@@ -147,17 +148,6 @@ export const configureContainer = ({
     jobs,
   });
 
-  const generateClassOptions = makeGenerateClassOptions({
-    ai,
-    recordAiAttempt,
-    retrieveContext,
-    skillRepo,
-    optionRepo,
-    classRepo,
-    quizRepo,
-    eventRepo,
-    clock,
-  });
 
   const answerClassQuestion = makeAnswerClassQuestion({
     ai,
@@ -219,14 +209,14 @@ export const configureContainer = ({
   Object.assign(
     jobHandlers,
     makeJobHandlers({
-      generateInitialSkill,
+      generateSkillMetadata,
+      generateFirstLesson,
       nextClassWorker,
       answerClassQuestion,
       mineAnswerVectors,
       mineQaVectors,
       vectorizeClassContent,
       gradeOpenEnded,
-      generateClassOptions,
       generateSkillRecommendations,
       generateClassClips,
     }),
@@ -248,10 +238,9 @@ export const configureContainer = ({
   const classQaSweeper = makeClassQaSweeper({ qaRepo, jobs });
   // Recovery nets for jobs without a durable row: the serverless API
   // freezes its in-process setImmediate queue the moment a request returns,
-  // so skill-init, class-options and open-ended grading need state-derived
-  // recovery exactly like the QA and next-class sweepers above.
+  // so skill-init and open-ended grading need state-derived recovery
+  // exactly like the QA and next-class sweepers above.
   const skillInitSweeper = makeSkillInitSweeper({ skillRepo, jobs });
-  const skillOptionsSweeper = makeSkillOptionsSweeper({ skillRepo, jobs });
   const recommendationsSweeper = makeRecommendationsSweeper({ videoRepo, jobs });
   const classClipsSweeper = makeClassClipsSweeper({ videoRepo, jobs });
   const gradingSweeper = makeGradingSweeper({ quizRepo, jobs });
@@ -259,7 +248,6 @@ export const configureContainer = ({
   return {
     skillRepo,
     classRepo,
-    optionRepo,
     qaRepo,
     quizRepo,
     eventRepo,
@@ -281,7 +269,6 @@ export const configureContainer = ({
     sponsor: makeSponsorClient(),
     generateSkillRecommendations,
     generateClassClips,
-    skillOptionsSweeper,
     gradingSweeper,
   };
 };

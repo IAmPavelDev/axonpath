@@ -15,7 +15,7 @@
  * AiAttempt row so effectiveness (parse-failure rate, attempts, latency)
  * is comparable across prompt iterations.
  */
-export const PROMPT_VERSION = "2026-10-10.1";
+export const PROMPT_VERSION = "2026-10-17.1";
 import type { ReviewItem } from "@/modules/learning/domain/quiz/review-schedule";
 
 /** Verbatim fence: text inside is exactly the labeled author's words. */
@@ -25,15 +25,16 @@ const fence = (text: string): string => `"""${text}"""`;
 const clamp = (text: string, max: number): string =>
   text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
 
-export const buildSkillDescriptionPrompt = (topic: string): string =>
-  `The learner typed this topic:\n${fence(topic)}`;
+export const buildSkillMetadataPrompt = (prompt: string): string =>
+  `The learner described what they want to learn:\n${fence(prompt)}`;
 
-export const SKILL_DESCRIPTION_SCHEMA = {
+export const SKILL_METADATA_SCHEMA = {
   type: "object",
   properties: {
+    title: { type: "string" },
     description: { type: "string" },
   },
-  required: ["description"],
+  required: ["title", "description"],
   additionalProperties: false,
 } as const;
 
@@ -120,12 +121,10 @@ export type NextClassMistake = {
 
 export const buildNextClassPrompt = (input: {
   topic: string;
-  /** Absent when a manual skill composes its very first lesson. */
+  /** Absent when init composes the very first lesson. */
   lastTitle?: string;
   /** Best-effort: the previous lesson's own AI_NEXT summary, when retrieved. */
   lastSummary?: string;
-  /** Learner-chosen direction (MANUAL mode) — becomes the lesson's center. */
-  target?: string;
   history: { textSnippet: string; source: string }[];
   mistakes: NextClassMistake[];
   allCorrect: boolean;
@@ -146,14 +145,6 @@ Previous lesson (Axon-generated): "${input.lastTitle}"`;
 
   if (input.lastSummary) {
     prompt += `\nWhat the previous lesson covered (Axon's summary): ${input.lastSummary}`;
-  }
-
-  if (input.target !== undefined && input.target.length > 0) {
-    prompt += `
-
-The learner chose this direction for the new lesson (their own words, possibly edited from Axon's suggestions):
-${fence(clamp(input.target, 2000))}
-Make it the lesson's central learning target: build the whole lesson and its quiz around it.`;
   }
 
   prompt += `\n\n${lessonJsonInstructions}`;
@@ -247,105 +238,6 @@ The learner has not attempted the previous lesson's quiz yet — continue where 
   return prompt;
 };
 
-/**
- * Candidate directions for a MANUAL-mode skill's next lesson: exactly three
- * ranked one-sentence learning targets, best pick first. One AI request for
- * the whole set — the client gets instant options instead of a blank form.
- */
-export const CLASS_OPTIONS_SCHEMA = {
-  type: "object",
-  properties: {
-    targets: {
-      type: "array",
-      items: { type: "string" },
-      minItems: 3,
-      maxItems: 3,
-    },
-  },
-  required: ["targets"],
-  additionalProperties: false,
-} as const;
-
-export const buildClassOptionsPrompt = (input: {
-  topic: string;
-  /** Absent while the skill has no classes yet (first-lesson proposals). */
-  lastTitle?: string;
-  lastSummary?: string;
-  history: { textSnippet: string; source: string }[];
-  review: ReviewItem[];
-}): string => {
-  let prompt = `Propose exactly 3 candidate directions for the learner's next lesson, ranked from your best pick to the least favorable.
-
-The learner typed this topic:
-${fence(input.topic)}`;
-
-  if (input.lastTitle !== undefined) {
-    prompt += `\nPrevious lesson (Axon-generated): "${input.lastTitle}"`;
-    if (input.lastSummary) {
-      prompt += `\nWhat the previous lesson covered (Axon's summary): ${input.lastSummary}`;
-    }
-  }
-
-  prompt += `
-
-Each candidate is one short sentence (at most 30 words) describing what to learn next — concrete enough that another tutor could build a lesson from it alone. The three candidates must be genuinely different paths (different depth, different application, different next step), all faithful to the topic. Order them by expected value for this learner: the first is your best pick.`;
-
-  const priorLessons = input.history
-    .filter((hit) => hit.source === "AI_NEXT")
-    .map((hit) => `- ${hit.textSnippet}`)
-    .join("\n");
-  if (priorLessons.length > 0) {
-    prompt += `
-
-Lessons already covered (Axon's own summaries) — candidates must build on them, not repeat them:
-${priorLessons}
-`;
-  }
-
-  const learnerContext = input.history
-    .filter((hit) => hit.source === "AI_INITIAL")
-    .map((hit) => `- ${hit.textSnippet}`)
-    .join("\n");
-  if (learnerContext.length > 0) {
-    prompt += `
-
-Notes Axon wrote about this learner (observations, not the learner's own claims):
-${learnerContext}
-`;
-  }
-
-  const knownGaps = input.history
-    .filter((hit) => hit.source === "ANSWER_DERIVED")
-    .map((hit) => `- ${hit.textSnippet}`)
-    .join("\n");
-  if (knownGaps.length > 0) {
-    prompt += `
-
-Known gaps — from the learner's wrong quiz answers (notes written by Axon). At least one candidate should close a gap:
-${knownGaps}
-`;
-  }
-
-  if (input.review.length > 0) {
-    const reviewLines = input.review
-      .map(
-        (item) =>
-          `- [${item.urgency}] ${fence(clamp(item.questionText, 200))} (${item.note})`,
-      )
-      .join("\n");
-    prompt += `
-
-Mastery ledger — older quiz results from earlier lessons (Axon's notes). At least one candidate should consolidate one of these points:
-${reviewLines}
-`;
-  }
-
-  prompt += `
-
-Return JSON: {"targets": ["<best pick>", "<second>", "<third>"]}.`;
-
-  return prompt;
-};
 
 /**
  * Open-ended grading (Phase 7 D4): one batched request judges every

@@ -18,7 +18,6 @@ const CLAIM: NextClassJobClaim = {
   userId: 7,
   attempts: 1,
   claimedAt: new Date(),
-  target: null,
 };
 
 const okResult: Result<void, GenerateNextClassError> = ok(undefined);

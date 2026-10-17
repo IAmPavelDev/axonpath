@@ -7,7 +7,6 @@ import type { AnswerReview } from "@/modules/learning/domain/quiz/quiz.repositor
 import type { DomainEvent } from "@/modules/learning/domain/event/event.repository";
 import type { AiError, AiUsage } from "@/modules/tutoring/ports";
 import type { NewVector } from "@/modules/memory/ports";
-import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
 
 const LESSON_JSON = JSON.stringify({
@@ -32,11 +31,9 @@ const SKILL = {
   id: 10,
   userId: 7,
   topic: "SQL joins",
+  prompt: "",
   description: "",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
-  optionsState: NextClassOptionsState.NONE,
-  optionsStateAt: null,
 };
 
 type NextClassState = {
@@ -123,11 +120,9 @@ const makeDeps = (
         return {
           id,
           topic: "SQL joins",
+          prompt: "",
           description: "",
           status: "ACTIVE",
-          mode: SkillMode.AUTOMATIC,
-          optionsState: NextClassOptionsState.NONE,
-          optionsStateAt: null,
         };
       },
       findById: async () =>
@@ -142,9 +137,7 @@ const makeDeps = (
       claimStaleInit: async () => {
         throw new Error("not used in next-class tests");
       },
-      listStalePendingOptions: async () => {
-        throw new Error("not used in next-class tests");
-      },
+      claimStaleFirstLesson: async () => [],
     },
     classRepo: {
       findQuestionCountsByClassIds: async () => {

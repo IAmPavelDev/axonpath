@@ -29,8 +29,6 @@ import { ok } from "@/modules/platform/result";
 import {
   ClassQaStatus,
   type EventType,
-  NextClassOptionsState,
-  SkillMode,
 } from "@/prisma/generated";
 import { QA_TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 
@@ -47,11 +45,9 @@ const SKILL = {
   id: 10,
   userId: 7,
   topic: "SQL joins",
+  prompt: "",
   description: "Learn SQL joins by doing.",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
-  optionsState: NextClassOptionsState.NONE,
-  optionsStateAt: null,
 };
 
 const pendingBlock = (
@@ -204,9 +200,7 @@ const makeDeps = (
     claimStaleInit: async () => {
       throw new Error("not used in answer tests");
     },
-    listStalePendingOptions: async () => {
-      throw new Error("not used in answer tests");
-    },
+    claimStaleFirstLesson: async () => [],
   };
 
   const eventRepo: EventRepository = {

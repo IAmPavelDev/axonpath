@@ -3,12 +3,11 @@
 > Status: **CURRENT as of 2026-10-12** (backend 46 test files / 310 tests green, mobile
 > `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A /
 > Ask-AI, skill.progress, AI token-usage capture + `usage.report`, `stats.overview`,
-> `skill.mistakes`, QA context layering + vector memory, the **skill lesson-flow
-> modes** (AUTOMATIC/MANUAL candidate-direction picker + mastery-ledger spaced
+> `skill.mistakes`, QA context layering + vector memory, the mastery-ledger spaced
 > review), and **AI-attempt analytics + observability** (AiAttempt table, pino JSON
 > logs → CloudWatch metric filters/alarms/dashboards — `knowledge-base/ANALYTICS.md`;
 > mobile Firebase Crashlytics + Analytics) shipped; loop live-verified by
-> `e2e-manual-mode.mts` SMOKE_PASS 2026-10-02).
+> `e2e-qa-context.mts` SMOKE_PASS 2026-10-02).
 > Execution authority for what is next:
 > `knowledge-base/BUSINESS_DECISIONS.md` §4 (post-backlog horizon — first levers landed,
 > see §4.4). Beta history:
@@ -116,12 +115,13 @@ apps/backend/src/
 │   ├── learning/          Skill/Class/Question/Event domain, queries+commands
 │   │                      (create-skill, edit-skill, submit-quiz, get-skill-*), Prisma repos,
 │   │                      oRPC handlers, skill status state machine (canTransition)
-│   ├── tutoring/          AiPort, personas (TUTOR_SYSTEM/DESCRIPTION_SYSTEM), prompt builders,
+│   ├── tutoring/          AiPort, personas (TUTOR_SYSTEM/METADATA_SYSTEM), prompt builders,
 │   │                      defensive JSON parsing, zai.client adapter (chat + embeddings),
-│   │                      generate-initial-skill + generate-next-class use cases
+│   │                      generate-skill-metadata + generate-first-lesson +
+│   │                      generate-next-class use cases
 │   ├── memory/            VectorStorePort (Prisma metadata + Qdrant points),
 │   │                      retrieve-relevant-context policy (degrades to [] on failure)
-│   └── jobs/              registry: "skill-init", "skill-next-class", "skill-class-options" → handlers
+│   └── jobs/              registry: "skill-init", "skill-first-lesson", "skill-next-class" → handlers
 └── src/prisma/            schema + migrations + generated client
 ```
 
@@ -133,14 +133,11 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 
 | Route | Purpose |
 |---|---|
-| `skill.create` | persist skill with status `GENERATING` + enqueue `skill-init` |
-| `skill.edit` | edit topic/description (status transitions deliberately excluded — own command later) |
+| `skill.create` | persist the learner's freeform prompt as a GENERATING shell (placeholder topic = clipped prompt, full brief on `Skill.prompt`) + enqueue `skill-init` |
+| `skill.edit` | ownership-checked topic/description update; on a lesson-less ACTIVE skill it IS the draft acceptance → GENERATING + arm `skill-first-lesson` |
 | `skill.get` / `skill.list` | read skill (+`status`); list includes lessonCount/completedLessons/learnedPoints/lastActivityAt; optional `includeArchived` (default false hides ARCHIVED) |
 | `skill.updateStatus` | user-settable lifecycle: PAUSED/ACTIVE/COMPLETED/ARCHIVED (state-machine-guarded, 409 on illegal; GENERATING/FAILED machine-managed) |
-| `skill.setMode` | switch lesson flow AUTOMATIC↔MANUAL (ACTIVE/PAUSED only, 409 otherwise). →MANUAL arms the options job; →AUTO consumes options and hands a completed skill to the durable pipeline |
-| `skill.classOptions` / `skill.refreshClassOptions` | MANUAL-mode picker state: `{state: NONE\|PENDING\|READY\|FAILED, optionsStateAt, options[3 ranked]}`; refresh (re)arms the one-request generator (also the FAILED retry) |
-| `skill.createClass` | MANUAL commit: `{target}` → consumes options, flips GENERATING, durable marker carries the target; pipeline composes the lesson around it (lesson 0 when empty) |
-| `skill.retry` | FAILED → GENERATING + re-enqueue `skill-init` (ownership-checked, state-machine-guarded) |
+| `skill.retry` | FAILED → GENERATING + re-enqueue the failed stage: `skill-first-lesson` when a draft exists, else `skill-init` from the stored prompt (ownership-checked, state-machine-guarded) |
 | `skill.mistakes` | latest wrong answer per question, newest first (correct retakes heal the question; pending open-ended excluded; OPEN_ENDED `correctAnswer` stays null server-side) |
 | `class.qa.ask` | anchor a learner question into a class conspect: persists a `PENDING` `ClassQaBlock` (with the verbatim `anchorText` selection when the learner long-press-selected, Phase 8) and enqueues the in-process answer job → `{blockId, status}` |
 | `class.qa.list` | Q&A blocks for a class, ascending `(anchorParagraph, createdAt, id)` — the client polls while any block is `PENDING` |
@@ -149,40 +146,54 @@ only `infrastructure/` imports prisma/qdrant/ai SDKs; only `container.ts` constr
 | `stats.report` | AI usage & cost per user: chat tokens by kind (init/next-class/QA) from event payloads, embedding tokens from `SUM(Vector.tokenCount)`, estimated USD; gap counters, optional `skillId` filter |
 
 Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hides behind 404
-so skill existence is not leaked); `InvalidSkillTransition` → 409; anything else → 500.
 
-### 4.2 The adaptive loop (the product)
+### 4.2 The create-with-prompt flow + the adaptive loop (the product)
 
-2. **Init** (`generate-initial-skill`): **retry guard first — if any class already exists
-   (`findTopBySkill`), skip generation entirely and let the success path flip ACTIVE** (a rerun
-   can never violate `UNIQUE(skillId, index)`; a partially-persisted failure heals to ACTIVE
-   with retrieval degrading to `[]` for its missing vectors — accepted beta cost). Otherwise:
-   description (best-effort) → prior-context retrieval (Qdrant, filtered by userId, excludes
-   own skill, degrades to []) → one JSON generation (class 0 + MC/TF + 1–2 open-ended questions + `lessonSummary`
-   + context snippets) → `SKILL_CREATED` audit event (full prompt+response) → persist
-   class/questions → embed summary+snippets in one call → vectors: summary `AI_NEXT`, snippets
-   `AI_INITIAL`, `classIndex 0` → status `ACTIVE`. Any failure → status `FAILED` +
+1. **Create** (`skill.create`): the learner writes a freeform prompt — what they want to
+   learn, goal, level (textarea, max 4000 chars). The shell persists `GENERATING` with the
+   prompt clipped to 255 chars as a placeholder `topic` and the full brief on
+   `Skill.prompt` (migration `20261017073000_add_skill_prompt`); `skill-init` is enqueued.
+2. **Metadata draft** (`generate-skill-metadata`, the `skill-init` job): one AI call
+   (`METADATA_SYSTEM` + `SKILL_METADATA_SCHEMA`) turns the prompt into a title +
+   description → audited as `SKILL_CREATED` (action `skill_metadata`; the usage report's
+   `skillInit` bucket reads this event) → persists both and settles **ACTIVE with zero
+   classes** — the client shows the draft for review. Any failure → `FAILED` +
+   `ERROR_OCCURRED`; `skill.retry` re-enters stage 1 from the stored prompt.
+3. **Acceptance** (`skill.edit` on a lesson-less `ACTIVE` skill): the learner edits and
+   saves the draft (mobile `ReviewSkill` screen — title + description, both editable,
+   FAILED offers retry). The edit is ownership-checked, saves the fields, flips
+   `GENERATING` and arms the `skill-first-lesson` job. Any later edit (classes exist) is
+   a plain field update.
+4. **First lesson** (`generate-first-lesson`, the `skill-first-lesson` job): **retry
+   guard first — if any class already exists (`findTopBySkill`), skip generation entirely
+   and let the success path flip ACTIVE** (a rerun can never violate
+   `UNIQUE(skillId, index)`; a partially-persisted failure heals to ACTIVE with retrieval
+   degrading to `[]` for its missing vectors — accepted beta cost). Otherwise:
+   prior-context retrieval (Qdrant, filtered by userId, excludes own skill, degrades to
+   []) → one JSON generation briefed with the stored prompt + the accepted description
+   (class 0 + MC/TF + 1–2 open-ended questions + `lessonSummary` + context snippets) →
+   `CLASS_GENERATED` audit event (action `first_lesson`, full prompt+response) → persist
+   class/questions → embed summary+snippets in one call → vectors: summary `AI_NEXT`,
+   snippets `AI_INITIAL`, `classIndex 0` (best-effort: a vector-store outage does not
+   fail the persisted lesson) → status `ACTIVE`. Any failure → status `FAILED` +
    `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled by `extractJsonObject` +
    per-field re-validation (`tutoring/domain/parse.ts`).
-3. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
+5. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
    open-ended persists `score/isCorrect = null` and is graded asynchronously —
-   open-ended generation unlocked (S5)) → `Answer` rows → **mode split**:
-   AUTOMATIC enqueues `skill-next-class` (durable marker + GENERATING flip); MANUAL arms the
-   candidate-options job instead (see 4b) — only when the submit completes the newest lesson
-   for the first time (retakes and older-lesson submits never churn the option set). Either
-   way: `skill-answer-vectors` mines the wrong MC/TF answers (cap 10/submit) into
+   open-ended generation unlocked (S5)) → `Answer` rows → submit-quiz enqueues
+   `skill-next-class` (durable marker + GENERATING flip).
+   It also enqueues `skill-answer-vectors` to mine the wrong MC/TF answers (cap 10/submit) into
    `ANSWER_DERIVED` vectors keyed by `answerId` (deduped per answer, best-effort degrade), and
    `grade-open-ended` grades open-ended answers in one batched AI call (feedback merges into
    `Answer.content` as `{ answer, feedback }`).
-4. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
+6. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
    user's answers (latest attempt per question) → **mastery ledger** (pure
    `learning/domain/quiz/review-schedule.ts` over `findReviewCandidatesBySkill`: standing
    wrongs → `reteach`, shaky heals → `reinforce`, stale-correct ≥3 days → `spiral` (cap 2);
    overall cap 5, newest-first within tier, newest class excluded — its mistakes already feed
    the dedicated block) → retrieval **without** `excludeSkillId`
    (own history wanted; topK 12) → prompt = TUTOR_SYSTEM + topic + last title/summary +
-   target block (MANUAL: "the learner chose this direction — make it the lesson's central
-   learning target") + known-gaps block (ANSWER_DERIVED memory) + **mastery-ledger block**
+   known-gaps block (ANSWER_DERIVED memory) + **mastery-ledger block**
    (re-test freshly phrased: new angle/example/question type, never the earlier wording) +
    mistake block (or "all correct — raise difficulty") + history blocks ("Already covered —
    build on it") → JSON generation (init shape + `lessonSummary`) → `CLASS_GENERATED` event →
@@ -190,23 +201,10 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
    (`AI_INITIAL`) at the new classIndex. Status settles back to `ACTIVE`.
    **Retake dedup**: the use case skips (returns ok, no event, no AI call) when the learner's
    highest answered class index (`QuizRepository.findHighestAnsweredClassIndex`) is behind the
-   newest class — a consecutive retake of the newest lesson no longer spawns variants. An
-   explicit `target` (MANUAL `skill.create-class`) bypasses the dedup and composes lesson 0
-   when the skill has no classes yet.
-4b. **MANUAL candidates** (`generate-class-options`, job `skill-class-options`): one AI
-   request (OPTIONS_SYSTEM persona + `buildClassOptionsPrompt`: topic, last lesson, retrieved
-   history, known gaps, mastery ledger) proposes exactly 3 ranked one-sentence directions →
-   persisted as `NextClassOption` rows (rank 1 = best pick), skill `optionsState READY` +
-   `CLASS_OPTIONS_GENERATED` audit (usage lands under the `classOptions` bucket of
-   `usage.report`). Triggers set `PENDING` first: MANUAL create-skill (which skips init —
-   the shell is ACTIVE with zero classes from birth), first completion of the newest lesson,
-   `setMode` to MANUAL, `refreshClassOptions`. Gates: ACTIVE only (else a dangling PENDING
-   rewinds to NONE); failure → `FAILED` + ERROR_OCCURRED (client refresh = retry; a stale
-   PENDING >3 min is client-retryable via `optionsStateAt`). The reconciler never re-arms
-   MANUAL skills — they never self-continue.
-5. **Observe**: after submit the client routes back to the skill's lesson list; SkillDetail
-   shows a "Preparing your next lesson…" line while the skill is `GENERATING` — no
-   client-side polling of generation. The home skill list polls `skill.list` every 10 s
+   newest class — a consecutive retake of the newest lesson no longer spawns variants.
+7. **Observe**: after acceptance the client routes to the skill's lesson list; SkillDetail
+   shows the skeleton row while the skill is `GENERATING` — no client-side polling of
+   generation beyond the 10 s list polls. The home skill list polls `skill.list` every 10 s
    while visible.
 
 ### 4.3 Skill status lifecycle
@@ -214,12 +212,17 @@ so skill existence is not leaked); `InvalidSkillTransition` → 409; anything el
 `GENERATING → ACTIVE | FAILED`, `FAILED → GENERATING` (retry), `ACTIVE ↔ PAUSED`,
 `→ COMPLETED → ARCHIVED` — enforced by pure `canTransition` (`learning/domain/skill/skill.ts`).
 Migrations `20260921*_skill_status_*` added `GENERATING`/`FAILED` and backfilled legacy `DRAFT`
-rows (≥1 class → `ACTIVE`, else `FAILED`). User-settable transitions go through `skill.updateStatus`; a paused skill's submits still score but `generate-next-class` no-ops unless the skill is ACTIVE or mid-GENERATING (pause gates generation).
-Generation trigger is durable since `5902e68`: `submit-quiz` (AUTOMATIC) and
-`skill.create-class` (MANUAL, with the target) write a `NextClassJob` marker
-(unique per skill, lease-claimed, attempt-capped with requeue, `target` column) processed by a
-worker; a sweeper/reconciler recovers stale or lost signals on boot and interval — the
-reconciler skips MANUAL skills.
+rows (≥1 class → `ACTIVE`, else `FAILED`). User-settable transitions go through
+`skill.updateStatus`; a paused skill's submits still score but `generate-next-class` no-ops
+unless the skill is ACTIVE or mid-GENERATING (pause gates generation).
+
+Generation trigger is durable since `5902e68`: `submit-quiz` writes a `NextClassJob` marker
+(unique per skill, lease-claimed, attempt-capped with requeue) processed by a
+worker; a sweeper/reconciler recovers stale or lost signals on boot and interval. The
+prompt-flow stages run in-process (no durable row): the `skill-init` sweeper re-enqueues
+lost stage jobs on stale GENERATING skills (branching on description presence), heals an
+abandoned review (ACTIVE, lesson-less, stale) as implicit acceptance, and settles a
+GENERATING skill whose class persisted but whose pipeline died before settling.
 
 ### 4.4 AI token accounting
 
@@ -234,7 +237,7 @@ answer-memory mining). A correct first step before any modeling: billing data no
 with the events themselves.
 
 **Report (read side).** `stats.report` (`usage.report`) prices one user's AI spend:
-chat tokens per kind (skillInit / nextClass / qa / classOptions) from the event payloads' `usage`,
+chat tokens per kind (skillInit / nextClass / qa) from the event payloads' `usage`,
 embedding tokens from `SUM(Vector.tokenCount)` (`VectorMetadataRepository.sumTokenCountsByUser`),
 USD via the diffable rate table `learning/domain/event/pricing.ts` (`estimateCostUsd`).
 Gaps are counted, never estimated: `eventsWithoutUsage` (payload lacks usage) and
@@ -286,10 +289,7 @@ erDiagram
     Question ||--o{ Answer : receives
     Answer ||--o{ Vector : derives
 ```
-Key tables: `Skill` (topic, description, status, **mode** AUTOMATIC|MANUAL,
-`optionsState` NONE|PENDING|READY|FAILED + `optionsStateAt` for the MANUAL candidate set,
-requestId UK), `NextClassOption` (MANUAL candidate direction: skillId, rank 1..3, text —
-replaced wholesale per generation, consumed by `skill.create-class`), `Class`
+Key tables: `Skill` (topic, description, status, requestId UK), `Class`
 (UNIQUE(skillId, index), contentMd, aiModel), `Question` (type, text, choices, answerKey
 server-side only), `Answer` (content json, score, isCorrect, timeSpentMs), `Event` (audit:
 SKILL_CREATED, CLASS_GENERATED, CLASS_OPTIONS_GENERATED, ANSWER_SUBMITTED, CONTEXT_SELECTED,
@@ -304,8 +304,7 @@ job; `contentMd` itself stays untouched),
 `SkillProgress` (snapshot json — **unused**).
 
 Enums: **SkillStatus** `DRAFT(legacy) | GENERATING | ACTIVE | FAILED | PAUSED | COMPLETED |
-ARCHIVED` · **SkillMode** `AUTOMATIC | MANUAL` (default AUTOMATIC) · **NextClassOptionsState**
-`NONE | PENDING | READY | FAILED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED`
+ARCHIVED` · **QuestionType** `MULTIPLE_CHOICE | TRUE_FALSE | OPEN_ENDED`
 (all three types generated since S5; MC/TF graded synchronously, open-ended async via
 grade-open-ended) · **VectorSource** `AI_INITIAL | AI_NEXT | ANSWER_DERIVED | CONTENT_CHUNK |
 QA_DERIVED` (Phase 8: conspect blocks + mined Q&A) · **ClassQaStatus**
@@ -319,14 +318,10 @@ Gemini OpenAI-compatible endpoint; chat: `glm-5.3-flash` via `https://api.z.ai/a
 
 Flow: Firebase auth → skill list (home; polls `skill.list` every 10 s while visible;
 `GENERATING` rows show a preparing state, pull-to-refresh, pinning; `FAILED` rows show a
-"Failed to prepare" chip with a retry affordance) → create-skill (topic input + **lesson-flow
-mode cards**: Automatic — every finished lesson flows into the next; Manual — the learner
-picks each next direction; the mode rides through `skill.create` and the description step
-skips the AI-preparation screen for MANUAL) →
-description/skill detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows
-error copy + retry button), **Lesson flow segmented control** (Automatic/Manual via
-`skill.setMode`, shown for ACTIVE/PAUSED; a MANUAL ACTIVE skill also gets the "Create your
-first class"/"Add next class" button into the picker) → class list (newest first) → class
+"Failed to prepare" chip with a retry affordance) → create-skill (freeform prompt
+textarea) → review skill (AI-drafted title/description) → skill
+detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows error copy + retry
+button) → class list (newest first) → class
 screen (Markdown conspect + quiz tabs; native text selection "Ask AI" creates an anchored
 Q&A block via `class.qa.ask` (the verbatim selection rides along as `anchorText`, and the
 card quotes the stored selection over the chunk preview), and the screen polls
@@ -334,23 +329,12 @@ card quotes the stored selection over the chunk preview), and the screen polls
 result → "continue" returns to the skill's lesson list; generation completes server-side and
 surfaces as the preparing state above.
 
-**New-class picker** (`app/skill/[skillId]/new-class.tsx` + `components/skill/NewClassOptions.tsx`):
-opens instantly for MANUAL skills — PENDING polls `skill.classOptions` every 2 s with a
-"Generating options…" screen (a PENDING older than 3 min — the generator died with a process —
-offers retry via `optionsStateAt`), FAILED shows retry, NONE auto-arms refresh once. READY
-renders the 3 ranked directions as folded cards (3 clipped lines, fading tail, "Show more");
-unfolding pins one direction full-screen with an editable multiline field, a fold button, and
-an always-visible "Choose path" button; "Add your own" appends a custom draft unfolded with
-the keyboard up. Choosing (possibly edited text) calls `skill.createClass` and returns to the
-skill detail, where the GENERATING skeleton row takes over.
-
 - **RPC client** (`utils/rpc.ts`): typed oRPC client; bearer Firebase ID token attached per call
-  (transparent refresh). `EXPO_PUBLIC_API_URL` overrides the base URL; defaults stay
-  `localhost` (web) / `10.0.2.2` (emulator).
 - **State**: TanStack Query for server data; Zustand (`quiz.store`) for in-screen answers.
 - **Theme**: Source Sans 3 + blue-tinted light/dark palettes; `lib/theme.ts` (RN styles) and
   `global.css` (NativeWind vars) kept in lockstep via the `theme:check` script. Conspects:
-  syntax-highlighted code, selectable text (`components/class/`, `lib/conspect-markdown.tsx`).
+  markdown rendering, karaoke read-aloud, syntax-highlighted code, selectable text
+  (`components/class/`, `lib/conspect-markdown.tsx`).
 
 ## 7. Environment & config
 
@@ -359,8 +343,6 @@ skill detail, where the GENERATING skeleton row takes over.
 | Key | Used for |
 |---|---|
 | `DATABASE_URL` | Prisma → Postgres |
-| `QDRANT_URL` | Qdrant (default `http://localhost:6333`) |
-| `ZAI_API_KEY` | Z.ai chat (glm-5.3-flash) |
 | `GEMINI_API_KEY` | Gemini embeddings |
 | `APP_PORT` / `APP_HOST` / `NODE_ENV` | HTTP bind (compose maps 3001:3001) |
 
@@ -369,31 +351,27 @@ Prisma upgraded 6.15.0 → 6.19.3 (2026-10-01) for Postgres 18 support (6.15.0 b
 
 ## 8. Tests
 
-Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (39 files / 280 tests, all
-green 2026-10-02): scoring, skill state machine, Result, authenticate + Firebase verifier +
-auth middleware, create-skill (incl. MANUAL branch: ACTIVE shell + options job, no init),
-retry-skill, mine-answer-vectors (dedup/cap/degrade),
+Vitest, colocated `*.test.ts` + `modules/loop.integration.test.ts` (48 files / 327 tests, all
+green 2026-10-17): scoring, skill state machine, Result, authenticate + Firebase verifier +
+auth middleware, create-skill (prompt shell + placeholder topic), retry-skill (stage
+branching), edit-skill (acceptance trigger/ownership), mine-answer-vectors (dedup/cap/degrade),
 grade-open-ended (batch/degrade/partial), open-ended generation unlock (enum/instruction/drift
 guard), set-skill-status (whitelist/state-machine/NotOwned), next-class pause guard,
-get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-initial-skill
-(incl. retry-guard cases), generate-next-class (incl. retake-dedup cases + explicit-target
-bypass + first-lesson target), submit-quiz (AUTOMATIC trigger + MANUAL first-completion/
-retake/older-class cases), set-skill-mode (ownership, GENERATING/FAILED rejection, no-op
-same mode, arm/consume side effects both directions), create-class (ownership, mode/status
-guards, target-carrying durable enqueue), generate-class-options (ranked persist, READY/FAILED
-transitions, pause rewind, parse degrade, cap-3), review-schedule (reteach/reinforce/spiral
-tiers, caps, staleness, newest-class exclusion), prompt builders (target block, mastery-ledger
-block, first-lesson shape),
+get-skill-progress (zeros / partial / completed / NotOwned / NotFound), generate-skill-metadata
+(persist/settle/audit/failure shapes), generate-first-lesson (retry-guard replay, prompt+
+description brief, audit, failure shapes), generate-next-class (incl. retake-dedup cases), submit-quiz
+(trigger + dedup cases), review-schedule (reteach/reinforce/spiral tiers, caps, staleness,
+newest-class exclusion), prompt builders (mastery-ledger block, first-lesson shape),
 the next-class durable queue (worker retry/release-at-cap, sweeper claim loop, reconciler
-stale-pending requeue + MANUAL skip), class Q&A (ask → PENDING block + enqueue + contract
+stale-pending requeue), class Q&A (ask → PENDING block + enqueue + contract
 validation incl. `anchorText` bounds, list ordering/ownership, answer generation
 PENDING→ANSWERED/FAILED with replay no-ops, stranded-block requeue on boot), and the
 composed loop integration test (real use cases + in-memory
-fakes over `modules/testing/fakes.ts`: AUTOMATIC create → init → submit → next-class → retake
-dedup → FAILED/retry heal, both failure shapes, the Phase 8 QA scenario — anchored ask →
+fakes over `modules/testing/fakes.ts`: prompt create → metadata draft → acceptance → first
+lesson → submit → next-class → retake dedup → FAILED/retry heal for both stages, the Phase 8
+QA scenario — anchored ask →
 layered prompt evidence → CONTENT_CHUNK backfill → QA_DERIVED mining dedup → follow-up
-annotation block — and the MANUAL loop: create → options → choose target → lesson 0 →
-options re-arm → retake no-churn). Post-backlog additions: AiPort usage capture
+annotation block). Post-backlog additions: AiPort usage capture
 (payload `usage` / `Vector.tokenCount` persisted; absent-usage degrade), `embeddingTokenCounts`
 (exact-sum batch split), `stats.overview` + its calendar domain (ISO weeks / streak / lesson
 coverage), `skill.mistakes` (wrong-only, retake heals, open-ended feedback without the model
@@ -404,13 +382,8 @@ per-class chunk embedding, dedup + full degrade), `retrieve-qa-context` (one emb
 filtered searches, per-group degrade), `mine-qa-vectors` (block-keyed dedup + degrade), the
 attribution contract (`prompts.test.ts`: author labels in every builder + persona rule), and
 the layered `buildQaAnswerPrompt` structure tests (order, caps, optional-layer omission).
-Lesson-flow additions: mastery ledger + candidate generator suites (above) wired through the
-integration harness.
 Live verification: `e2e-qa-context.mts` on the dev stack (real Postgres/Qdrant/AI) —
-SMOKE_PASS 2026-10-01; `e2e-manual-mode.mts` (Firebase throwaway account, real
-Postgres/Qdrant/AI: MANUAL create → READY options → create-class target → lesson 0 → submit →
-options re-arm → setMode back to AUTOMATIC) — SMOKE_PASS 2026-10-02.
-
+SMOKE_PASS 2026-10-01.
 ## 9. Known gaps → post-beta backlog
 
 **Phase 7 COMPLETE (2026-09-30) — all seven audit items closed.** Original audit: `knowledge-base/PHASE7_POST_BETA.md`

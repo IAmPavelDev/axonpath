@@ -12,10 +12,6 @@ import { makeGetSkillById, type GetSkillByIdDeps } from "@/modules/learning/appl
 import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/application/queries/get-skills-list";
 import { makeGetSkillProgress, type GetSkillProgressDeps } from "@/modules/learning/application/queries/get-skill-progress";
 import { makeGetSkillMistakes, type GetSkillMistakesDeps } from "@/modules/learning/application/queries/get-skill-mistakes";
-import { makeSetSkillMode, type SetSkillModeDeps } from "@/modules/learning/application/commands/set-skill-mode";
-import { makeCreateClass, type CreateClassDeps } from "@/modules/learning/application/commands/create-class";
-import { makeGetClassOptions, type GetClassOptionsDeps } from "@/modules/learning/application/queries/get-class-options";
-import { makeRefreshClassOptions, type RefreshClassOptionsDeps } from "@/modules/learning/application/commands/refresh-class-options";
 
 export type SkillApiDeps = CreateSkillDeps &
   EditSkillDeps &
@@ -24,11 +20,7 @@ export type SkillApiDeps = CreateSkillDeps &
   RetrySkillDeps &
   SetSkillStatusDeps &
   GetSkillProgressDeps &
-  GetSkillMistakesDeps &
-  SetSkillModeDeps &
-  CreateClassDeps &
-  GetClassOptionsDeps &
-  RefreshClassOptionsDeps;
+  GetSkillMistakesDeps;
 
 export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const createSkill = makeCreateSkill(deps);
@@ -39,17 +31,12 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const setSkillStatus = makeSetSkillStatus(deps);
   const getSkillProgress = makeGetSkillProgress(deps);
   const getSkillMistakes = makeGetSkillMistakes(deps);
-  const setSkillMode = makeSetSkillMode(deps);
-  const createClass = makeCreateClass(deps);
-  const getClassOptions = makeGetClassOptions(deps);
-  const refreshClassOptions = makeRefreshClassOptions(deps);
 
   return {
     create: (async ({ input, context }) => {
       const result = await createSkill({
-        topic: input.topic,
+        prompt: input.prompt,
         userId: context.user.id,
-        mode: input.mode,
       });
       return unwrapOrThrow(result, toORPCError);
     }) satisfies OrpcHandler<
@@ -57,13 +44,19 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
       z.infer<typeof schema.skill.CreateSkillOutput>
     >,
 
-    edit: (async ({ input }) => {
-      const result = await editSkill(input);
+    edit: (async ({ input, context }) => {
+      const result = await editSkill({
+        id: input.id,
+        userId: context.user.id,
+        topic: input.topic,
+        description: input.description,
+      });
       return unwrapOrThrow(result, toORPCError);
     }) satisfies OrpcHandler<
       z.infer<typeof schema.skill.EditSkillInput>,
       z.infer<typeof schema.skill.StatusOnly>
     >,
+
 
     get: (async ({ input }) => {
       const result = await getSkillById({ skillId: input.id });
@@ -84,7 +77,6 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
         id: skill.id,
         topic: skill.topic,
         status: skill.status,
-        mode: skill.mode,
         createdAt: skill.createdAt,
         lessonCount: skill.lessonCount,
         completedLessons: skill.completedLessons,
@@ -94,52 +86,6 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
     }) satisfies OrpcHandler<
       z.infer<typeof schema.skill.GetSkillListInput>,
       z.infer<typeof schema.skill.GetSkillListOutput>
-    >,
-
-    setMode: (async ({ input, context }) => {
-      const result = await setSkillMode({
-        skillId: input.id,
-        userId: context.user.id,
-        mode: input.mode,
-      });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
-      z.infer<typeof schema.skill.SetSkillModeInput>,
-      z.infer<typeof schema.skill.StatusOnly>
-    >,
-
-    classOptions: (async ({ input, context }) => {
-      const result = await getClassOptions({
-        skillId: input.id,
-        userId: context.user.id,
-      });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
-      z.infer<typeof schema.skill.SkillIdInput>,
-      z.infer<typeof schema.skill.GetClassOptionsOutput>
-    >,
-
-    refreshClassOptions: (async ({ input, context }) => {
-      const result = await refreshClassOptions({
-        skillId: input.id,
-        userId: context.user.id,
-      });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
-      z.infer<typeof schema.skill.RefreshClassOptionsInput>,
-      z.infer<typeof schema.skill.GetClassOptionsOutput>
-    >,
-
-    createClass: (async ({ input, context }) => {
-      const result = await createClass({
-        skillId: input.id,
-        userId: context.user.id,
-        target: input.target,
-      });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
-      z.infer<typeof schema.skill.CreateClassInput>,
-      z.infer<typeof schema.skill.StatusOnly>
     >,
 
     retry: (async ({ input, context }) => {

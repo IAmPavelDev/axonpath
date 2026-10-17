@@ -3,18 +3,17 @@ import type { NextClassJobRepository } from "@/modules/jobs/next-class-job.repos
 type ClaimRow = {
   skillId: number;
   userId: number;
-  target: string | null;
   attempts: number;
   claimedAt: Date;
 };
 export const makePrismaNextClassJobRepository = (): NextClassJobRepository => ({
-  enqueue: async ({ skillId, userId, target = null }) => {
+  enqueue: async ({ skillId, userId }) => {
     // Upsert on the skillId unique: a quiz retake re-arms the marker instead
     // of stacking duplicates.
     await prisma.nextClassJob.upsert({
       where: { skillId },
-      create: { skillId, userId, target },
-      update: { userId, target, status: "PENDING", attempts: 0, claimedAt: null },
+      create: { skillId, userId },
+      update: { userId, status: "PENDING", attempts: 0, claimedAt: null },
     });
   },
 
@@ -37,7 +36,7 @@ export const makePrismaNextClassJobRepository = (): NextClassJobRepository => ({
         FOR UPDATE SKIP LOCKED
       ) AS due
       WHERE job."id" = due."id"
-      RETURNING job."skillId", job."userId", job."target", job."attempts", job."claimedAt"
+      RETURNING job."skillId", job."userId", job."attempts", job."claimedAt"
     `,
 
   claimOne: async ({ skillId, leaseMinutes }) => {
@@ -48,7 +47,7 @@ export const makePrismaNextClassJobRepository = (): NextClassJobRepository => ({
         AND ("status" = 'PENDING'
             OR ("status" = 'PROCESSING'
                 AND "claimedAt" < NOW() - make_interval(mins => ${leaseMinutes}::int)))
-      RETURNING "skillId", "userId", "target", "attempts", "claimedAt"
+      RETURNING "skillId", "userId", "attempts", "claimedAt"
     `;
     return rows[0] ?? null;
   },

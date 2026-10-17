@@ -48,7 +48,7 @@ const event = {
     authorization: `Bearer ${token}`,
   },
   requestContext: { http: { method: 'POST', path: '/rpc/skill/create' } },
-  body: '{"topic":"Local repro topic","mode":"MANUAL"}',
+  body: '{"prompt":"Local repro topic"}',
   isBase64Encoded: false,
 };
 

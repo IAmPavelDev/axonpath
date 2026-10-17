@@ -1,15 +1,11 @@
 import z from 'zod';
 import { QuestionType } from './quiz.schema.js';
 
-/** How the next lesson comes into being (see ARCHITECTURE.md §4.2). */
-export const SkillMode = z.enum(['AUTOMATIC', 'MANUAL']);
-
-/** Lifecycle of the MANUAL-mode candidate-target set. */
-export const NextClassOptionsState = z.enum(['NONE', 'PENDING', 'READY', 'FAILED']);
 
 export const CreateSkillInput = z.object({
-  topic: z.string(),
-  mode: SkillMode.default('AUTOMATIC'),
+  /** Freeform learner brief: what they want to learn, goal, level. The
+   * title + description are generated from it and confirmed by the user. */
+  prompt: z.string().min(1).max(4000),
 });
 
 export const EditSkillInput = z.object({
@@ -29,7 +25,6 @@ export const GetSkillListOutput = z.array(z.object({
   id: z.number(),
   topic: z.string(),
   status: z.string(),
-  mode: SkillMode,
   createdAt: z.date(),
   lessonCount: z.number().int(),
   completedLessons: z.number().int(),
@@ -42,7 +37,6 @@ export const GetSkillByIdOutput = z.object({
   topic: z.string(),
   description: z.string(),
   status: z.string(),
-  mode: SkillMode,
 });
 
 export const StatusOnly = z.object({ status: z.string() });
@@ -53,40 +47,6 @@ export const UpdateSkillStatusInput = z.object({
   status: z.enum(["PAUSED", "ACTIVE", "COMPLETED", "ARCHIVED"]),
 });
 
-/** Switch how the next lesson is chosen. Only ACTIVE/PAUSED skills accept it. */
-export const SetSkillModeInput = z.object({
-  id: z.number().int().positive().min(1),
-  mode: SkillMode,
-});
-
-/** One ranked candidate direction for the next manual lesson. */
-export const SkillClassOption = z.object({
-  id: z.number(),
-  rank: z.number().int(),
-  text: z.string(),
-});
-
-export const GetClassOptionsOutput = z.object({
-  state: NextClassOptionsState,
-  /**
-   * Timestamp of the last state change. The client uses it to tell a fresh
-   * PENDING from a stranded one (the generator died with the process) and
-   * offer a retry instead of an endless spinner.
-   */
-  optionsStateAt: z.date().nullable(),
-  options: z.array(SkillClassOption),
-});
-
-/** Commit a direction (possibly edited) as the next lesson's learning target. */
-export const CreateClassInput = z.object({
-  id: z.number().int().positive().min(1),
-  target: z.string().trim().min(1).max(2000),
-});
-
-/** Regenerate the candidate set (also the retry path after FAILED). */
-export const RefreshClassOptionsInput = z.object({
-  id: z.number().int().positive().min(1),
-});
 
 /** Archived skills leave skill.list unless explicitly included (default false). */
 export const GetSkillListInput = z

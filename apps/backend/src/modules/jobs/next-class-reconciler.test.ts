@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { SkillMode, SkillStatus } from "@/prisma/generated";
+import type { SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
@@ -12,7 +12,6 @@ const makeDeps = ({
     id: number;
     userId: number;
     status: SkillStatus;
-    mode?: SkillMode;
   }[],
   topBySkill = {} as Record<
     number,
@@ -38,9 +37,6 @@ const makeDeps = ({
           topic: "t",
           description: "",
           status: "ACTIVE",
-          mode: "AUTOMATIC",
-          optionsState: "NONE",
-          optionsStateAt: null,
         };
       },
       findById: async () => notUsed("findById"),
@@ -53,7 +49,6 @@ const makeDeps = ({
             topic: "SQL joins",
             description: "",
             status: skill.status,
-            mode: skill.mode ?? ("AUTOMATIC" as const),
             userId: skill.userId,
             requestId: null,
             createdAt: new Date(),
@@ -65,7 +60,7 @@ const makeDeps = ({
           })),
       settleStaleGenerating: async () => [],
       claimStaleInit: async () => notUsed("claimStaleInit"),
-      listStalePendingOptions: async () => notUsed("listStalePendingOptions"),
+      claimStaleFirstLesson: async () => notUsed("claimStaleFirstLesson"),
     } satisfies SkillRepository,
     classRepo: {
       findQuestionCountsByClassIds: async () =>
@@ -197,24 +192,4 @@ describe("makeNextClassReconciler", () => {
     ]);
   });
 
-  it("skips MANUAL skills — they never self-continue", async () => {
-    const manual = {
-      id: 12,
-      userId: 7,
-      status: "ACTIVE" as const,
-      mode: "MANUAL" as const,
-    };
-    const { deps, enqueued, statusUpdates } = makeDeps({
-      skills: [ACTIVE_SKILL, manual],
-      topBySkill: { 10: NEWEST_CLASS, 12: NEWEST_CLASS },
-      answeredIndex: { 10: 2, 12: 2 },
-    });
-
-    await makeNextClassReconciler(deps)();
-
-    expect(enqueued).toEqual([{ skillId: 10, userId: 7 }]);
-    expect(statusUpdates).toEqual([
-      { id: 10, patch: { status: "GENERATING" } },
-    ]);
-  });
 });

@@ -12,8 +12,8 @@ import { ClassListItem } from '@components/class/ClassList';
 import { Class } from '@/types/class';
 import rpc from '@/utils/rpc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { ChevronDown, Plus } from 'lucide-react-native';
+import { useRouter, useIsFocused } from 'expo-router';
+import { ChevronDown } from 'lucide-react-native';
 import { FC, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
@@ -35,6 +35,7 @@ type ClassListRow = { kind: 'generating' } | { kind: 'class'; classData: Class }
 
 export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   const [tab, setTab] = useState<'lessons' | 'videos'>('lessons');
+  const isFocused = useIsFocused();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -50,8 +51,10 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
   } = useQuery({
     queryKey: ['skill', skillId],
     queryFn: () => rpc.skill.get({ id: skillId }),
-    // Poll while this skill page is open; paused when the app is backgrounded.
-    refetchInterval: 10_000,
+    // Poll only while this skill page is the focused screen: stack navigation
+    // keeps it mounted under pushed routes (e.g. inside a lesson), and an
+    // ungated interval would keep firing from there.
+    refetchInterval: isFocused ? 10_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -60,7 +63,8 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     queryFn: () => rpc.class.list({ skillId }),
     // Same cadence: the generated lesson surfaces here the moment the
     // pipeline finishes, instead of only on the next manual refresh.
-    refetchInterval: 10_000,
+    // Focus-gated for the same reason as the skill query above.
+    refetchInterval: isFocused ? 10_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -72,7 +76,8 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
     refetchOnMount: 'always',
     // Progress moves with submits and newly generated lessons; same cadence
     // as the sibling queries so all three stay consistent on screen.
-    refetchInterval: 10_000,
+    // Focus-gated for the same reason as the skill query above.
+    refetchInterval: isFocused ? 10_000 : false,
     refetchIntervalInBackground: false,
   });
 
@@ -121,11 +126,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
 
   const { mutate: retryGeneration, isPending: retryPending } = useMutation({
     mutationFn: () => rpc.skill.retry({ id: skillId }),
-    onSuccess: invalidate,
-  });
-
-  const { mutate: setSkillMode, isPending: modePending } = useMutation({
-    mutationFn: (mode: 'AUTOMATIC' | 'MANUAL') => rpc.skill.setMode({ id: skillId, mode }),
     onSuccess: invalidate,
   });
 
@@ -275,27 +275,6 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                     editable={!isSaving}
                   />
                 </View>
-                {(skill.status === 'ACTIVE' || skill.status === 'PAUSED') && (
-                  <View className="gap-2">
-                    <Text variant="label">Lesson flow</Text>
-                    <SegmentedControl
-                      options={[
-                        { value: 'AUTOMATIC', label: 'Automatic' },
-                        { value: 'MANUAL', label: 'Manual' },
-                      ]}
-                      value={skill.mode}
-                      onChange={(value) => {
-                        if (value !== skill.mode) {
-                          setSkillMode(value);
-                        }
-                      }}
-                    />
-                    <Text variant="muted" className="text-[13px] leading-[18px]">
-                      Automatic queues the next lesson as soon as you finish one. Manual lets you
-                      pick each next lesson&apos;s direction yourself.
-                    </Text>
-                  </View>
-                )}
                 {topicError && (
                   <Text variant="muted" className="text-destructive">
                     {topicError.message}
@@ -358,25 +337,12 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
                 {skill.status === 'FAILED' && (
                   <View className="gap-2 pt-1">
                     <Text variant="body" className="text-destructive">
-                      The first lesson failed to generate. Retrying usually fixes it.
+                      Generation failed. Retrying usually fixes it.
                     </Text>
                     <Button size="sm" onPress={() => retryGeneration()} disabled={retryPending}>
                       <Text>{retryPending ? 'Retrying…' : 'Try again'}</Text>
                     </Button>
                   </View>
-                )}
-                {skill.mode === 'MANUAL' && skill.status === 'ACTIVE' && (
-                  <Button
-                    className="mt-1"
-                    disabled={modePending}
-                    onPress={() => router.push(`/skill/${skillId}/new-class`)}>
-                    <View className="flex-row items-center gap-2">
-                      <Icon as={Plus} size={16} strokeWidth={2} />
-                      <Text>
-                        {sortedClasses.length === 0 ? 'Create your first class' : 'Add next class'}
-                      </Text>
-                    </View>
-                  </Button>
                 )}
               </View>
             )}
@@ -400,11 +366,7 @@ export const SkillDetail: FC<{ skillId: number }> = ({ skillId }) => {
             <RecommendationsList skillId={skillId} />
           ) : (
             <View className="px-6 py-8">
-              <Text variant="muted">
-                {skill.mode === 'MANUAL'
-                  ? 'No lessons yet — pick a direction for your first one.'
-                  : 'No lessons yet.'}
-              </Text>
+              <Text variant="muted">No lessons yet.</Text>
             </View>
           )
         }

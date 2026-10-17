@@ -1,15 +1,13 @@
 import type { JobHandler } from "@/modules/platform/ports/jobs";
 import { SKILL_INIT_JOB } from "@/modules/learning/application/commands/create-skill";
 import { SKILL_NEXT_CLASS_JOB } from "@/modules/tutoring/application/generate-next-class";
-import {
-  SKILL_CLASS_OPTIONS_JOB,
-  type GenerateClassOptions,
-} from "@/modules/tutoring/application/generate-class-options";
+import { SKILL_FIRST_LESSON_JOB } from "@/modules/tutoring/application/generate-first-lesson";
 import {
   CLASS_QA_ANSWER_JOB,
   type AnswerClassQuestion,
 } from "@/modules/tutoring/application/answer-class-question";
-import type { GenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
+import type { GenerateSkillMetadata } from "@/modules/tutoring/application/generate-skill-metadata";
+import type { GenerateFirstLesson } from "@/modules/tutoring/application/generate-first-lesson";
 import type { NextClassWorker } from "@/modules/jobs/next-class-worker";
 import {
   SKILL_ANSWER_VECTORS_JOB,
@@ -27,14 +25,14 @@ import {
   GRADE_OPEN_ENDED_JOB,
   type GradeOpenEnded,
 } from "@/modules/tutoring/application/grade-open-ended";
-import { getGenerateInitialSkillJobHandler } from "./generateInitialSkillJobHandler";
+import { getGenerateSkillMetadataJobHandler } from "./generateSkillMetadataJobHandler";
+import { getGenerateFirstLessonJobHandler } from "./generateFirstLessonJobHandler";
 import { getGenerateNextClassJobHandler } from "./generateNextClassJobHandler";
 import { getAnswerClassQuestionJobHandler } from "./answerClassQuestionJobHandler";
 import { getMineAnswerVectorsJobHandler } from "./mineAnswerVectorsJobHandler";
 import { getMineQaVectorsJobHandler } from "./mineQaVectorsJobHandler";
 import { getVectorizeClassContentJobHandler } from "./vectorizeClassContentJobHandler";
 import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
-import { getGenerateClassOptionsJobHandler } from "./generateClassOptionsJobHandler";
 import { getSkillRecommendationsJobHandler } from "./skill-recommendations-job-handler";
 import { getClassVideoClipsJobHandler } from "./class-video-clips-job-handler";
 import type { GenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
@@ -49,33 +47,33 @@ import { CLASS_VIDEO_CLIPS_JOB } from "@/modules/video/application/generate-clas
  * AI/tutoring logic directly. Adding a job = adding an entry here.
  */
 export type JobRegistryDeps = {
-  generateInitialSkill: GenerateInitialSkill;
+  generateSkillMetadata: GenerateSkillMetadata;
+  generateFirstLesson: GenerateFirstLesson;
   nextClassWorker: NextClassWorker;
   answerClassQuestion: AnswerClassQuestion;
   mineAnswerVectors: MineAnswerVectors;
   mineQaVectors: MineQaVectors;
   vectorizeClassContent: VectorizeClassContent;
   gradeOpenEnded: GradeOpenEnded;
-  generateClassOptions: GenerateClassOptions;
   generateSkillRecommendations: GenerateSkillRecommendations;
   generateClassClips: GenerateClassClips;
 };
 
 export const makeJobHandlers = ({
-  generateInitialSkill,
+  generateSkillMetadata,
+  generateFirstLesson,
   nextClassWorker,
   answerClassQuestion,
   mineAnswerVectors,
   mineQaVectors,
   vectorizeClassContent,
   gradeOpenEnded,
-  generateClassOptions,
   generateSkillRecommendations,
   generateClassClips,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
-  [SKILL_INIT_JOB]: getGenerateInitialSkillJobHandler(generateInitialSkill),
+  [SKILL_INIT_JOB]: getGenerateSkillMetadataJobHandler(generateSkillMetadata),
+  [SKILL_FIRST_LESSON_JOB]: getGenerateFirstLessonJobHandler(generateFirstLesson),
   [SKILL_NEXT_CLASS_JOB]: getGenerateNextClassJobHandler(nextClassWorker),
-  [SKILL_CLASS_OPTIONS_JOB]: getGenerateClassOptionsJobHandler(generateClassOptions),
   [CLASS_QA_ANSWER_JOB]: getAnswerClassQuestionJobHandler(answerClassQuestion),
   [SKILL_ANSWER_VECTORS_JOB]: getMineAnswerVectorsJobHandler(mineAnswerVectors),
   [QA_BLOCK_VECTORS_JOB]: getMineQaVectorsJobHandler(mineQaVectors),

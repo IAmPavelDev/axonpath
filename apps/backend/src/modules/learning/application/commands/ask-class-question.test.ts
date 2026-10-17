@@ -14,8 +14,6 @@ import type {
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import {
   ClassQaStatus,
-  NextClassOptionsState,
-  SkillMode,
 } from "@/prisma/generated";
 
 const CLASS = {
@@ -29,11 +27,9 @@ const SKILL = {
   id: 10,
   userId: 7,
   topic: "SQL",
+  prompt: "",
   description: "",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
-  optionsState: NextClassOptionsState.NONE,
-  optionsStateAt: null,
 };
 
 type AskState = {
@@ -93,9 +89,7 @@ const makeDeps = (
     claimStaleInit: async () => {
       throw new Error("not used in ask tests");
     },
-    listStalePendingOptions: async () => {
-      throw new Error("not used in ask tests");
-    },
+    claimStaleFirstLesson: async () => [],
   };
 
   const qaRepo: ClassQaRepository = {

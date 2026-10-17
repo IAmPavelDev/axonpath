@@ -1,15 +1,10 @@
-import type {
-  NextClassOptionsState,
-  SkillMode,
-  SkillStatus,
-} from "@/prisma/generated";
+import type { SkillStatus } from "@/prisma/generated";
 
 export type SkillListItem = {
   id: number;
   topic: string;
   description: string;
   status: string;
-  mode: SkillMode;
   userId: number;
   requestId: number | null;
   createdAt: Date;
@@ -23,20 +18,19 @@ export type SkillListItem = {
 export type SkillCoreRow = {
   id: number;
   topic: string;
+  /** The learner's original freeform brief the title/description came from. */
+  prompt: string;
   description: string;
   status: string;
-  mode: SkillMode;
-  optionsState: NextClassOptionsState;
-  optionsStateAt: Date | null;
   userId: number;
 };
 
 export type SkillRepository = {
   create(input: {
     userId: number;
+    prompt: string;
     topic: string;
     status: SkillStatus;
-    mode: SkillMode;
   }): Promise<{ id: number; status: string }>;
   update(
     id: number,
@@ -44,19 +38,12 @@ export type SkillRepository = {
       topic?: string;
       description?: string;
       status?: SkillStatus;
-      mode?: SkillMode;
-      optionsState?: NextClassOptionsState;
-      /** Timestamp accompanying an optionsState change (null clears it). */
-      optionsStateAt?: Date | null;
     },
   ): Promise<{
     id: number;
     topic: string;
     description: string;
     status: string;
-    mode: SkillMode;
-    optionsState: NextClassOptionsState;
-    optionsStateAt: Date | null;
   }>;
   findById(id: number): Promise<SkillCoreRow | null>;
   /** Archived skills leave the list unless explicitly included (deep links still reach them). */
@@ -67,15 +54,28 @@ export type SkillRepository = {
   /** Skills in one status — the cron's reconciliation sweep enumerates ACTIVE. */
   listByStatus(status: SkillStatus): Promise<SkillListItem[]>;
   /**
-   * Atomically claim stuck init generations: GENERATING skills with zero
-   * classes untouched since `olderThan` (create-skill's in-process job was
-   * lost — the serverless API freezes setImmediate work). Claiming refreshes
-   * updatedAt, which doubles as the lease: concurrent sweepers never claim
-   * the same skill, and a run in flight keeps it claimed.
+   * Atomically claim stuck stage-1 generations: GENERATING skills with zero
+   * classes untouched since `olderThan` (the in-process job was lost — the
+   * serverless API freezes setImmediate work; covers both a lost create
+   * init and a lost/failed first-lesson arm). Claiming refreshes updatedAt,
+   * which doubles as the lease: concurrent sweepers never claim the same
+   * skill, and a run in flight keeps it claimed. The sweeper branches on
+   * description: empty = metadata (title/description) never landed —
+   * re-run stage 1; non-empty = the lesson pipeline died — re-run stage 2.
    */
   claimStaleInit(
     olderThan: Date,
-  ): Promise<Array<{ id: number; userId: number; topic: string }>>;
+  ): Promise<
+    Array<{ id: number; userId: number; prompt: string; description: string }>
+  >;
+  /**
+   * Claim lesson-less ACTIVE skills whose review was abandoned (the learner
+   * created the skill, the draft landed, but skill.edit never accepted it).
+   * Heals as implicit acceptance: flips the skill GENERATING (refreshing
+   * the updatedAt lease) so stage 2 regenerates from the stored draft, and
+   * a dead provider cannot loop the requeue.
+   */
+  claimStaleFirstLesson(olderThan: Date): Promise<Array<{ id: number; userId: number }>>;
   /**
    * Recovery net for a GENERATING skill whose generation pipeline died after
    * persisting a class but before settling (crash between class-create and
@@ -86,13 +86,4 @@ export type SkillRepository = {
    * exists and the loop re-arms on the next submit.
    */
   settleStaleGenerating(olderThan: Date): Promise<number[]>;
-  /**
-   * MANUAL skills whose candidate-options job was lost: optionsState still
-   * PENDING past `olderThan`. Plain read — re-enqueueing while a run is in
-   * flight is benign (the job's writes are last-wins), and every terminal
-   * outcome (READY/FAILED) drops the skill out of the query.
-   */
-  listStalePendingOptions(
-    olderThan: Date,
-  ): Promise<Array<{ id: number; userId: number }>>;
 };

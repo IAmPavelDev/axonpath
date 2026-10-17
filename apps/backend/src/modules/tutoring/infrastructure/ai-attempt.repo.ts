@@ -6,9 +6,8 @@ import { PARSER_VERSION } from "@/modules/tutoring/domain/parse";
 
 export type AiOperation =
   | "init_skill"
-  | "skill_description"
+  | "skill_metadata"
   | "next_class"
-  | "class_options"
   | "grade_open"
   | "qa_answer";
 

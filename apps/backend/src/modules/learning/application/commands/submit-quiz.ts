@@ -1,9 +1,5 @@
 import { err, ok, type Result } from "@/modules/platform/result";
-import {
-  NextClassOptionsState,
-  SkillMode,
-  SkillStatus,
-} from "@/prisma/generated";
+import { SkillStatus } from "@/prisma/generated";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import {
   SKILL_NEXT_CLASS_JOB,
@@ -29,19 +25,14 @@ import {
 } from "@/modules/tutoring/application/grade-open-ended";
 import { scoreAnswer } from "@/modules/learning/domain/quiz/scoring";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
-import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
-import {
-  SKILL_CLASS_OPTIONS_JOB,
-  type SkillClassOptionsJobPayload,
-} from "@/modules/tutoring/application/generate-class-options";
 export type SubmitQuizDeps = {
   quizRepo: QuizRepository;
-  classRepo: ClassRepository;
-  eventRepo: EventRepository;
   skillRepo: SkillRepository;
+  eventRepo: EventRepository;
   jobs: JobQueuePort;
   nextClassJobs: NextClassJobRepository;
 };
+
 export type SubmitQuizInput = {
   classId: number;
   userId: number;
@@ -66,23 +57,18 @@ export type SubmitQuizOutput = {
  * don't belong to this class are skipped, not rejected — they cannot be
  * scored and must not persist. A class with no questions is ClassNotFound:
  * nothing to score and no skill attribution.
- *
- * After scoring, the skill's mode picks the continuation: AUTOMATIC flips
- * the skill into its GENERATING phase (the user-visible "composing your
- * next lesson" state), marks it due via the durable row (survives restarts,
- * unique per skill so retakes re-arm instead of stacking) and fires the
- * instant in-process job; MANUAL arms the candidate-options job when this
- * submit completes the newest lesson for the first time. If a job is lost,
- * the minute sweeper picks the durable row up. The next-class pipeline
- * settles the status back to ACTIVE. Clients just observe class.list /
- * class-options.
+ * After scoring, the skill flips into its GENERATING phase (the user-visible
+ * "composing your next lesson" state), is marked due via the durable row
+ * (survives restarts, unique per skill so retakes re-arm instead of stacking)
+ * and fires the instant in-process job. If a job is lost, the minute sweeper
+ * picks the durable row up. The next-class pipeline settles the status back
+ * to ACTIVE. Clients just observe class.list.
  */
 export const makeSubmitQuiz =
   ({
     quizRepo,
-    classRepo,
-    eventRepo,
     skillRepo,
+    eventRepo,
     jobs,
     nextClassJobs,
   }: SubmitQuizDeps) =>
@@ -167,56 +153,25 @@ export const makeSubmitQuiz =
         } satisfies GradeOpenEndedJobPayload);
       }
 
-      // Mode split — the submit is the learning signal either way:
-      // AUTOMATIC composes the next lesson; MANUAL proposes three candidate
-      // directions for the learner to pick from.
       const skill = await skillRepo.findById(skillId);
-      if (skill?.mode === SkillMode.MANUAL) {
-        // Regenerate candidates only when this submit completes the newest
-        // lesson for the first time: retakes and older-lesson submits must
-        // not churn the option set. (Attempts were already persisted above,
-        // so "first completion" = all rows for this class minus this submit.)
-        const top = await classRepo.findTopBySkill(skillId);
-        const priorAttempts =
-          top && top.id === input.classId
-            ? (await quizRepo.findAnswersByClassAndUser(top.id, input.userId))
-                .length - scored.length
-            : -1;
-        if (
-          top &&
-          top.id === input.classId &&
-          priorAttempts === 0 &&
-          skill.status === SkillStatus.ACTIVE
-        ) {
-          await skillRepo.update(skillId, {
-            optionsState: NextClassOptionsState.PENDING,
-            optionsStateAt: new Date(),
-          });
-          jobs.enqueue(SKILL_CLASS_OPTIONS_JOB, {
-            skillId,
-            userId: input.userId,
-          } satisfies SkillClassOptionsJobPayload);
-        }
-      } else {
-        // Durable row first: if the process dies before the flip or before
-        // the in-memory job fires, the sweeper still picks the skill up — an
-        // ACTIVE-or-GENERATING skill is never left with a lost signal.
-        await nextClassJobs.enqueue({ skillId, userId: input.userId });
+      // Durable row first: if the process dies before the flip or before
+      // the in-memory job fires, the sweeper still picks the skill up — an
+      // ACTIVE-or-GENERATING skill is never left with a lost signal.
+      await nextClassJobs.enqueue({ skillId, userId: input.userId });
 
-        // The user-visible phase change. Illegal from PAUSED/COMPLETED/
-        // ARCHIVED — the flip is only for learnable skills; generation itself
-        // is not gated here.
-        if (
-          skill &&
-          canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)
-        ) {
-          await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
-        }
-        jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
-          skillId,
-          userId: input.userId,
-        } satisfies SkillNextClassJobPayload);
+      // The user-visible phase change. Illegal from PAUSED/COMPLETED/
+      // ARCHIVED — the flip is only for learnable skills; generation itself
+      // is not gated here.
+      if (
+        skill &&
+        canTransition(skill.status as SkillStatus, SkillStatus.GENERATING)
+      ) {
+        await skillRepo.update(skillId, { status: SkillStatus.GENERATING });
       }
+      jobs.enqueue(SKILL_NEXT_CLASS_JOB, {
+        skillId,
+        userId: input.userId,
+      } satisfies SkillNextClassJobPayload);
     }
 
     const perQuestion = scored.map(({ question, isCorrect, submitted }) => ({

@@ -5,8 +5,6 @@ import {
   type SetSkillStatusDeps,
 } from "./set-skill-status";
 import {
-  NextClassOptionsState,
-  SkillMode,
   SkillStatus,
 } from "@/prisma/generated";
 import { ok } from "@/modules/platform/result";
@@ -32,9 +30,6 @@ const makeFakeDeps = (skill: SkillCoreRow | null) => {
         topic: "SQL joins",
         description: "",
         status: patch.status ?? SkillStatus.ACTIVE,
-        mode: SkillMode.AUTOMATIC,
-        optionsState: NextClassOptionsState.NONE,
-        optionsStateAt: null,
       };
     },
     findById: async () => skill,
@@ -42,7 +37,7 @@ const makeFakeDeps = (skill: SkillCoreRow | null) => {
     listByStatus: unused,
     settleStaleGenerating: async () => [],
     claimStaleInit: unused,
-    listStalePendingOptions: unused,
+    claimStaleFirstLesson: unused,
   };
 
   const deps: SetSkillStatusDeps = { skillRepo };
@@ -55,11 +50,9 @@ describe("makeSetSkillStatus", () => {
     id: 42,
     userId: 7,
     topic: "SQL joins",
+    prompt: "",
     description: "",
     status,
-    mode: SkillMode.AUTOMATIC,
-    optionsState: NextClassOptionsState.NONE,
-    optionsStateAt: null,
   });
 
   it.each([

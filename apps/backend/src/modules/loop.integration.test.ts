@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   EventType,
-  NextClassOptionsState,
   SkillStatus,
   VectorSource,
 } from "@/prisma/generated";
@@ -10,11 +9,9 @@ import {
   SKILL_INIT_JOB,
   makeCreateSkill,
 } from "@/modules/learning/application/commands/create-skill";
+import { makeEditSkill } from "@/modules/learning/application/commands/edit-skill";
+import { SKILL_FIRST_LESSON_JOB } from "@/modules/tutoring/application/generate-first-lesson";
 import { makeAskClassQuestion } from "@/modules/learning/application/commands/ask-class-question";
-import { makeCreateClass } from "@/modules/learning/application/commands/create-class";
-import {
-  SKILL_CLASS_OPTIONS_JOB,
-} from "@/modules/tutoring/application/generate-class-options";
 import { makeSubmitQuiz } from "@/modules/learning/application/commands/submit-quiz";
 import { makeRetrySkill } from "@/modules/learning/application/commands/retry-skill";
 import {
@@ -32,15 +29,31 @@ import {
   classesOfSkill,
   firstQuestionOfType,
   makeLoopHarness,
+  type LoopHarness,
 } from "@/modules/testing/fakes";
 
+const acceptDraft = (h: LoopHarness, skillId: number) =>
+  makeEditSkill({
+    skillRepo: h.deps.skillRepo,
+    classRepo: h.deps.classRepo,
+    jobs: h.jobs,
+  })({
+    id: skillId,
+    userId: 7,
+    topic: "SQL Joins",
+    description: "Learn SQL joins by doing.",
+  });
+
+const PROMPT = "I want to learn SQL joins for work — I know basic SELECTs.";
+
 /**
- * The composed adaptive loop: the REAL use cases (create, init, submit,
- * next-class, retry) and the REAL job registry wired over in-memory fakes.
- * This is the CI-able version of the manual smoke test — beta acceptance §3.
+ * The composed adaptive loop: the REAL use cases (create, metadata init,
+ * edit-accept, first lesson, submit, next-class, retry) and the REAL job
+ * registry wired over in-memory fakes. This is the CI-able version of the
+ * manual smoke test — beta acceptance §3.
  */
 describe("adaptive loop integration", () => {
-  it("runs create → init → submit → next-class, then dedups a consecutive retake", async () => {
+  it("runs create → metadata → accept → first lesson → submit → next-class, then dedups a consecutive retake", async () => {
     const h = makeLoopHarness({
       gradingRaw: JSON.stringify({
         results: [
@@ -55,13 +68,46 @@ describe("adaptive loop integration", () => {
     });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
 
-    // 1. Create → GENERATING; init job → ACTIVE with class 0, questions,
-    //    AI_NEXT summary vector and AI_INITIAL snippet vectors.
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
+    // 1. Create → GENERATING; init job (stage 1) → ACTIVE with the drafted
+    //    title + description and ZERO classes — the lesson waits for
+    //    acceptance.
+    const created = await createSkill({ userId: 7, prompt: PROMPT });
     expect(created).toEqual(ok({ id: 1, status: SkillStatus.GENERATING }));
     const skillId = unwrapOrThrow(created).id;
 
     await h.runJob(SKILL_INIT_JOB);
+
+    expect(h.state.skills.get(skillId)).toMatchObject({
+      status: SkillStatus.ACTIVE,
+      topic: "SQL Joins",
+      description: "Learn SQL joins by doing.",
+    });
+    expect(classesOfSkill(h, skillId)).toHaveLength(0);
+    // The metadata call is audited as SKILL_CREATED (usage bucket skillInit).
+    const createdEvents = h.state.events.filter(
+      (event) => event.type === EventType.SKILL_CREATED,
+    );
+    expect(createdEvents).toHaveLength(1);
+    expect(createdEvents[0]).toMatchObject({ skillId, userId: 7 });
+    expect(createdEvents[0]?.payload).toMatchObject({
+      action: "skill_metadata",
+      model: "glm-5.3-flash",
+    });
+
+    // 1b. Acceptance: the learner saves the draft — GENERATING again and the
+    //     first-lesson job armed; the lesson pipeline composes class 0 with
+    //     questions, AI_NEXT summary vector and AI_INITIAL snippet vectors.
+    const accepted = await acceptDraft(h, skillId);
+    expect(accepted).toEqual(
+      ok({
+        id: skillId,
+        topic: "SQL Joins",
+        description: "Learn SQL joins by doing.",
+        status: SkillStatus.GENERATING,
+      }),
+    );
+
+    await h.runJob(SKILL_FIRST_LESSON_JOB);
 
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
     const class0 = classesOfSkill(h, skillId);
@@ -83,6 +129,14 @@ describe("adaptive loop integration", () => {
     });
     expect(h.state.vectors[1]).toMatchObject({ source: VectorSource.AI_INITIAL, classIndex: 0 });
 
+    // The lesson brief carries the learner's original prompt, not just the
+    // generated title.
+    const lessonCall = h.state.aiCalls.find(
+      (call) => call.schemaName === "init_skill",
+    );
+    expect(lessonCall?.prompt).toContain(PROMPT);
+    expect(lessonCall?.prompt).toContain("Learn SQL joins by doing.");
+
     // The class gains one open-ended question (generation unlocks it in S5;
     // grading must already handle it end-to-end).
     h.state.questions.set(9001, {
@@ -98,7 +152,6 @@ describe("adaptive loop integration", () => {
     // 2. Submit with one deliberate wrong answer → scored, next-class enqueued.
     const submitQuiz = makeSubmitQuiz({
       quizRepo: h.deps.quizRepo,
-      classRepo: h.deps.classRepo,
       eventRepo: h.deps.eventRepo,
       skillRepo: h.deps.skillRepo,
       jobs: h.jobs,
@@ -195,12 +248,15 @@ describe("adaptive loop integration", () => {
     expect(nextCall?.prompt).toContain(
       'Struggled with: An INNER JOIN drops unmatched rows. The learner answered "False"; the lesson\'s correct answer was "True"',
     );
-
+    // Two audits so far: the accepted first lesson and the adaptive
+    // next-class lesson.
     const generated = h.state.events.filter(
       (event) => event.type === EventType.CLASS_GENERATED,
     );
-    expect(generated).toHaveLength(1);
+    expect(generated).toHaveLength(2);
     expect(generated[0]).toMatchObject({ skillId, userId: 7 });
+    expect(generated[0]?.payload).toMatchObject({ action: "first_lesson" });
+    expect(generated[1]?.payload).toMatchObject({ action: "next_class" });
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
 
     // 4. Retake the same quiz → the next-class handler no-ops (D3 dedup):
@@ -220,16 +276,16 @@ describe("adaptive loop integration", () => {
     ).toHaveLength(1);
     expect(
       h.state.events.filter((event) => event.type === EventType.CLASS_GENERATED),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
     // Retake flipped GENERATING again; the dedup no-op settled it back.
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
   });
 
-  it("heals a FAILED init through retry when nothing was persisted", async () => {
-    // 5. Scripted AI failure before any persist → FAILED + ERROR_OCCURRED.
-    const h = makeLoopHarness({ failOnceOn: "init_skill" });
+  it("heals a failed metadata draft through retry (stage 1 replays from the stored prompt)", async () => {
+    // Scripted AI failure in stage 1 → FAILED + ERROR_OCCURRED, no draft.
+    const h = makeLoopHarness({ failOnceOn: "skill_metadata" });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
+    const created = await createSkill({ userId: 7, prompt: PROMPT });
     const skillId = unwrapOrThrow(created).id;
 
     await h.runJob(SKILL_INIT_JOB);
@@ -239,7 +295,7 @@ describe("adaptive loop integration", () => {
     expect(h.state.events[0]).toMatchObject({ type: EventType.ERROR_OCCURRED, skillId });
     expect(classesOfSkill(h, skillId)).toHaveLength(0);
 
-    // skill.retry → GENERATING + a fresh skill-init job with the create payload.
+    // skill.retry → GENERATING + a fresh skill-init job with the stored prompt.
     const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
     const retried = await retrySkill({ skillId, userId: 7 });
     expect(retried).toEqual(ok({ status: SkillStatus.GENERATING }));
@@ -247,50 +303,68 @@ describe("adaptive loop integration", () => {
 
     await h.runJob(SKILL_INIT_JOB);
 
-    // The retry ran a full regeneration (init AI called a second time).
+    // Stage 1 only: the draft lands, no lesson yet — acceptance still gates it.
+    expect(h.state.skills.get(skillId)).toMatchObject({
+      status: SkillStatus.ACTIVE,
+      topic: "SQL Joins",
+    });
+    expect(classesOfSkill(h, skillId)).toHaveLength(0);
+    expect(
+      h.state.aiCalls.filter((call) => call.schemaName === "skill_metadata"),
+    ).toHaveLength(2);
+
+    await acceptDraft(h, skillId);
+    await h.runJob(SKILL_FIRST_LESSON_JOB);
+
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
-    expect(
-      h.state.aiCalls.filter((call) => call.schemaName === "init_skill"),
-    ).toHaveLength(2);
   });
 
-  it("heals a partial persist through retry without regenerating", async () => {
-    // Embeddings fail AFTER the class was persisted: FAILED with class 0
-    // present. The init retry guard skips generation and heals to ACTIVE —
-    // no duplicate class, no new AI calls (D2).
+  it("heals a partial first-lesson persist through retry without regenerating", async () => {
+    // Embeddings fail AFTER the class was persisted (stage 2): FAILED with
+    // class 0 present. The retry routes to stage 2 (a draft exists), whose
+    // guard skips generation and heals to ACTIVE — no duplicate class, no
+    // new lesson AI calls (D2).
     const h = makeLoopHarness({ failEmbeddingsOnce: true });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
+    const created = await createSkill({ userId: 7, prompt: PROMPT });
     const skillId = unwrapOrThrow(created).id;
 
     await h.runJob(SKILL_INIT_JOB);
+    await acceptDraft(h, skillId);
+    await h.runJob(SKILL_FIRST_LESSON_JOB);
 
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.FAILED);
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
 
     const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    await retrySkill({ skillId, userId: 7 });
-    await h.runJob(SKILL_INIT_JOB);
+    const retried = await retrySkill({ skillId, userId: 7 });
+    expect(retried).toEqual(ok({ status: SkillStatus.GENERATING }));
+    expect(h.state.enqueued.at(-1)?.jobName).toBe(SKILL_FIRST_LESSON_JOB);
+    await h.runJob(SKILL_FIRST_LESSON_JOB);
 
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
     expect(
       h.state.aiCalls.filter((call) => call.schemaName === "init_skill"),
     ).toHaveLength(1);
-    // First run: SKILL_CREATED audit + ERROR_OCCURRED. The healed run adds
-    // nothing — the guard short-circuits before any event is recorded.
+    // First run: SKILL_CREATED (metadata) + CLASS_GENERATED (lesson audit)
+    // + ERROR_OCCURRED. The healed run adds nothing — the guard
+    // short-circuits before any event is recorded.
     expect(
       h.state.events.filter((event) => event.type === EventType.ERROR_OCCURRED),
+    ).toHaveLength(1);
+    expect(
+      h.state.events.filter((event) => event.type === EventType.CLASS_GENERATED),
     ).toHaveLength(1);
   });
 
   it("refuses a retry the user does not own or from a non-FAILED state", async () => {
     const h = makeLoopHarness();
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
+    const created = await createSkill({ userId: 7, prompt: PROMPT });
     const skillId = unwrapOrThrow(created).id;
-    await h.runJob(SKILL_INIT_JOB); // → ACTIVE
+    await h.runJob(SKILL_INIT_JOB); // → ACTIVE (draft ready, no lesson yet)
 
     const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
 
@@ -303,12 +377,15 @@ describe("adaptive loop integration", () => {
       error: { kind: "InvalidSkillTransition", from: SkillStatus.ACTIVE, to: SkillStatus.GENERATING },
     });
   });
+
   it("answers an anchored QA question through the layered pipeline and memory", async () => {
     const h = makeLoopHarness();
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "AUTOMATIC" });
+    const created = await createSkill({ userId: 7, prompt: PROMPT });
     const skillId = unwrapOrThrow(created).id;
     await h.runJob(SKILL_INIT_JOB);
+    await acceptDraft(h, skillId);
+    await h.runJob(SKILL_FIRST_LESSON_JOB);
     const class0 = classesOfSkill(h, skillId)[0];
 
     // 1. Ask with a verbatim selection → PENDING block + answer job.
@@ -390,146 +467,4 @@ describe("adaptive loop integration", () => {
     ).toHaveLength(2);
   });
 
-  it("runs the MANUAL loop: create → options → choose target → lesson 0 → fresh options", async () => {
-    const h = makeLoopHarness();
-    const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-
-    // 1. MANUAL create: ACTIVE immediately — no init generation — with the
-    //    candidate-options job armed.
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "MANUAL" });
-    expect(created).toEqual(ok({ id: 1, status: SkillStatus.ACTIVE }));
-    const skillId = unwrapOrThrow(created).id;
-    expect(h.state.enqueued.some((job) => job.jobName === SKILL_INIT_JOB)).toBe(false);
-    expect(h.state.skills.get(skillId)?.optionsState).toBe(
-      NextClassOptionsState.PENDING,
-    );
-
-    // 2. Options job: three ranked candidates, state READY, audited.
-    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
-    expect(h.state.skills.get(skillId)?.optionsState).toBe(
-      NextClassOptionsState.READY,
-    );
-    const options = h.state.nextClassOptions.filter(
-      (option) => option.skillId === skillId,
-    );
-    expect(options.map((option) => option.rank)).toEqual([1, 2, 3]);
-    expect(h.state.events.some((e) => e.type === EventType.CLASS_OPTIONS_GENERATED)).toBe(
-      true,
-    );
-
-    // 3. Choose a path: options consumed, skill GENERATING, target durable.
-    const createClass = makeCreateClass({
-      skillRepo: h.deps.skillRepo,
-      optionRepo: h.deps.nextClassOptions,
-      jobs: h.jobs,
-      nextClassJobs: h.nextClassJobs,
-    });
-    const chosen = await createClass({
-      skillId,
-      userId: 7,
-      target: "Master LEFT JOIN with real datasets",
-    });
-    expect(chosen).toEqual(ok({ status: SkillStatus.GENERATING }));
-    expect(
-      h.state.nextClassOptions.filter((option) => option.skillId === skillId),
-    ).toHaveLength(0);
-
-    await h.runJob(SKILL_NEXT_CLASS_JOB);
-    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
-    const class0 = classesOfSkill(h, skillId);
-    expect(class0).toHaveLength(1);
-    expect(class0[0]).toMatchObject({ index: 0 });
-    const lessonCall = h.state.aiCalls.find((call) => call.schemaName === "next_class");
-    expect(lessonCall?.prompt).toContain("Master LEFT JOIN with real datasets");
-    expect(lessonCall?.prompt).toContain(
-      "Make it the lesson's central learning target",
-    );
-
-    // 4. Submitting the newest lesson re-arms options instead of spawning a
-    //    next class automatically.
-    const submitQuiz = makeSubmitQuiz({
-      quizRepo: h.deps.quizRepo,
-      classRepo: h.deps.classRepo,
-      eventRepo: h.deps.eventRepo,
-      skillRepo: h.deps.skillRepo,
-      jobs: h.jobs,
-      nextClassJobs: h.nextClassJobs,
-    });
-    const multipleChoice = firstQuestionOfType(
-      h,
-      class0[0]?.id ?? 0,
-      "MULTIPLE_CHOICE",
-    );
-    expect(multipleChoice).toBeDefined();
-    const submitted = await submitQuiz({
-      classId: class0[0]?.id ?? 0,
-      userId: 7,
-      answers: [{ questionId: multipleChoice?.id ?? 0, answer: "LEFT JOIN" }],
-    });
-    expect(submitted.ok).toBe(true);
-    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
-    expect(h.state.skills.get(skillId)?.optionsState).toBe(
-      NextClassOptionsState.PENDING,
-    );
-    expect(
-      h.state.enqueued.filter((job) => job.jobName === SKILL_NEXT_CLASS_JOB),
-    ).toHaveLength(0);
-
-    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
-    expect(h.state.skills.get(skillId)?.optionsState).toBe(
-      NextClassOptionsState.READY,
-    );
-    const regenerationCall = h.state.aiCalls.filter(
-      (call) => call.schemaName === "class_options",
-    )[1];
-    expect(regenerationCall?.prompt).toContain("Previous lesson");
-  });
-
-  it("does not churn options on a retake or an older-lesson submit", async () => {
-    const h = makeLoopHarness();
-    const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
-    const created = await createSkill({ userId: 7, topic: "SQL joins", mode: "MANUAL" });
-    const skillId = unwrapOrThrow(created).id;
-    await h.runJob(SKILL_CLASS_OPTIONS_JOB);
-
-    const createClass = makeCreateClass({
-      skillRepo: h.deps.skillRepo,
-      optionRepo: h.deps.nextClassOptions,
-      jobs: h.jobs,
-      nextClassJobs: h.nextClassJobs,
-    });
-    await createClass({ skillId, userId: 7, target: "Start with joins" });
-    await h.runJob(SKILL_NEXT_CLASS_JOB);
-    const class0 = classesOfSkill(h, skillId);
-
-    const submitQuiz = makeSubmitQuiz({
-      quizRepo: h.deps.quizRepo,
-      classRepo: h.deps.classRepo,
-      eventRepo: h.deps.eventRepo,
-      skillRepo: h.deps.skillRepo,
-      jobs: h.jobs,
-      nextClassJobs: h.nextClassJobs,
-    });
-    const multipleChoice = firstQuestionOfType(
-      h,
-      class0[0]?.id ?? 0,
-      "MULTIPLE_CHOICE",
-    );
-    const answers = [
-      { questionId: multipleChoice?.id ?? 0, answer: "LEFT JOIN" },
-    ];
-
-    // First completion arms options; an immediate retake must not stack
-    // another options job.
-    await submitQuiz({ classId: class0[0]?.id ?? 0, userId: 7, answers });
-    const afterFirst = h.state.enqueued.filter(
-      (job) => job.jobName === SKILL_CLASS_OPTIONS_JOB,
-    ).length;
-    expect(afterFirst).toBe(1);
-
-    await submitQuiz({ classId: class0[0]?.id ?? 0, userId: 7, answers });
-    expect(
-      h.state.enqueued.filter((job) => job.jobName === SKILL_CLASS_OPTIONS_JOB),
-    ).toHaveLength(1);
-  });
 });

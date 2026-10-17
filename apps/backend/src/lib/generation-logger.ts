@@ -10,9 +10,9 @@ import { logger } from "@/lib/logger";
  * cross-referencing the database.
  */
 export type GenerationPipeline =
+  | "skill_metadata"
+  | "skill_first_lesson"
   | "next_class"
-  | "skill_init"
-  | "class_options"
   | "recommendations"
   | "class_clips";
 

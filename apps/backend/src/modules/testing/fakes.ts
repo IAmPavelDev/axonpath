@@ -4,8 +4,6 @@ import { makeSystemClock } from "@/modules/platform/ports/clock";
 import {
   ClassQaStatus,
   NextClassJobStatus,
-  NextClassOptionsState,
-  SkillMode,
   SkillStatus,
   VectorSource,
   type QuestionType,
@@ -42,8 +40,8 @@ import type {
   NewClassQaBlock,
 } from "@/modules/learning/domain/class-qa/class-qa.repository";
 import { makeJobHandlers } from "@/modules/jobs/registry";
-import { makeGenerateInitialSkill } from "@/modules/tutoring/application/generate-initial-skill";
-import { makeGenerateClassOptions } from "@/modules/tutoring/application/generate-class-options";
+import { makeGenerateSkillMetadata } from "@/modules/tutoring/application/generate-skill-metadata";
+import { makeGenerateFirstLesson } from "@/modules/tutoring/application/generate-first-lesson";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
@@ -56,7 +54,6 @@ import type {
   NextClassJobClaim,
   NextClassJobRepository,
 } from "@/modules/jobs/next-class-job.repository";
-import type { NextClassOptionRepository } from "@/modules/learning/domain/skill/next-class-option.repository";
 
 /**
  * Deterministic in-memory backend for the composed loop integration test:
@@ -64,15 +61,14 @@ import type { NextClassOptionRepository } from "@/modules/learning/domain/skill/
  * whose handlers are invoked explicitly (no setImmediate timing).
  */
 export type AiScript = {
-  descriptionRaw?: string;
+  /** Stage-1 response: the generated title + description JSON. */
+  metadataRaw?: string;
   initRaw?: string;
   nextRaw?: string;
   /** Grading response for open-ended submits; default grades nothing (degrade). */
   gradingRaw?: string;
   /** Plain-text answer for class Q&A; default is a one-liner. */
   qaAnswerRaw?: string;
-  /** Candidate-target response for the options job; default proposes three. */
-  optionsRaw?: string;
   /** Fail the FIRST generateJson call with this schema name, then succeed. */
   failOnceOn?: string;
   /** Fail the FIRST generateEmbeddings call, then succeed. */
@@ -88,14 +84,6 @@ const GRADING_RAW_DEFAULT = JSON.stringify({ results: [] });
 const QA_ANSWER_RAW_DEFAULT =
   "A left join keeps every left row, matched or not.";
 
-/** Default candidate-target response: three ranked directions. */
-const OPTIONS_JSON_DEFAULT = JSON.stringify({
-  targets: [
-    "Practice writing LEFT JOIN queries with unmatched rows",
-    "Compare INNER JOIN and LEFT JOIN on the same tables",
-    "Aggregate results after joining two tables",
-  ],
-});
 
 export type LoopHarness = {
   state: {
@@ -105,11 +93,9 @@ export type LoopHarness = {
         id: number;
         userId: number;
         topic: string;
+        prompt: string;
         description: string;
         status: SkillStatus;
-        mode: SkillMode;
-        optionsState: NextClassOptionsState;
-        optionsStateAt: Date | null;
       }
     >;
     classes: Map<
@@ -124,12 +110,6 @@ export type LoopHarness = {
     >;
     questions: Map<number, NewQuestion & { id: number }>;
     answers: (NewAnswer & { id: number; createdAt: Date })[];
-    nextClassOptions: Array<{
-      id: number;
-      skillId: number;
-      rank: number;
-      text: string;
-    }>;
     qaBlocks: ClassQaEntity[];
     events: DomainEvent[];
     vectors: NewVector[];
@@ -148,8 +128,6 @@ export type LoopHarness = {
       { textSnippet: string; source: string; classIndex: number | null }[]
     >;
     skillRepo: SkillRepository;
-    optionRepo: NextClassOptionRepository;
-    nextClassOptions: NextClassOptionRepository;
     classRepo: ClassRepository;
     quizRepo: QuizRepository;
     qaRepo: ClassQaRepository;
@@ -167,7 +145,8 @@ export type LoopHarness = {
   runJob: (jobName: string) => Promise<unknown>;
 };
 
-const DESCRIPTION_RAW = JSON.stringify({
+const METADATA_RAW = JSON.stringify({
+  title: "SQL Joins",
   description: "Learn SQL joins by doing.",
 });
 
@@ -219,11 +198,9 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         id: number;
         userId: number;
         topic: string;
+        prompt: string;
         description: string;
         status: SkillStatus;
-        mode: SkillMode;
-        optionsState: NextClassOptionsState;
-        optionsStateAt: Date | null;
       }
     >(),
     classes: new Map<
@@ -238,12 +215,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     >(),
     questions: new Map<number, NewQuestion & { id: number }>(),
     answers: [] as (NewAnswer & { id: number; createdAt: Date })[],
-    nextClassOptions: [] as Array<{
-      id: number;
-      skillId: number;
-      rank: number;
-      text: string;
-    }>,
     qaBlocks: [] as ClassQaEntity[],
     events: [] as DomainEvent[],
     vectors: [] as NewVector[],
@@ -266,17 +237,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         return { ok: false, error };
       }
       const raw =
-        request.schemaName === "skill_description"
-          ? (script.descriptionRaw ?? DESCRIPTION_RAW)
+        request.schemaName === "skill_metadata"
+          ? (script.metadataRaw ?? METADATA_RAW)
           : request.schemaName === "init_skill"
             ? (script.initRaw ?? INIT_JSON)
             : request.schemaName === "next_class"
               ? (script.nextRaw ?? NEXT_JSON)
               : request.schemaName === "grading"
                 ? (script.gradingRaw ?? GRADING_RAW_DEFAULT)
-                : request.schemaName === "class_options"
-                  ? (script.optionsRaw ?? OPTIONS_JSON_DEFAULT)
-                  : null;
+                : null;
       if (raw === null) {
         throw new Error(`unexpected schema ${request.schemaName}`);
       }
@@ -334,11 +303,9 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         id,
         userId: input.userId,
         topic: input.topic,
+        prompt: input.prompt,
         description: "",
         status: input.status,
-        mode: input.mode,
-        optionsState: "NONE",
-        optionsStateAt: null,
       });
       return { id, status: input.status };
     },
@@ -351,19 +318,11 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       if (patch.description !== undefined)
         skill.description = patch.description;
       if (patch.status !== undefined) skill.status = patch.status;
-      if (patch.mode !== undefined) skill.mode = patch.mode;
-      if (patch.optionsState !== undefined)
-        skill.optionsState = patch.optionsState;
-      if (patch.optionsStateAt !== undefined)
-        skill.optionsStateAt = patch.optionsStateAt;
       return {
         id,
         topic: skill.topic,
         description: skill.description,
         status: skill.status,
-        mode: skill.mode,
-        optionsState: skill.optionsState,
-        optionsStateAt: skill.optionsStateAt,
       };
     },
     findById: async (id) => {
@@ -372,11 +331,9 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         ? {
             id: skill.id,
             topic: skill.topic,
+            prompt: skill.prompt,
             description: skill.description,
             status: skill.status,
-            mode: skill.mode,
-            optionsState: skill.optionsState,
-            optionsStateAt: skill.optionsStateAt,
             userId: skill.userId,
           }
         : null;
@@ -390,7 +347,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           topic: skill.topic,
           description: skill.description,
           status: skill.status,
-          mode: skill.mode,
           userId: skill.userId,
           requestId: null,
           createdAt: new Date(),
@@ -400,10 +356,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           learnedPoints: 0,
           lastActivityAt: null,
         })),
-    claimStaleInit: async (olderThan) => {
+    claimStaleInit: async () => {
       // No clock in the harness: every stuck GENERATING skill without
       // classes is claimable; tests control staleness via state setup.
-      const claimed: Array<{ id: number; userId: number; topic: string }> = [];
+      const claimed: Array<{
+        id: number;
+        userId: number;
+        prompt: string;
+        description: string;
+      }> = [];
       for (const skill of state.skills.values()) {
         if (skill.status !== SkillStatus.GENERATING) continue;
         const hasClass = [...state.classes.values()].some(
@@ -413,10 +374,26 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         claimed.push({
           id: skill.id,
           userId: skill.userId,
-          topic: skill.topic,
+          prompt: skill.prompt,
+          description: skill.description,
         });
       }
       return claimed;
+    },
+    claimStaleFirstLesson: async () => {
+      // Implicit-acceptance heal: lesson-less ACTIVE skills flip GENERATING
+      // and are returned for the stage-2 requeue; tests pre-seed status.
+      const accepted: Array<{ id: number; userId: number }> = [];
+      for (const skill of state.skills.values()) {
+        if (skill.status !== SkillStatus.ACTIVE) continue;
+        const hasClass = [...state.classes.values()].some(
+          (cls) => cls.skillId === skill.id,
+        );
+        if (hasClass) continue;
+        skill.status = SkillStatus.GENERATING;
+        accepted.push({ id: skill.id, userId: skill.userId });
+      }
+      return accepted;
     },
     settleStaleGenerating: async () => {
       // No clock in the harness: every abandoned GENERATING skill (has a
@@ -435,37 +412,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return settled;
     },
-    listStalePendingOptions: async (olderThan) =>
-      [...state.skills.values()]
-        .filter(
-          (skill) =>
-            skill.optionsState === NextClassOptionsState.PENDING &&
-            skill.optionsStateAt !== null &&
-            skill.optionsStateAt < olderThan,
-        )
-        .map((skill) => ({ id: skill.id, userId: skill.userId })),
-  };
-
-  let optionIdSeq = 0;
-  const nextClassOptions: NextClassOptionRepository = {
-    replaceForSkill: async (skillId, options) => {
-      state.nextClassOptions = state.nextClassOptions.filter(
-        (option) => option.skillId !== skillId,
-      );
-      for (const option of options) {
-        state.nextClassOptions.push({ id: ++optionIdSeq, skillId, ...option });
-      }
-    },
-    clearForSkill: async (skillId) => {
-      state.nextClassOptions = state.nextClassOptions.filter(
-        (option) => option.skillId !== skillId,
-      );
-    },
-    listBySkill: async (skillId) =>
-      state.nextClassOptions
-        .filter((option) => option.skillId === skillId)
-        .sort((a, b) => a.rank - b.rank)
-        .map(({ id, rank, text }) => ({ id, rank, text })),
   };
 
   const classRepo: ClassRepository = {
@@ -897,8 +843,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     recordAiAttempt: () => {},
     retrieveContext,
     skillRepo,
-    optionRepo: nextClassOptions,
-    nextClassOptions,
     classRepo,
     quizRepo,
     qaRepo,
@@ -914,7 +858,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     {
       skillId: number;
       userId: number;
-      target: string | null;
       status: NextClassJobStatus;
       attempts: number;
       claimedAt: Date | null;
@@ -927,7 +870,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       claimedAt: Date | null;
       skillId: number;
       userId: number;
-      target: string | null;
     },
     leaseMinutes: number,
   ): NextClassJobClaim | null => {
@@ -945,7 +887,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       return {
         skillId: row.skillId,
         userId: row.userId,
-        target: row.target,
         attempts: row.attempts,
         claimedAt: row.claimedAt,
       };
@@ -953,11 +894,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     return null;
   };
   const nextClassJobs: NextClassJobRepository = {
-    enqueue: async ({ skillId, userId, target = null }) => {
+    enqueue: async ({ skillId, userId }) => {
       const existing = nextClassJobRows.get(skillId);
       if (existing) {
         existing.userId = userId;
-        existing.target = target;
         existing.status = "PENDING";
         existing.attempts = 0;
         existing.claimedAt = null;
@@ -966,7 +906,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       nextClassJobRows.set(skillId, {
         skillId,
         userId,
-        target,
         status: "PENDING",
         attempts: 0,
         claimedAt: null,
@@ -1076,7 +1015,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   });
   const retrieveQaContext = makeRetrieveQaContext({ ai, vectorStore });
   const gradeOpenEnded = makeGradeOpenEnded({ ai, quizRepo, recordAiAttempt: () => {} });
-  const generateClassOptions = makeGenerateClassOptions(deps);
   const answerClassQuestion = makeAnswerClassQuestion({
     ai,
     recordAiAttempt: () => {},
@@ -1091,14 +1029,14 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
   });
 
   const handlers = makeJobHandlers({
-    generateInitialSkill: makeGenerateInitialSkill(deps),
+    generateSkillMetadata: makeGenerateSkillMetadata(deps),
+    generateFirstLesson: makeGenerateFirstLesson(deps),
     nextClassWorker,
     answerClassQuestion,
     mineAnswerVectors,
     mineQaVectors,
     vectorizeClassContent,
     gradeOpenEnded,
-    generateClassOptions,
     generateSkillRecommendations: async () => undefined,
     generateClassClips: async () => undefined,
   });
@@ -1111,7 +1049,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     const [job] = state.enqueued.splice(index, 1);
     return handlers[jobName]?.(job.payload as never);
   };
-
   return { state, deps, jobs, nextClassJobs, runJob };
 };
 

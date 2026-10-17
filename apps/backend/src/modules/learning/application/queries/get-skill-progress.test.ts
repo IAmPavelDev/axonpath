@@ -9,7 +9,6 @@ import type {
 } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { QuizRepository } from "@/modules/learning/domain/quiz/quiz.repository";
-import { NextClassOptionsState, SkillMode } from "@/prisma/generated";
 
 const unused = async (): Promise<never> => {
   throw new Error("not used in progress tests");
@@ -36,11 +35,9 @@ const makeFakeDeps = (options: {
           id: 42,
           userId: 7,
           topic: "SQL joins",
+          prompt: "",
           description: "",
           status: "ACTIVE",
-          mode: SkillMode.AUTOMATIC,
-          optionsState: NextClassOptionsState.NONE,
-          optionsStateAt: null,
         }
       : options.skill;
 
@@ -52,7 +49,7 @@ const makeFakeDeps = (options: {
     listByStatus: unused,
     settleStaleGenerating: async () => [],
     claimStaleInit: unused,
-    listStalePendingOptions: unused,
+    claimStaleFirstLesson: unused,
   };
   const classRepo: ClassRepository = {
     findQuestionCountsByClassIds: unused,
@@ -199,11 +196,9 @@ describe("makeGetSkillProgress", () => {
           id: 42,
           userId: 8,
           topic: "SQL joins",
+          prompt: "",
           description: "",
           status: "ACTIVE",
-          mode: SkillMode.AUTOMATIC,
-          optionsState: NextClassOptionsState.NONE,
-          optionsStateAt: null,
         },
       }),
     )(input);

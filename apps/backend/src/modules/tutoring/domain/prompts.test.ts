@@ -4,9 +4,9 @@ import {
   buildInitSkillPrompt,
   buildNextClassPrompt,
   buildQaAnswerPrompt,
-  buildSkillDescriptionPrompt,
+  buildSkillMetadataPrompt,
 } from "./prompts";
-import { DESCRIPTION_SYSTEM, GRADER_SYSTEM, QA_TUTOR_SYSTEM, TUTOR_SYSTEM } from "./personas";
+import { GRADER_SYSTEM, METADATA_SYSTEM, QA_TUTOR_SYSTEM, TUTOR_SYSTEM } from "./personas";
 
 /**
  * Phase 8 D6: author attribution is a test-asserted contract. Learner-typed
@@ -14,10 +14,10 @@ import { DESCRIPTION_SYSTEM, GRADER_SYSTEM, QA_TUTOR_SYSTEM, TUTOR_SYSTEM } from
  * labeled as Axon's. A builder that swaps or drops a label breaks here.
  */
 describe("author attribution (D6)", () => {
-  it("labels the typed topic as learner input in the description prompt", () => {
-    const prompt = buildSkillDescriptionPrompt("SQL joins");
-    expect(prompt).toContain("The learner typed this topic:");
-    expect(prompt).toContain('"""SQL joins"""');
+  it("labels the typed brief as learner input in the metadata prompt", () => {
+    const prompt = buildSkillMetadataPrompt("SQL joins for work");
+    expect(prompt).toContain("The learner described what they want to learn:");
+    expect(prompt).toContain('"""SQL joins for work"""');
   });
 
   it("labels topic + prior context by author in the init prompt", () => {
@@ -89,7 +89,7 @@ describe("author attribution (D6)", () => {
   });
 
   it("carries the attribution rule in every persona", () => {
-    for (const persona of [DESCRIPTION_SYSTEM, TUTOR_SYSTEM, QA_TUTOR_SYSTEM, GRADER_SYSTEM]) {
+    for (const persona of [METADATA_SYSTEM, TUTOR_SYSTEM, QA_TUTOR_SYSTEM, GRADER_SYSTEM]) {
       expect(persona).toContain("Attribution: every text you receive carries an author label.");
       expect(persona).toContain("never merge the two roles");
     }
@@ -199,15 +199,6 @@ describe("buildNextClassPrompt — target + mastery ledger", () => {
     review: [],
   };
 
-  it("makes an explicit learner target the lesson's center", () => {
-    const prompt = buildNextClassPrompt({
-      ...base,
-      target: "Master LEFT JOIN with real datasets",
-    });
-    expect(prompt).toContain('"""Master LEFT JOIN with real datasets"""');
-    expect(prompt).toContain("central learning target");
-  });
-
   it("renders the mastery ledger with tier labels and freshness notes", () => {
     const prompt = buildNextClassPrompt({
       ...base,
@@ -232,9 +223,8 @@ describe("buildNextClassPrompt — target + mastery ledger", () => {
     expect(prompt).toContain("Never reuse the earlier wording");
   });
 
-  it("omits both blocks when target and review are empty", () => {
+  it("omits the mastery ledger when review is empty", () => {
     const prompt = buildNextClassPrompt(base);
-    expect(prompt).not.toContain("central learning target");
     expect(prompt).not.toContain("Mastery ledger");
   });
 
@@ -242,7 +232,6 @@ describe("buildNextClassPrompt — target + mastery ledger", () => {
     const prompt = buildNextClassPrompt({
       ...base,
       lastTitle: undefined,
-      target: "Start from zero",
     });
     expect(prompt).toContain("Create the first lesson");
     expect(prompt).not.toContain("Previous lesson");

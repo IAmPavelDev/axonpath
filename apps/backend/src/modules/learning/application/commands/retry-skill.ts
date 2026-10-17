@@ -3,6 +3,10 @@ import { SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { SKILL_INIT_JOB, type SkillInitJobPayload } from "./create-skill";
+import {
+  SKILL_FIRST_LESSON_JOB,
+  type SkillFirstLessonJobPayload,
+} from "@/modules/tutoring/application/generate-first-lesson";
 
 export type RetrySkillDeps = {
   skillRepo: SkillRepository;
@@ -23,13 +27,18 @@ export type RetrySkillError =
 
 /**
  * Re-enter generation for a FAILED skill: flip it back to GENERATING and
- * re-enqueue the init job with the original create payload. Ownership is
- * checked here (NotOwned maps to 404 so existence is not leaked) and the
- * guard is explicitly FAILED-only: ACTIVE re-enters GENERATING only through
- * the adaptive loop (submit-quiz), never through a retry.
+ * re-enqueue the job that failed. Ownership is checked here (NotOwned maps
+ * to 404 so existence is not leaked) and the guard is explicitly
+ * FAILED-only: ACTIVE re-enters GENERATING only through the adaptive loop
+ * (submit-quiz) or the first-lesson acceptance, never through a retry.
  *
- * A retry is always safe to run: the init pipeline skips generation when any
- * class already exists, so a duplicate or repeated retry cannot corrupt an
+ * The failed stage follows from what already landed: a description on the
+ * row means the metadata stage succeeded and the first-lesson pipeline
+ * died — retry stage 2; otherwise the draft itself never arrived — retry
+ * stage 1 from the stored prompt.
+ *
+ * A retry is always safe to run: both pipelines no-op when their work
+ * already exists, so a duplicate or repeated retry cannot corrupt an
  * existing skill.
  */
 export const makeRetrySkill =
@@ -56,11 +65,18 @@ export const makeRetrySkill =
       status: SkillStatus.GENERATING,
     });
 
-    jobs.enqueue(SKILL_INIT_JOB, {
-      skillId: input.skillId,
-      userId: skill.userId,
-      topic: skill.topic,
-    } satisfies SkillInitJobPayload);
+    if (skill.description.length > 0) {
+      jobs.enqueue(SKILL_FIRST_LESSON_JOB, {
+        skillId: input.skillId,
+        userId: skill.userId,
+      } satisfies SkillFirstLessonJobPayload);
+    } else {
+      jobs.enqueue(SKILL_INIT_JOB, {
+        skillId: input.skillId,
+        userId: skill.userId,
+        prompt: skill.prompt,
+      } satisfies SkillInitJobPayload);
+    }
 
     return ok({ status: updated.status });
   };

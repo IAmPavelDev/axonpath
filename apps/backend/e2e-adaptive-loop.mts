@@ -86,8 +86,8 @@ if (signUp.status !== 200) {
 const token = signUp.json.idToken as string;
 console.log('SIGNUP_OK');
 
-// 2. skill.create — status must come back GENERATING (not DRAFT).
-const created = (await rpc('skill/create', { topic: TOPIC }, token)) as {
+// 2. skill.create with the learner prompt — status must come back GENERATING.
+const created = (await rpc('skill/create', { prompt: TOPIC }, token)) as {
   id: number;
   status: string;
 };
@@ -98,16 +98,34 @@ if (created.status !== 'GENERATING') {
 const skillId = created.id;
 
 try {
-  // 3. Poll until init flips the skill ACTIVE.
+  // 3. Poll until the metadata stage flips the skill ACTIVE (title +
+  //    description drafted, zero classes).
   await poll('skill ACTIVE', 180_000, async () => {
     const skill = (await rpc('skill/get', { id: skillId }, token)) as { status: string };
     return skill.status === 'ACTIVE' ? skill : null;
   });
   console.log('SKILL_ACTIVE_OK');
 
-  // 4. Class 0 exists and carries skillId (D8 contract).
+  // 3b. Acceptance: saving the draft arms the first-lesson job (the skill
+  //     returns to GENERATING until lesson 0 lands).
+  const edited = (await rpc(
+    'skill/edit',
+    { id: skillId, topic: 'SQL joins from scratch', description: 'Practice-oriented joins for everyday queries.' },
+    token,
+  )) as Json;
+  if (edited.status !== 'GENERATING') {
+    throw new Error(`expected GENERATING after acceptance edit, got ${String(edited.status)}`);
+  }
+  console.log('ACCEPT_OK');
+
+  // 4. Poll until the first-lesson stage settles ACTIVE with class 0.
+  await poll('first lesson ACTIVE', 300_000, async () => {
+    const skill = (await rpc('skill/get', { id: skillId }, token)) as { status: string };
+    if (skill.status !== 'ACTIVE') return null;
+    const classList0 = (await rpc('class/list', { skillId }, token)) as Array<Json>;
+    return classList0.length === 1 ? classList0 : null;
+  });
   const classList0 = (await rpc('class/list', { skillId }, token)) as Array<Json>;
-  if (classList0.length !== 1) throw new Error(`expected 1 class after init, got ${classList0.length}`);
   const class0 = (await rpc('class/get', { id: classList0[0]!.id }, token)) as Json;
   if (class0.skillId !== skillId) throw new Error(`class.get skillId=${class0.skillId}, expected ${skillId}`);
   console.log('CLASS0_OK:', class0.id, 'skillId present');

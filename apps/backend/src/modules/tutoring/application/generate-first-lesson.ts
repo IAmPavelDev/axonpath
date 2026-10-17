@@ -1,5 +1,6 @@
 import {
   generationFailed,
+  generationSkipped,
   generationStarted,
   generationSucceeded,
 } from "@/lib/generation-logger";
@@ -11,14 +12,9 @@ import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectoriz
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
   buildInitSkillPrompt,
-  buildSkillDescriptionPrompt,
   INIT_SKILL_SCHEMA,
-  SKILL_DESCRIPTION_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
-import {
-  DESCRIPTION_SYSTEM,
-  TUTOR_SYSTEM,
-} from "@/modules/tutoring/domain/personas";
+import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
 import {
   extractJsonObject,
@@ -35,7 +31,14 @@ import {
   type RecordAiAttempt,
 } from "@/modules/tutoring/infrastructure/ai-attempt.repo";
 
-export type ParsedInitSkill = {
+export const SKILL_FIRST_LESSON_JOB = "skill-first-lesson";
+
+export type SkillFirstLessonJobPayload = {
+  skillId: number;
+  userId: number;
+};
+
+export type ParsedFirstLesson = {
   classTitle: string;
   classContentMd: string;
   lessonSummary: string;
@@ -43,13 +46,11 @@ export type ParsedInitSkill = {
   contextSnippets: string[];
 };
 
-export type GenerateInitialSkillError =
+export type GenerateFirstLessonError =
   | { kind: "AiGenerationFailed"; detail?: string }
-  | { kind: "AiResponseInvalid"; detail?: string }
-  | { kind: "VectorUpsertFailed"; detail?: string }
-  | { kind: "VectorStoreUnavailable"; detail?: string };
+  | { kind: "AiResponseInvalid"; detail?: string };
 
-export type GenerateInitialSkillDeps = {
+export type GenerateFirstLessonDeps = {
   ai: AiPort;
   recordAiAttempt: RecordAiAttempt;
   retrieveContext: (input: {
@@ -69,124 +70,94 @@ export type GenerateInitialSkillDeps = {
   jobs: JobQueuePort;
 };
 
-export type GenerateInitialSkillInput = {
-  skillId: number;
-  userId: number;
-  topic: string;
-};
+export type GenerateFirstLessonInput = SkillFirstLessonJobPayload;
 
 /** The bound, dependency-complete use case — what the job registry consumes. */
-export type GenerateInitialSkill = (
-  input: GenerateInitialSkillInput,
-) => Promise<Result<void, GenerateInitialSkillError>>;
+export type GenerateFirstLesson = (
+  input: GenerateFirstLessonInput,
+) => Promise<Result<void, GenerateFirstLessonError>>;
 
 /**
- * The AI initialization pipeline for a freshly created GENERATING skill. Runs
- * in the background ("skill-init" job):
- *   1. Generate + persist the skill description.
- *   2. Retrieve the user's prior context (embed topic, semantic search) to
- *      personalize generation.
- *   3. Generate the initial class + quiz + lesson summary + context snippets.
- *   4. Audit SKILL_CREATED.
- *   5. Persist class, questions, and vectors (lessonSummary as AI_NEXT — the
+ * Stage 2 of the create-with-prompt flow (the "skill-first-lesson" job,
+ * armed by skill.edit when the user accepts the generated title/description
+ * — an ACTIVE skill with zero classes). Composes lesson 0 from the stored
+ * prompt (+ description) and the learner's prior-skill memory:
+ *   1. Retrieve the user's prior context (embed the brief, semantic search).
+ *   2. Generate the initial class + quiz + lesson summary + context snippets.
+ *   3. Audit CLASS_GENERATED.
+ *   4. Persist class, questions, and vectors (lessonSummary as AI_NEXT — the
  *      per-lesson memory unit — snippets as AI_INITIAL).
  *
- * Degradation rules: description failure -> skip description; retrieval
- * failure -> no personalization; generation/parse failure -> err. Status
- * lifecycle: success flips the skill ACTIVE; any failure flips it FAILED and
- * records ERROR_OCCURRED (the job handler logs the error itself).
+ * Degradation rules: retrieval failure -> no personalization;
+ * generation/parse failure -> err. Status lifecycle: success settles the
+ * skill ACTIVE; any failure settles FAILED and records ERROR_OCCURRED (the
+ * job handler logs the error itself). A lost job is re-armed by the
+ * skill-init sweeper, so the pipeline is safe to replay: an existing class
+ * short-circuits generation and merely heals the status.
  */
-export const makeGenerateInitialSkill = ({
-  recordAiAttempt,
-  ai,
-  retrieveContext,
-  skillRepo,
-  classRepo,
-  quizRepo,
-  eventRepo,
-  recordVectors,
-  chatModel,
-  jobs,
-}: GenerateInitialSkillDeps) => {
-  const attempt = async (
-    input: GenerateInitialSkillInput,
-  ): Promise<Result<void, GenerateInitialSkillError>> => {
-    // Retry guard: a previous attempt may have persisted classes before
-    // failing. Regenerating would violate UNIQUE(skillId, index) and leave
-    // the skill stuck GENERATING. If any class exists, skip generation and
-    // let the success path heal the skill to ACTIVE.
+export const makeGenerateFirstLesson =
+  ({
+    recordAiAttempt,
+    ai,
+    retrieveContext,
+    skillRepo,
+    classRepo,
+    quizRepo,
+    eventRepo,
+    recordVectors,
+    chatModel,
+    jobs,
+  }: GenerateFirstLessonDeps): GenerateFirstLesson =>
+  async (input) => {
+    const skill = await skillRepo.findById(input.skillId);
+    // The skill row is deleted only with its owner (cascade); a missing row
+    // means a replay after deletion — nothing to generate for.
+    if (!skill) {
+      return { ok: true, value: undefined };
+    }
+    const logCtx = {
+      pipeline: "skill_first_lesson",
+      skillId: input.skillId,
+      skillName: skill.topic.slice(0, 120),
+      userId: input.userId,
+    } as const;
+    generationStarted(logCtx);
+    const startedAt = Date.now();
+
+    // Replay guard: a previous attempt may have persisted the class before
+    // failing. Regenerating would violate UNIQUE(skillId, index) — settle
+    // the status and stop.
     const existing = await classRepo.findTopBySkill(input.skillId);
     if (existing !== null) {
+      await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+      generationSkipped(logCtx, {
+        durationMs: Date.now() - startedAt,
+        reason: "lesson 0 already exists",
+      });
       return { ok: true, value: undefined };
     }
 
-    // 1. Description (best-effort: failure yields "" and still updates).
-    const descriptionStartedAt = Date.now();
-    const descriptionResult = await ai.generateJson(
-      {
-        system: DESCRIPTION_SYSTEM,
-        prompt: buildSkillDescriptionPrompt(input.topic),
-      },
-      {
-        schemaName: "skill_description",
-        responseSchema: SKILL_DESCRIPTION_SCHEMA,
-      },
-    );
-    recordAiAttempt(
-      descriptionResult.ok
-        ? {
-            userId: input.userId,
-            operation: "skill_description",
-            outcome: "ok",
-            latencyMs: Date.now() - descriptionStartedAt,
-            promptTokens: descriptionResult.value.usage?.promptTokens,
-            completionTokens: descriptionResult.value.usage?.completionTokens,
-            rawChars: descriptionResult.value.raw.length,
-          }
-        : {
-            userId: input.userId,
-            operation: "skill_description",
-            ...outcomeForError(descriptionResult.error),
-            latencyMs: Date.now() - descriptionStartedAt,
-          },
-    );
-
-    let description = "";
-    if (descriptionResult.ok) {
-      try {
-        const parsed: unknown = extractJsonObject(descriptionResult.value.raw);
-        if (typeof parsed === "string") {
-          description = parsed.trim();
-        } else if (
-          typeof parsed === "object" &&
-          parsed !== null &&
-          "description" in parsed
-        ) {
-          const d = parsed.description;
-          if (typeof d === "string") description = d.trim();
-        }
-      } catch {
-        // glm-5.3-flash sometimes answers prose despite the JSON schema;
-        // the prose itself is the description.
-        description = descriptionResult.value.raw.trim();
-      }
-    }
-    await skillRepo.update(input.skillId, { description });
-
-    // 2. Personalization context (best-effort: failure -> no context).
+    // 1. Personalization context (best-effort: failure -> no context). The
+    //    learner's original brief is richer than the generated title.
+    const brief = skill.prompt.length > 0 ? skill.prompt : skill.topic;
     const priorContext = (
       await retrieveContext({
         userId: input.userId,
-        query: input.topic,
+        query: brief,
         excludeSkillId: input.skillId,
       })
     ).map((hit) => hit.textSnippet);
 
-    // 3. Generate the initial class + quiz + summary + snippets.
-    const prompt = buildInitSkillPrompt({
-      topic: input.topic,
+    // 2. Generate the initial class + quiz + summary + snippets. The
+    //    description (possibly user-edited at acceptance) carries the goal.
+    const goal =
+      skill.description.length > 0
+        ? `Axon drafted this description of the skill (the learner may have edited it):\n"""${skill.description}"""\n`
+        : "";
+    const prompt = `${buildInitSkillPrompt({
+      topic: brief,
       priorContext,
-    });
+    })}${goal}`;
     const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: TUTOR_SYSTEM, prompt },
@@ -200,14 +171,14 @@ export const makeGenerateInitialSkill = ({
         ...outcomeForError(generation.error),
         latencyMs: Date.now() - generationStartedAt,
       });
-      return { ok: false, error: generation.error };
+      return await fail(generation.error);
     }
-    let parsed: ParsedInitSkill;
+    let parsed: ParsedFirstLesson;
     try {
       // Named cast: untrusted model output; every field re-validated below.
       const raw = extractJsonObject(
         generation.value.raw,
-      ) as Partial<ParsedInitSkill>;
+      ) as Partial<ParsedFirstLesson>;
       parsed = {
         classTitle: raw.classTitle ?? "Unknown title",
         classContentMd: raw.classContentMd ?? "",
@@ -226,13 +197,10 @@ export const makeGenerateInitialSkill = ({
         rawChars: generation.value.raw.length,
         errorKind: error instanceof Error ? error.message : String(error),
       });
-      return {
-        ok: false,
-        error: {
-          kind: "AiResponseInvalid",
-          detail: error instanceof Error ? error.message : String(error),
-        },
-      };
+      return await fail({
+        kind: "AiResponseInvalid",
+        detail: error instanceof Error ? error.message : String(error),
+      });
     }
 
     // A lesson without questions is a dead end — retry-skill is the only
@@ -247,13 +215,10 @@ export const makeGenerateInitialSkill = ({
         rawChars: generation.value.raw.length,
         errorKind: "model returned no questions",
       });
-      return {
-        ok: false,
-        error: {
-          kind: "AiResponseInvalid",
-          detail: "model returned no questions",
-        },
-      };
+      return await fail({
+        kind: "AiResponseInvalid",
+        detail: "model returned no questions",
+      });
     }
 
     recordAiAttempt({
@@ -266,13 +231,14 @@ export const makeGenerateInitialSkill = ({
       rawChars: generation.value.raw.length,
     });
 
-    // 4. Audit SKILL_CREATED with the full request + response for debugging.
+    // 3. Audit CLASS_GENERATED with the full request + response for
+    //    debugging; the usage report reads the nextClass bucket from it.
     await eventRepo.record({
       skillId: input.skillId,
       userId: input.userId,
-      type: EventType.SKILL_CREATED,
+      type: EventType.CLASS_GENERATED,
       payload: {
-        action: "init_skill",
+        action: "first_lesson",
         prompt,
         system: TUTOR_SYSTEM,
         model: chatModel,
@@ -281,8 +247,8 @@ export const makeGenerateInitialSkill = ({
       },
     });
 
-    // 5. Persist class + questions in one transaction — a crash can never
-    // strand a class without questions. Vectors stay best-effort below.
+    // 4. Persist class + questions in one transaction — a crash can never
+    //    strand a class without questions. Vectors stay best-effort below.
     const createdClass = await classRepo.createWithQuestions(
       {
         skillId: input.skillId,
@@ -323,7 +289,7 @@ export const makeGenerateInitialSkill = ({
         vectorInputs.map((vector) => vector.text),
       );
       if (!embeddings.ok) {
-        return { ok: false, error: embeddings.error };
+        return await fail(embeddings.error);
       }
       const tokenCounts = embeddingTokenCounts(
         embeddings.value.usage,
@@ -341,56 +307,33 @@ export const makeGenerateInitialSkill = ({
           tokenCount: tokenCounts[i],
         }),
       );
+      // Best-effort: the lesson is fully persisted by now — a vector-store
+      // outage must not fail the skill (the sweeper re-arms nothing for
+      // memory; QA/personalization degrade gracefully without the vectors).
       await recordVectors(vectors);
     }
 
-    return { ok: true, value: undefined };
-  };
-
-  return async (
-    input: GenerateInitialSkillInput,
-  ): Promise<Result<void, GenerateInitialSkillError>> => {
-    generationStarted({
-      pipeline: "skill_init",
-      skillId: input.skillId,
-      skillName: input.topic,
-      userId: input.userId,
+    await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+    generationSucceeded(logCtx, {
+      durationMs: Date.now() - startedAt,
+      classId: createdClass.id,
+      className: parsed.classTitle,
     });
-    const startedAt = Date.now();
-    const result = await attempt(input);
-    if (result.ok) {
-      await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
-      generationSucceeded(
-        {
-          pipeline: "skill_init",
-          skillId: input.skillId,
-          skillName: input.topic,
-          userId: input.userId,
-        },
-        { durationMs: Date.now() - startedAt },
-      );
-    } else {
+    return { ok: true, value: undefined };
+
+    async function fail(error: GenerateFirstLessonError) {
       await skillRepo.update(input.skillId, { status: SkillStatus.FAILED });
-      generationFailed(
-        {
-          pipeline: "skill_init",
-          skillId: input.skillId,
-          skillName: input.topic,
-          userId: input.userId,
-        },
-        {
-          durationMs: Date.now() - startedAt,
-          errorKind: result.error.kind,
-          errorDetail: result.error.detail,
-        },
-      );
+      generationFailed(logCtx, {
+        durationMs: Date.now() - startedAt,
+        errorKind: error.kind,
+        errorDetail: error.detail,
+      });
       await eventRepo.record({
         skillId: input.skillId,
         userId: input.userId,
         type: EventType.ERROR_OCCURRED,
-        payload: { action: "init_skill", error: result.error },
+        payload: { action: "first_lesson", error },
       });
+      return { ok: false as const, error };
     }
-    return result;
   };
-};

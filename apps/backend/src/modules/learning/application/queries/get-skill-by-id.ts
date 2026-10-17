@@ -1,5 +1,4 @@
 import { err, ok, type Result } from "@/modules/platform/result";
-import type { SkillMode } from "@/prisma/generated";
 import type { SkillError } from "@/modules/learning/domain/skill/skill";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 
@@ -10,7 +9,6 @@ export type GetSkillByIdOutput = {
   topic: string;
   description: string;
   status: string;
-  mode: SkillMode;
 };
 
 export const makeGetSkillById =

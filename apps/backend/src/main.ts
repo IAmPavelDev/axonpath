@@ -17,7 +17,6 @@ const startServer = async (): Promise<void> => {
         container.nextClassSweeper.stop();
         container.classQaSweeper.stop();
         container.skillInitSweeper.stop();
-        container.skillOptionsSweeper.stop();
         container.gradingSweeper.stop();
         await app.close();
         app.log.info("Server closed successfully");
@@ -43,7 +42,6 @@ const startServer = async (): Promise<void> => {
     container.nextClassSweeper.start();
     container.classQaSweeper.start();
     container.skillInitSweeper.start();
-    container.skillOptionsSweeper.start();
     container.gradingSweeper.start();
     container.recommendationsSweeper.start();
     container.classClipsSweeper.start();

@@ -20,7 +20,6 @@ export const workerHandler = async (): Promise<void> => {
   await container.nextClassSweeper.tickOnce();
   await container.classQaSweeper.tickOnce();
   await container.skillInitSweeper.tickOnce();
-  await container.skillOptionsSweeper.tickOnce();
   await container.gradingSweeper.tickOnce();
   await container.recommendationsSweeper.tickOnce();
   await container.classClipsSweeper.tickOnce();

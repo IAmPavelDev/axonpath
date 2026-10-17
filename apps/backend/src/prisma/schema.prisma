@@ -79,31 +79,6 @@ enum SkillStatus {
   FAILED
 }
 
-/**
- * How the next lesson comes into being. AUTOMATIC (default): submit-quiz
- * triggers the adaptive pipeline, which composes the next lesson on its own.
- * MANUAL: completing a lesson (or the skill's creation) produces three ranked
- * candidate learning targets; the learner picks, edits, or writes one and the
- * pipeline composes the lesson around that chosen direction.
- */
-enum SkillMode {
-  AUTOMATIC
-  MANUAL
-}
-
-/**
- * Lifecycle of the MANUAL-mode candidate-target set. NONE = nothing pending
- * and nothing proposed; PENDING = the options job is generating (or queued);
- * READY = candidates are readable; FAILED = generation failed (client can
- * refresh). optionsStateAt timestamps the last state change so the client
- * can tell a fresh PENDING from a stranded one.
- */
-enum NextClassOptionsState {
-  NONE
-  PENDING
-  READY
-  FAILED
-}
 
 enum QuestionType {
   MULTIPLE_CHOICE
@@ -137,13 +112,12 @@ model Skill {
   user      User            @relation(fields: [userId], references: [id])
   userId    Int
   topic     String          @db.VarChar(255)
+  /** The learner's original freeform brief; title/description are generated from it. */
+  prompt    String          @default("") @db.Text
   description String      @default("") @db.Text
   status    SkillStatus     @default(DRAFT)
-  mode      SkillMode       @default(AUTOMATIC)
-  optionsState    NextClassOptionsState @default(NONE)
   recommendationsStatus RecommendationsStatus?
   recommendationsAttempts Int        @default(0)
-  optionsStateAt  DateTime?
   requestId Int?            @unique
   classes   Class[]
   questions Question[]
@@ -151,7 +125,6 @@ model Skill {
   progress  SkillProgress[]
   events    Event[]
   vectors   Vector[]
-  nextClassOptions NextClassOption[]
   recommendations  SkillRecommendation[]
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -383,43 +356,14 @@ enum NextClassJobStatus {
 
 /**
  * Durable marker that a skill is due for its next lesson. submit-quiz writes
- * it (AUTOMATIC mode) as does skill.create-class (MANUAL mode, with the
- * learner-chosen target); the minute sweeper or the instant in-process job
- * claims it. Deliberately FK-free: infrastructure bookkeeping, not domain
- * data (skills are never deleted), and the marker must outlive nothing but a
- * generation attempt.
+ * it; the minute sweeper or the instant in-process job claims it. Deliberately
+ * FK-free: infrastructure bookkeeping, not domain data (skills are never
+ * deleted), and the marker must outlive nothing but a generation attempt.
  */
-
-/**
- * One ranked candidate learning target for a MANUAL-mode skill's next
- * lesson: a 1-2 sentence description of what to learn next, generated in
- * bulk (3 per round) when the newest lesson is completed, the skill is
- * created in MANUAL mode, or an AUTOMATIC skill switches to MANUAL. The set
- * is replaced wholesale on every generation and consumed (cleared) when the
- * learner commits a direction via skill.create-class. rank 1 is the model's
- * best pick.
- */
-model NextClassOption {
-  id        Int      @id @default(autoincrement())
-  skill     Skill    @relation(fields: [skillId], references: [id])
-  skillId   Int
-  rank      Int
-  text      String   @db.Text
-  createdAt DateTime @default(now())
-
-  @@index([skillId, rank])
-}
-
 model NextClassJob {
   id        Int                @id @default(autoincrement())
   skillId   Int                @unique
   userId    Int
-  /**
-   * Learner-chosen direction for MANUAL-mode generation (skill.create-class).
-   * Durable so a sweeper-recovered run still composes the lesson the learner
-   * asked for; null = automatic next-lesson generation.
-   */
-  target    String?
   attempts  Int                @default(0)
   claimedAt DateTime?
   status    NextClassJobStatus @default(PENDING)
@@ -438,8 +382,7 @@ model AiAttempt {
   id               Int      @id @default(autoincrement())
   userId           Int?
   /**
-   * init_skill | skill_description | next_class | class_options |
-   * grade_open | qa_answer
+   * init_skill | skill_metadata | next_class | grade_open | qa_answer
    */
   operation        String
   /**

@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { makeCreateSkill, SKILL_INIT_JOB } from "./create-skill";
-import { SkillMode, SkillStatus } from "@/prisma/generated";
+import { SkillStatus } from "@/prisma/generated";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { ok } from "@/modules/platform/result";
 
-/** Test seam: in-memory skill repo + job queue capturing creation and enqueue. */
+const PROMPT = "I want to learn SQL joins for work — I know basic SELECTs.";
 const makeFakeDeps = () => {
-  const createInputs: unknown[] = [];
+
+/** Test seam: in-memory skill repo + job queue capturing creation and enqueue. */
+  const createInputs: Parameters<SkillRepository["create"]>[0][] = [];
   const enqueued: { jobName: string; payload: unknown }[] = [];
 
   const skillRepo: SkillRepository = {
@@ -31,7 +33,7 @@ const makeFakeDeps = () => {
     claimStaleInit: async () => {
       throw new Error("not used in create tests");
     },
-    listStalePendingOptions: async () => {
+    claimStaleFirstLesson: async () => {
       throw new Error("not used in create tests");
     },
   };
@@ -46,30 +48,35 @@ const makeFakeDeps = () => {
 };
 
 describe("makeCreateSkill", () => {
-  it("creates the shell in GENERATING and enqueues skill-init", async () => {
+  it("creates the shell in GENERATING with the prompt and enqueues skill-init", async () => {
     const { deps, createInputs, enqueued } = makeFakeDeps();
     const createSkill = makeCreateSkill(deps);
 
-    const result = await createSkill({
-      userId: 1,
-      topic: "SQL joins",
-      mode: SkillMode.AUTOMATIC,
-    });
+    const result = await createSkill({ userId: 1, prompt: PROMPT });
 
     expect(result).toEqual(ok({ id: 42, status: SkillStatus.GENERATING }));
     expect(createInputs).toEqual([
       {
         userId: 1,
-        topic: "SQL joins",
+        prompt: PROMPT,
+        topic: PROMPT.slice(0, 255),
         status: SkillStatus.GENERATING,
-        mode: SkillMode.AUTOMATIC,
       },
     ]);
     expect(enqueued).toEqual([
       {
         jobName: SKILL_INIT_JOB,
-        payload: { skillId: 42, userId: 1, topic: "SQL joins" },
+        payload: { skillId: 42, userId: 1, prompt: PROMPT },
       },
     ]);
+  });
+
+  it("clips the placeholder topic to the topic column width", async () => {
+    const { deps, createInputs } = makeFakeDeps();
+    const createSkill = makeCreateSkill(deps);
+
+    await createSkill({ userId: 1, prompt: "x".repeat(400) });
+
+    expect(createInputs[0]?.topic).toHaveLength(255);
   });
 });

@@ -12,7 +12,7 @@ import type {
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { AiPort } from "@/modules/tutoring/ports";
-import { NextClassOptionsState, SkillMode, VectorSource } from "@/prisma/generated";
+import { VectorSource } from "@/prisma/generated";
 
 const CLASS_ROW = {
   id: 5,
@@ -25,11 +25,9 @@ const SKILL = {
   id: 10,
   userId: 7,
   topic: "SQL",
+  prompt: "",
   description: "",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
-  optionsState: NextClassOptionsState.NONE,
-  optionsStateAt: null,
 };
 
 /** Test seam: scriptable dedup + embedding failures, capturing recordVectors. */

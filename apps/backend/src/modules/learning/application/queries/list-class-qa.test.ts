@@ -6,8 +6,6 @@ import type { ClassQaEntity } from "@/modules/learning/domain/class-qa/class-qa"
 import type { ClassQaRepository } from "@/modules/learning/domain/class-qa/class-qa.repository";
 import {
   ClassQaStatus,
-  NextClassOptionsState,
-  SkillMode,
 } from "@/prisma/generated";
 
 const CLASS = {
@@ -21,11 +19,9 @@ const SKILL = {
   id: 10,
   userId: 7,
   topic: "SQL",
+  prompt: "",
   description: "",
   status: "ACTIVE",
-  mode: SkillMode.AUTOMATIC,
-  optionsState: NextClassOptionsState.NONE,
-  optionsStateAt: null,
 };
 
 const block = (
@@ -106,9 +102,7 @@ const makeDeps = (
     claimStaleInit: async () => {
       throw new Error("not used in list tests");
     },
-    listStalePendingOptions: async () => {
-      throw new Error("not used in list tests");
-    },
+    claimStaleFirstLesson: async () => [],
   };
 
   const qaRepo: ClassQaRepository = {

@@ -81,7 +81,7 @@ if (signUp.status !== 200) {
 bearer = signUp.json.idToken as string;
 console.log('SIGNUP_OK');
 
-const created = await client.skill.create({ topic: TOPIC });
+const created = await client.skill.create({ prompt: TOPIC });
 console.log('CREATE_OK:', JSON.stringify(created));
 const skillId = created.id;
 
@@ -106,6 +106,23 @@ try {
     return skill.status === 'ACTIVE' ? skill : null;
   });
   console.log('SKILL_ACTIVE_OK');
+
+  // 2b. Acceptance: saving the draft arms the first-lesson job; wait for it
+  //     to settle ACTIVE with class 0 (its boot also vectorizes the class
+  //     conspect into CONTENT_CHUNK vectors via the background job).
+  const edited = await client.skill.edit({
+    id: skillId,
+    topic: 'SQL joins from scratch',
+    description: 'Practice-oriented joins for everyday queries.',
+  });
+  console.log('ACCEPT_OK:', JSON.stringify(edited));
+
+  await poll('first lesson ACTIVE', 300_000, async () => {
+    const skill = await client.skill.get({ id: skillId });
+    if (skill.status !== 'ACTIVE') return null;
+    const classList = await client.class.list({ skillId });
+    return classList.length === 1 ? classList : null;
+  });
 
   const classList = await client.class.list({ skillId });
   const class0 = await client.class.get({ id: classList[0]!.id });
