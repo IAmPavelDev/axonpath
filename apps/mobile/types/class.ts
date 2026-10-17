@@ -13,6 +13,8 @@ export interface ClassById {
   skillId: number;
   title: string;
   contentMd: string;
+  /** Lesson base speech language (BCP-47); null for pre-tagging lessons. */
+  baseLanguage?: string | null;
   /** Video enrichment: PENDING gates the lesson, SKIPPED renders plain. */
   clipStatus?: 'PENDING' | 'READY' | 'SKIPPED';
   videoClips?: ClassVideoClip[];

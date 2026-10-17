@@ -14,6 +14,7 @@ import {
   buildInitSkillPrompt,
   INIT_SKILL_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
+import { validateLessonLanguages } from "@/modules/tutoring/domain/lesson-langs";
 import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
 import {
@@ -41,6 +42,8 @@ export type SkillFirstLessonJobPayload = {
 export type ParsedFirstLesson = {
   classTitle: string;
   classContentMd: string;
+  baseLanguage: string;
+  contentLanguages: string[];
   lessonSummary: string;
   questions: GeneratedQuestion[];
   contextSnippets: string[];
@@ -182,12 +185,22 @@ export const makeGenerateFirstLesson =
       parsed = {
         classTitle: raw.classTitle ?? "Unknown title",
         classContentMd: raw.classContentMd ?? "",
+        baseLanguage: raw.baseLanguage ?? "",
+        contentLanguages: Array.isArray(raw.contentLanguages)
+          ? raw.contentLanguages.filter((l): l is string => typeof l === "string")
+          : [],
         lessonSummary: raw.lessonSummary ?? "",
         questions: (Array.isArray(raw.questions) ? raw.questions : [])
           .map(toGeneratedQuestion)
           .filter((q): q is GeneratedQuestion => q !== null),
         contextSnippets: raw.contextSnippets ?? [],
       };
+      const langViolation = validateLessonLanguages(
+        parsed.classContentMd,
+        parsed.baseLanguage,
+        parsed.contentLanguages,
+      );
+      if (langViolation) throw new Error(langViolation);
     } catch (error) {
       recordAiAttempt({
         userId: input.userId,
@@ -246,15 +259,13 @@ export const makeGenerateFirstLesson =
         response: generation.value.raw,
       },
     });
-
-    // 4. Persist class + questions in one transaction — a crash can never
-    //    strand a class without questions. Vectors stay best-effort below.
     const createdClass = await classRepo.createWithQuestions(
       {
         skillId: input.skillId,
         index: 0,
         title: parsed.classTitle,
         contentMd: parsed.classContentMd,
+        baseLanguage: parsed.baseLanguage,
         aiModel: chatModel,
       },
       parsed.questions.map((question) => ({

@@ -126,13 +126,22 @@ export class KokoroDriver {
 
   constructor(private readonly hooks: KokoroDriverHooks) {}
 
-  /** Starts reading `plan` from global word `fromWord`. Throws when engine
+  /** Starts reading the English units of `plan` from global word `fromWord`
+   * until `untilWord` (exclusive) — the orchestrator hands the driver one
+   * English run at a time; other languages play on the system engine. The
+   * language filter is defense in depth on top of that. Throws when engine
    * init or synthesis fails — the caller falls back to the system engine. */
-  async start(plan: SpeechPlan, fromWord: number): Promise<void> {
+  async start(
+    plan: SpeechPlan,
+    fromWord: number,
+    untilWord: number = Number.POSITIVE_INFINITY,
+  ): Promise<void> {
     const token = ++this.runToken;
     this.player?.pause();
     this.plan = plan;
-    this.units = buildUnits(plan);
+    this.units = buildUnits(plan).filter(
+      (u) => u.lang === 'en' && u.firstGlobal < untilWord,
+    );
     if (this.units.length === 0) {
       this.hooks.onDone();
       return;

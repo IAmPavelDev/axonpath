@@ -1,3 +1,4 @@
+import { stripLanguageMarkers } from '@/lib/conspect-speech/lang-markers';
 import { Markdown, type RenderFunction } from 'react-native-markdown-x';
 import { highlightSpans, resolveLanguage, type Scheme } from '@/lib/code-highlight';
 import { FONTS, THEME } from '@/lib/theme';
@@ -342,6 +343,9 @@ export const ConspectMarkdown: FC<{
   /** When set, prose paragraphs gain the native selection item "Ask AI". */
   selectionAsk?: SelectionAsk;
 }> = ({ md, disableLinks = false, selectionAsk }) => {
+  // Speech-language markers are read-aloud metadata; no rendered surface
+  // may ever show them (QA answers arrive tagged from the tutor).
+  const visible = stripLanguageMarkers(md);
   const { colorScheme } = useColorScheme();
   const scheme = colorScheme ?? 'light';
   const styles = useMemo(() => makeStyles(scheme), [scheme]);
@@ -352,7 +356,7 @@ export const ConspectMarkdown: FC<{
 
   return (
     <Markdown styles={styles} renderFunctions={renderFunctions}>
-      {md}
+      {visible}
     </Markdown>
   );
 };

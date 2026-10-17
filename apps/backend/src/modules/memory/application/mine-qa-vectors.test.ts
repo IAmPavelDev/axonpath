@@ -18,6 +18,7 @@ const CLASS_ROW = {
   index: 2,
   title: "Joins",
   contentMd: "## Intro",
+  baseLanguage: null,
 };
 
 const answeredBlock = (overrides: Partial<ClassQaEntity> = {}): ClassQaEntity => ({

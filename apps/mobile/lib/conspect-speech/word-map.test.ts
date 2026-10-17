@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { splitConspectChunks } from '../conspect-chunks';
 import type { SpeechPlan } from './word-map';
-import { buildSpeechPlan, findChunkForWord, localWordForChar, stripLeadingH1 } from './word-map';
+import { buildLangRuns,
+  buildSpeechPlan, findChunkForWord, localWordForChar, stripLeadingH1 } from './word-map';
 /** Slice a word's text back out of its chunk's raw markdown. */
 const wordText = (md: string, plan: SpeechPlan, index: number) => {
   const word = plan.words[index];
@@ -115,5 +116,42 @@ describe('buildSpeechPlan', () => {
     });
     expect(findChunkForWord(plan, -1)).toBeNull();
     expect(findChunkForWord(plan, plan.words.length)).toBeNull();
+  });
+});
+
+describe('language markers', () => {
+  it('strips marker syntax from spoken words and chunk text', () => {
+    const plan = buildSpeechPlan('Пояснення: [[lang:en]]Hello![[/lang]] Далі українською.');
+    expect(plan.words.map((w) => plan.chunks[w.chunk].text.slice(w.chunkStart, w.chunkEnd)).join(' '))
+      .not.toContain('[[');
+    expect(plan.chunks.some((c) => c.text.includes('Hello'))).toBe(true);
+  });
+
+  it('forces a chunk boundary at a language switch', () => {
+    const plan = buildSpeechPlan('Пояснення українською [[lang:en]]Good morning![[/lang]] продовження українською.');
+    const langs = plan.chunks.map((c) => c.lang);
+    expect(langs).toEqual([null, 'en', null]);
+  });
+
+  it('tags English chunks and leaves untagged chunks as the base language', () => {
+    const plan = buildSpeechPlan('[[lang:en]]Say hello.[[/lang]] І пояснення.', 'uk');
+    expect(plan.chunks.map((c) => c.lang)).toEqual(['en', 'uk']);
+  });
+
+  it('builds runs: kokoro for English, system for everything else', () => {
+    const plan = buildSpeechPlan('A [[lang:en]]B[[/lang]] C', 'uk');
+    const runs = buildLangRuns(plan);
+    expect(runs.map((r) => [r.engine, r.lang])).toEqual([
+      ['system', 'uk'],
+      ['kokoro', 'en'],
+      ['system', 'uk'],
+    ]);
+    expect(runs[0].from).toBe(0);
+    expect(runs[runs.length - 1].until).toBe(plan.words.length);
+  });
+
+  it('routes everything to system when kokoro is disabled', () => {
+    const plan = buildSpeechPlan('A [[lang:en]]B[[/lang]] C', 'uk');
+    expect(buildLangRuns(plan, true).every((r) => r.engine === 'system')).toBe(true);
   });
 });

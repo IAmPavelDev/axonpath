@@ -141,6 +141,9 @@ model Class {
   index     Int
   title     String     @db.VarChar(255)
   contentMd String     @db.Text
+  /** Lesson base speech language (BCP-47, e.g. "uk") from generation; null
+   * for lessons generated before language tagging existed. */
+  baseLanguage String?
   aiModel   String?
   vectors   Vector[]
   questions Question[]

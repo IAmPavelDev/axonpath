@@ -335,6 +335,15 @@ surfaces as the preparing state above.
   `global.css` (NativeWind vars) kept in lockstep via the `theme:check` script. Conspects:
   markdown rendering, karaoke read-aloud, syntax-highlighted code, selectable text
   (`components/class/`, `lib/conspect-markdown.tsx`).
+  Read-aloud (2026-10-18): mixed-language lessons tag speech runs at
+  generation — the tutor emits `[[lang:xx]]…[[/lang]]` markers plus required
+  `baseLanguage`/`contentLanguages` JSON fields (validated post-parse,
+  retryable) — and the mobile player routes English runs to the bundled
+  Kokoro-82M engine and everything else to the system engine with the chunk
+  language as a voice hint (`lib/conspect-speech/`, `hooks/use-conspect-speech.ts`).
+  Markers never render: stripped in `ClassConspect`, `ConspectMarkdown`, and
+  QA excerpts. The 152 MB Kokoro model ships in EAS builds via `.easignore`
+  (EAS reads it instead of `.gitignore`; the model stays out of git).
 
 ## 7. Environment & config
 

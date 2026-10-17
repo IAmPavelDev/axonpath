@@ -106,6 +106,7 @@ export type LoopHarness = {
         index: number;
         title: string;
         contentMd: string;
+        baseLanguage: string | null;
       }
     >;
     questions: Map<number, NewQuestion & { id: number }>;
@@ -153,6 +154,8 @@ const METADATA_RAW = JSON.stringify({
 const INIT_JSON = JSON.stringify({
   classTitle: "SQL joins from zero",
   classContentMd: "## Introduction\nMeet the join.",
+  baseLanguage: "en",
+  contentLanguages: ["en"],
   lessonSummary:
     "This lesson introduced inner and left joins with small datasets.",
   questions: [
@@ -169,6 +172,8 @@ const INIT_JSON = JSON.stringify({
 const NEXT_JSON = JSON.stringify({
   classTitle: "Joins deep dive",
   classContentMd: "## Introduction\nOuter joins in practice.",
+  baseLanguage: "en",
+  contentLanguages: ["en"],
   lessonSummary: "The learner practiced outer joins and result filtering.",
   questions: [
     {
@@ -211,6 +216,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         index: number;
         title: string;
         contentMd: string;
+        baseLanguage: string | null;
       }
     >(),
     questions: new Map<number, NewQuestion & { id: number }>(),
@@ -436,6 +442,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         index: cls.index,
         title: cls.title,
         contentMd: cls.contentMd,
+        baseLanguage: cls.baseLanguage,
       });
       for (const question of questions) {
         const questionId = ++questionIdSeq;
@@ -484,6 +491,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
             index: row.index,
             title: row.title,
             contentMd: row.contentMd,
+            baseLanguage: row.baseLanguage,
           }
         : null;
     },

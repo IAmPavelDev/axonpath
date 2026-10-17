@@ -13,7 +13,13 @@ export const makeGetClassList =
 
 export type GetClassByIdDeps = { classRepo: ClassRepository };
 export type GetClassByIdInput = { classId: number };
-export type GetClassByIdOutput = { id: number; skillId: number; title: string; contentMd: string };
+export type GetClassByIdOutput = {
+  id: number;
+  skillId: number;
+  title: string;
+  contentMd: string;
+  baseLanguage: string | null;
+};
 
 export const makeGetClassById =
   ({ classRepo }: GetClassByIdDeps) =>

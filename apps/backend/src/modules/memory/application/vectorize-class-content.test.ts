@@ -20,6 +20,7 @@ const CLASS_ROW = {
   index: 2,
   title: "Joins",
   contentMd: "## Intro\nMeet the join.\n\n## Left join\nKeeps left rows.",
+  baseLanguage: null,
 };
 const SKILL = {
   id: 10,

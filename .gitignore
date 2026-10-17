@@ -65,5 +65,10 @@ backups/
 dependabot-alerts*/
 reports/
 
-# Kokoro int8 TTS model — 152MB local asset, ships via EAS build, not git
+# Kokoro int8 TTS model — 152MB local asset. Kept out of git here, but
+# shipped via EAS cloud builds: .easignore (EAS reads it INSTEAD of this
+# file) does not ignore the model dir. Update both files together.
 apps/mobile/android/app/src/main/assets/
+
+# Local EAS build output (internal-distribution APK)
+apps/mobile/axon-preview.apk

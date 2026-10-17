@@ -1,7 +1,11 @@
+import { stripLanguageMarkers } from '@/lib/conspect-speech/lang-markers';
 import { chunkExcerpt, splitConspectChunks } from '@/lib/conspect-chunks';
 import { ConspectMarkdown } from '@/lib/conspect-markdown';
 import { HighlightedChunk } from '@components/class/HighlightedChunk';
-import { stripLeadingH1, type SpeechPlan } from '@/lib/conspect-speech/word-map';
+import {
+  stripLeadingH1,
+  type SpeechPlan,
+} from '@/lib/conspect-speech/word-map';
 import type { QaRenderItem } from '@/hooks/use-class-qa';
 import type { ClassQaBlock } from '@/types/class';
 import { VideoPlayerCard } from '@components/video/VideoPlayerCard';
@@ -75,7 +79,9 @@ export const ClassConspect: FC<Props> = ({
 }) => {
   // The screen header already carries the lesson title; a leading h1 in
   // the body would repeat it.
-  const contentMd = stripLeadingH1(raw);
+  // Speech-language markers are metadata for read-aloud; the reader must
+  // never show them.
+  const contentMd = stripLanguageMarkers(stripLeadingH1(raw));
   const chunks = useMemo(() => splitConspectChunks(contentMd), [contentMd]);
 
   // Stale anchors (server rows whose chunk no longer exists) render after

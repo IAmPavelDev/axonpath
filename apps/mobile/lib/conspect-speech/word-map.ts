@@ -3,14 +3,16 @@
  * reads plus the mapping needed to highlight each word as it is spoken.
  *
  * Offsets are keyed to strings this module produces: chunk strings come from
- * `splitConspectChunks` — the same strings `ClassConspect` renders — so a
- * word's `[chunkStart, chunkEnd)` highlights directly against the rendered
- * markdown of its chunk. `onBoundary` char offsets map onto `SpeechChunk`.
+ * `splitConspectChunks` (language markers stripped) — the same strings
+ * `ClassConspect` renders — so a word's `[chunkStart, chunkEnd)` highlights
+ * directly against the rendered markdown of its chunk. `onBoundary` char
+ * offsets map onto `SpeechChunk`.
  *
  * Fully local (expo-speech): no audio file exists, word timings arrive live
  * while speaking; the plan is the shared coordinate space for that mapping.
  */
 import { splitConspectChunks } from '../conspect-chunks';
+import { stripWithSpans, type LangSpan } from './lang-markers';
 
 /** ClassConspect strips a leading h1 before chunking; speech must see the same. */
 export const stripLeadingH1 = (md: string): string => md.replace(/^#[^\n]+\n+/, '');
@@ -30,6 +32,11 @@ export type SpeechChunk = {
   firstWord: number;
   /** Char offset of each word inside `text` (parallel to its word range). */
   starts: number[];
+  /** Speech language covering the whole chunk: an explicit `[[lang:]]` tag,
+   * the lesson's `baseLanguage` for untagged text, or null when unknown.
+   * Chunks never mix: a language switch forces a boundary, so one utterance
+   * always reaches one engine in one voice. */
+  lang: string | null;
 };
 
 export type SpeechPlan = {
@@ -85,15 +92,24 @@ const dropUnderscoreRuns = (line: string, drop: (index: number) => void): void =
   }
 };
 
-type Token = { start: number; end: number; text: string };
+type Token = { start: number; end: number; text: string; lang: string | null };
 
 /**
- * Speakable whitespace tokens of one chunk, with offsets into the chunk's raw
- * markdown. Markdown syntax chars are masked out; kept punctuation rides its
- * word so the engine still hears sentence pauses. Fence chunks → no tokens.
+ * Speakable whitespace tokens of one chunk, with offsets into the chunk's
+ * marker-stripped markdown. Markdown syntax chars are masked out; kept
+ * punctuation rides its word so the engine still hears sentence pauses.
+ * Fence chunks → no tokens.
  */
-const chunkTokens = (chunkMd: string): Token[] => {
+const chunkTokens = (chunkMd: string, spans: LangSpan[]): Token[] => {
   if (FENCE_CHUNK.test(chunkMd)) return [];
+  // Spans are document-ordered; tokens are emitted left-to-right, so one
+  // cursor answers each token's language without rescanning.
+  let spanIdx = 0;
+  const langAt = (start: number): string | null => {
+    while (spanIdx < spans.length && spans[spanIdx].end <= start) spanIdx++;
+    const span = spans[spanIdx];
+    return span && start >= span.start ? span.lang : null;
+  };
   const mask = new Uint8Array(chunkMd.length);
   let lineStart = 0;
 
@@ -142,7 +158,7 @@ const chunkTokens = (chunkMd: string): Token[] => {
     }
     let j = i;
     while (j < chunkMd.length && !mask[j] && !/\s/.test(chunkMd[j])) j++;
-    tokens.push({ start: i, end: j, text: chunkMd.slice(i, j) });
+    tokens.push({ start: i, end: j, text: chunkMd.slice(i, j), lang: langAt(i) });
     i = j;
   }
   return tokens;
@@ -151,18 +167,24 @@ const chunkTokens = (chunkMd: string): Token[] => {
 /**
  * Builds the plan: words per chunk (mask tokens), then sentence-bounded
  * utterance chunks within the per-utterance char target. Each chunk starts a
- * fresh utterance, which also gives natural pauses between blocks.
+ * fresh utterance, which also gives natural pauses between blocks. A language
+ * switch (tag or untagged↔tagged) forces a boundary too, so every utterance
+ * reaches one engine in one voice. Marker syntax is stripped before
+ * tokenizing; untagged text takes `baseLanguage` when the lesson declares one.
  */
-export const buildSpeechPlan = (md: string): SpeechPlan => {
+export const buildSpeechPlan = (md: string, baseLanguage?: string | null): SpeechPlan => {
   const chunkMds = splitConspectChunks(stripLeadingH1(md));
   const words: SpeechWord[] = [];
   const chunks: SpeechChunk[] = [];
 
-  chunkMds.forEach((chunkMd, chunk) => {
-    const tokens = chunkTokens(chunkMd);
+  chunkMds.forEach((rawMd, chunk) => {
+    const { text: chunkMd, spans } = stripWithSpans(rawMd);
+    const tokens = chunkTokens(chunkMd, spans);
     if (tokens.length === 0) return;
     const base = words.length;
-    for (const token of tokens) words.push({ chunk, chunkStart: token.start, chunkEnd: token.end });
+    for (const token of tokens) {
+      words.push({ chunk, chunkStart: token.start, chunkEnd: token.end });
+    }
 
     const emit = (from: number, to: number) => {
       const starts: number[] = [];
@@ -173,14 +195,18 @@ export const buildSpeechPlan = (md: string): SpeechPlan => {
         parts.push(tokens[k].text);
         offset += tokens[k].text.length + 1;
       }
-      chunks.push({ text: parts.join(' '), firstWord: base + from, starts });
+      const lang = tokens[from].lang ?? baseLanguage ?? null;
+      chunks.push({ text: parts.join(' '), firstWord: base + from, starts, lang });
     };
 
     let s = 0;
     let len = 0;
     for (let i = 0; i < tokens.length; i++) {
       const nextLen = i === s ? tokens[i].text.length : len + 1 + tokens[i].text.length;
-      if (i > s && nextLen > CHUNK_TARGET_CHARS) {
+      // Effective language: explicit tag wins, else the lesson base language.
+      const langOf = (k: number): string => tokens[k].lang ?? baseLanguage ?? '';
+      const langSwitch = i > s && langOf(i) !== langOf(s);
+      if (langSwitch || (i > s && nextLen > CHUNK_TARGET_CHARS)) {
         emit(s, i - 1);
         s = i;
         len = tokens[i].text.length;
@@ -233,4 +259,40 @@ export const localWordForChar = (chunk: SpeechChunk, charIndex: number): number 
     }
   }
   return found;
+};
+
+/**
+ * Contiguous same-routing runs over the plan's chunks: English chunks play on
+ * the bundled Kokoro engine, everything else on the system engine with the
+ * chunk language as a voice hint. Adjacent chunks of the same engine+language
+ * merge, so playback crosses utterances without engine handoffs.
+ * `kokoroDisabled` (session fell back to system TTS) routes everything to
+ * the system engine.
+ */
+export type SpeechRun = {
+  engine: 'kokoro' | 'system';
+  /** Language hint for the system engine; null = device default/auto. */
+  lang: string | null;
+  /** Global word range [from, until) covered by the run. */
+  from: number;
+  until: number;
+};
+
+export const buildLangRuns = (plan: SpeechPlan, kokoroDisabled = false): SpeechRun[] => {
+  const runs: SpeechRun[] = [];
+  for (const chunk of plan.chunks) {
+    const engine: SpeechRun['engine'] = chunk.lang === 'en' && !kokoroDisabled ? 'kokoro' : 'system';
+    const last = runs[runs.length - 1];
+    if (last && last.engine === engine && last.lang === chunk.lang) {
+      last.until = chunk.firstWord + chunk.starts.length;
+      continue;
+    }
+    runs.push({
+      engine,
+      lang: chunk.lang,
+      from: chunk.firstWord,
+      until: chunk.firstWord + chunk.starts.length,
+    });
+  }
+  return runs;
 };

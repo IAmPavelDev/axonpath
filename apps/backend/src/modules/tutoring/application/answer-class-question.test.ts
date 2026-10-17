@@ -40,6 +40,7 @@ const CLASS = {
   index: 2,
   title: "Joins",
   contentMd: LESSON_MD,
+  baseLanguage: null,
 };
 const SKILL = {
   id: 10,

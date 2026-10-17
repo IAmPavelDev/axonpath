@@ -38,9 +38,22 @@ export const SKILL_METADATA_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+const speechLanguageRules = `Speech language tagging: classContentMd carries inline language markers for
+read-aloud. The lesson's base language (the learner's own language, from their
+topic) stays untagged; wrap EVERY text run in another language as
+[[lang:xx]]text[[/lang]] with a BCP-47 code — e.g. [[lang:en]]Hello![[/lang]]
+around an English phrase inside Ukrainian prose. Markers wrap phrases, table
+cells, list items or whole headings; they never nest, never sit inside code
+fences, and never span a blank line. Removing every marker must leave exactly
+the same visible markdown.`;
+
 const lessonJsonInstructions = `Return JSON with:
 - classTitle: short lesson title.
 - classContentMd: the lesson markdown (see format rules in your instructions).
+${speechLanguageRules}
+- baseLanguage: the BCP-47 code of the base language the lesson is written in.
+- contentLanguages: every language present in classContentMd, base language
+  included, as BCP-47 codes.
 - lessonSummary: 2-4 self-contained sentences describing what this lesson covered and at what depth.
 - questions: 5-10 quiz questions per your instructions. Include 1–2 open-ended questions per lesson (type OPEN_ENDED, choices: [], answerKey: a model answer).
 - contextSnippets: 5-10 atomic facts about this learner per your instructions.`;
@@ -73,13 +86,26 @@ ${learnedContext}
 /**
  * Every generated lesson (init + next) returns the same shape. lessonSummary
  * is the per-lesson memory unit: embedded and stored as an AI_NEXT vector so
- * the next lesson knows what was already taught.
+ * the next lesson knows what was already taught. baseLanguage + the
+ * [[lang:]] markers drive read-aloud voice routing (see speechLanguageRules);
+ * the generation jobs validate them after parse and fail retryably.
  */
 export const INIT_SKILL_SCHEMA = {
   type: "object",
   properties: {
     classTitle: { type: "string" },
     classContentMd: { type: "string" },
+    baseLanguage: {
+      type: "string",
+      description: "BCP-47 code of the language the lesson's explanations are written in",
+      pattern: "^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$",
+    },
+    contentLanguages: {
+      type: "array",
+      description: "Every language present in classContentMd, base language included",
+      items: { type: "string", pattern: "^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$" },
+      minItems: 1,
+    },
     lessonSummary: { type: "string" },
     questions: {
       type: "array",
@@ -103,6 +129,8 @@ export const INIT_SKILL_SCHEMA = {
   required: [
     "classTitle",
     "classContentMd",
+    "baseLanguage",
+    "contentLanguages",
     "lessonSummary",
     "questions",
     "contextSnippets",
@@ -404,5 +432,9 @@ export const buildQaAnswerPrompt = (input: {
   parts.push(
     "Answer the learner's typed question, grounded in the lesson content above. Match the lesson's concepts and terminology; if the question reaches beyond the lesson, say so briefly and answer from general knowledge.",
   );
+  parts.push(
+    "Speech language tagging: wrap any runs in your answer that are in a different language than the learner's question as [[lang:xx]]text[[/lang]] (BCP-47 code, e.g. [[lang:en]]Hello![[/lang]] around an English term inside a Ukrainian answer). Removing every marker must leave exactly the same visible markdown.",
+  );
+  parts.push("");
   return parts.join("\n");
 };

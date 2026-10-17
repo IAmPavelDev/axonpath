@@ -16,6 +16,7 @@ export const makePrismaClassRepository = (): ClassRepository => ({
             index: cls.index,
             title: cls.title,
             contentMd: cls.contentMd,
+            baseLanguage: cls.baseLanguage,
             aiModel: cls.aiModel,
             clipStatus: "PENDING",
           },
@@ -127,7 +128,7 @@ export const makePrismaClassRepository = (): ClassRepository => ({
   findById: async (id) =>
     prisma.class.findUnique({
       where: { id },
-      select: { id: true, skillId: true, index: true, title: true, contentMd: true },
+      select: { id: true, skillId: true, index: true, title: true, contentMd: true, baseLanguage: true },
     }),
   listByIds: async (ids) => {
     if (ids.length === 0) {

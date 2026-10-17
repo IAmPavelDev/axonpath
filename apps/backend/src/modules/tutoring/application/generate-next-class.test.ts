@@ -12,6 +12,8 @@ import { ok } from "@/modules/platform/result";
 const LESSON_JSON = JSON.stringify({
   classTitle: "Joins deep dive",
   classContentMd: "## Introduction\nOuter joins in practice.",
+  baseLanguage: "en",
+  contentLanguages: ["en"],
   lessonSummary: "The learner practiced outer joins and result filtering.",
   questions: [
     {
@@ -266,6 +268,7 @@ describe("makeGenerateNextClass", () => {
         index: 3,
         title: "Joins deep dive",
         contentMd: "## Introduction\nOuter joins in practice.",
+        baseLanguage: "en",
         aiModel: "glm-5.3-flash",
       },
     ]);

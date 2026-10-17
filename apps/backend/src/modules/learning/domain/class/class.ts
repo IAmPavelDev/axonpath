@@ -8,6 +8,8 @@ export type Class = {
   index: number;
   title: string;
   contentMd: string;
+  /** Lesson base speech language (BCP-47); null for pre-tagging lessons. */
+  baseLanguage: string | null;
   aiModel: string | null;
 };
 

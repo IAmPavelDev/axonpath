@@ -18,6 +18,10 @@
 /** Plain-text excerpt of a block, truncated to `max` chars (…-suffixed). */
 export const conspectExcerpt = (chunkMd: string, max: number): string => {
   let text = chunkMd
+    // Speech-language markers are metadata; excerpts feed QA prompts and
+    // vector text, which must see only the visible words.
+    .replace(/\[\[lang:[a-zA-Z]{2,3}(?:-[a-zA-Z]{2,4})?\]\]/g, '')
+    .replace(/\[\[\/lang\]\]/g, '')
     .replace(/^ {0,3}(```+|~~~+)\s*\w*\n?/, '')
     .replace(/^ {0,3}#{1,6}\s*/gm, '')
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')

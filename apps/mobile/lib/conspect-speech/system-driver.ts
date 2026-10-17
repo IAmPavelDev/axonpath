@@ -8,12 +8,17 @@ import * as Speech from 'expo-speech';
 import { Platform } from 'react-native';
 import { findChunkForWord, localWordForChar, type SpeechPlan } from './word-map';
 
-/** English-only for now; per-class language arrives when classes carry one. */
-const SPEECH_LANGUAGE = 'en-US';
 /** Fallback cadence for engines that never fire boundary events. */
 const ESTIMATE_MS_PER_WORD = 340;
 /** Grace window before deciding the engine gives no boundaries. */
 const BOUNDARY_GRACE_MS = 1800;
+
+/** BCP-47 tags device TTS engines accept for the hint languages; unknown
+ * codes pass through untouched. */
+const bcp47 = (lang: string): string => {
+  const known: Record<string, string> = { en: 'en-US', uk: 'uk-UA', vi: 'vi-VN' };
+  return known[lang] ?? lang;
+};
 
 export type SystemDriverHooks = {
   onWord: (globalWordIndex: number) => void;
@@ -23,10 +28,10 @@ export type SystemDriverHooks = {
 };
 
 export type SystemDriver = {
-  start(plan: SpeechPlan, fromWord: number): void;
+  start(plan: SpeechPlan, fromWord: number, until?: number): void;
   /** iOS pauses the engine; Android stops and re-speaks on resume. */
   pause(): void;
-  resume(plan: SpeechPlan, fromWord: number): void;
+  resume(plan: SpeechPlan, fromWord: number, until?: number): void;
   stop(): void;
   dispose(): void;
 };
@@ -52,7 +57,7 @@ export const createSystemDriver = (hooks: SystemDriverHooks): SystemDriver => {
     timers.estimate = undefined;
   };
 
-  const speakFrom = (plan: SpeechPlan, word: number) => {
+  const speakFrom = (plan: SpeechPlan, word: number, until = Number.POSITIVE_INFINITY) => {
     const current = ++token;
     currentPlan = plan;
     const chunk = findChunkForWord(plan, word);
@@ -69,8 +74,11 @@ export const createSystemDriver = (hooks: SystemDriverHooks): SystemDriver => {
     gotBoundary = false;
     clearTimers();
     Speech.stop();
+    // The chunk's language picks the voice; untagged chunks keep the device
+    // default so legacy lessons behave exactly as before.
+    const language = chunk.lang ? bcp47(chunk.lang) : undefined;
     Speech.speak(chunk.text.slice(offset), {
-      language: SPEECH_LANGUAGE,
+      ...(language ? { language } : {}),
       onBoundary: (ev: { charIndex?: number }) => {
         if (current !== token || typeof ev.charIndex !== 'number') return;
         gotBoundary = true;
@@ -81,7 +89,9 @@ export const createSystemDriver = (hooks: SystemDriverHooks): SystemDriver => {
       onDone: () => {
         if (current !== token || !currentPlan) return;
         const next = currentPlan.chunks[chunkIdx + 1];
-        if (next) speakFrom(currentPlan, next.firstWord);
+        // `until` ends the current language run: past it, the orchestrator
+        // chains the next run's engine.
+        if (next && next.firstWord < until) speakFrom(currentPlan, next.firstWord, until);
         else hooks.onDone();
       },
       onError: () => {
@@ -95,20 +105,20 @@ export const createSystemDriver = (hooks: SystemDriverHooks): SystemDriver => {
     timers.grace = setTimeout(() => {
       if (current !== token || gotBoundary) return;
       timers.estimate = setInterval(() => {
-        lastWord = Math.min(lastWord + 1, plan.words.length - 1);
+        lastWord = Math.min(lastWord + 1, Math.min(plan.words.length - 1, until - 1));
         hooks.onWord(lastWord);
       }, ESTIMATE_MS_PER_WORD);
     }, BOUNDARY_GRACE_MS);
   };
 
   return {
-    start: (plan, fromWord) => speakFrom(plan, fromWord),
+    start: (plan, fromWord, until) => speakFrom(plan, fromWord, until),
     pause: () => {
       clearTimers();
       if (Platform.OS === 'ios') Speech.pause();
       else Speech.stop();
     },
-    resume: (plan, fromWord) => speakFrom(plan, fromWord),
+    resume: (plan, fromWord, until) => speakFrom(plan, fromWord, until),
     stop: () => {
       token++;
       clearTimers();

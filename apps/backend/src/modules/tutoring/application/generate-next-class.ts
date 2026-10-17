@@ -14,6 +14,7 @@ import {
   buildNextClassPrompt,
   NEXT_CLASS_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
+import { validateLessonLanguages } from "@/modules/tutoring/domain/lesson-langs";
 import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
 import {
@@ -47,6 +48,8 @@ export type SkillNextClassJobPayload = {
 export type ParsedNextClass = {
   classTitle: string;
   classContentMd: string;
+  baseLanguage: string;
+  contentLanguages: string[];
   lessonSummary: string;
   questions: GeneratedQuestion[];
   contextSnippets: string[];
@@ -323,12 +326,22 @@ export const makeGenerateNextClass =
       parsed = {
         classTitle: raw.classTitle ?? "Unknown title",
         classContentMd: raw.classContentMd ?? "",
+        baseLanguage: raw.baseLanguage ?? "",
+        contentLanguages: Array.isArray(raw.contentLanguages)
+          ? raw.contentLanguages.filter((l): l is string => typeof l === "string")
+          : [],
         lessonSummary: raw.lessonSummary ?? "",
         questions: (Array.isArray(raw.questions) ? raw.questions : [])
           .map(toGeneratedQuestion)
           .filter((q): q is GeneratedQuestion => q !== null),
         contextSnippets: raw.contextSnippets ?? [],
       };
+      const langViolation = validateLessonLanguages(
+        parsed.classContentMd,
+        parsed.baseLanguage,
+        parsed.contentLanguages,
+      );
+      if (langViolation) throw new Error(langViolation);
     } catch (error) {
       recordAiAttempt({
         userId: input.userId,
@@ -415,6 +428,7 @@ export const makeGenerateNextClass =
         action: "next_class",
         prompt,
         system: TUTOR_SYSTEM,
+        model: chatModel,
         usage: generation.value.usage,
         response: generation.value.raw,
       },
@@ -427,6 +441,7 @@ export const makeGenerateNextClass =
         index: classIndex,
         title: parsed.classTitle,
         contentMd: parsed.classContentMd,
+        baseLanguage: parsed.baseLanguage,
         aiModel: chatModel,
       },
       parsed.questions.map((question) => ({

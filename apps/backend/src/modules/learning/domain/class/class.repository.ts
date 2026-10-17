@@ -13,6 +13,7 @@ export type ClassRepository = {
       index: number;
       title: string;
       contentMd: string;
+      baseLanguage: string | null;
       aiModel?: string;
     },
     questions: Array<Omit<NewQuestion, "skillId" | "classId">>,
@@ -30,7 +31,9 @@ export type ClassRepository = {
   findTopBySkill(skillId: number): Promise<{ id: number; index: number; title: string } | null>;
   findById(
     id: number,
-  ): Promise<Pick<Class, "id" | "skillId" | "index" | "title" | "contentMd"> | null>;
+  ): Promise<
+    Pick<Class, "id" | "skillId" | "index" | "title" | "contentMd" | "baseLanguage"> | null
+  >;
   /** Titles + curriculum indexes for a set of class ids (answer-memory snippets). */
   listByIds(ids: number[]): Promise<Array<{ id: number; index: number; title: string }>>;
   /**

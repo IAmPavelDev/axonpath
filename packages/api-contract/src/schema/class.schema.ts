@@ -24,6 +24,8 @@ export const GetClassByIdOutput = z.object({
   skillId: z.number(),
   title: z.string(),
   contentMd: z.string(),
+  /** Lesson base speech language (BCP-47); null for pre-tagging lessons. */
+  baseLanguage: z.string().nullable(),
   /** Video enrichment state: PENDING gates the lesson, SKIPPED renders plain. */
   clipStatus: z.enum(["PENDING", "READY", "SKIPPED"]),
   videoClips: z.array(

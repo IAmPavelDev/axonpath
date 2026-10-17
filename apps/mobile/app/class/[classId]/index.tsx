@@ -36,6 +36,10 @@ type Tab = 'conspect' | 'quiz';
 
 /** Collapse runs over the first 140px of scroll. */
 const COLLAPSE_RANGE = 140;
+/** Scroll offsets at or below this are layout/navigation noise (Android can
+ * emit a small initial onScroll during the push transition), not user scroll
+ * — the header title must not fade at open. */
+const COLLAPSE_DEAD_ZONE = 24;
 const COLLAPSED_HEIGHT = 24;
 /** Speech scroll-follow comfort band: scroll only when the spoken word's
  * line leaves [scrollY+TOP, scrollY+height-BOTTOM], landing it a third down. */
@@ -125,9 +129,13 @@ export default function ClassScreen() {
 
   const scrollY = useSharedValue(0);
   const [expandedHeight, setExpandedHeight] = useState(EXPANDED_HEIGHT_FALLBACK);
-
-  // Collapse progress 0..1 over the first pixels of scroll.
-  const collapse = useDerivedValue(() => clamp(scrollY.value / COLLAPSE_RANGE, 0, 1));
+  // Dead-zone first: phantom sub-24px offsets (see COLLAPSE_DEAD_ZONE) must
+  // read as exactly zero, not as a half-faded title.
+  const collapse = useDerivedValue(() => {
+    const y = scrollY.value;
+    if (y <= COLLAPSE_DEAD_ZONE) return 0;
+    return clamp((y - COLLAPSE_DEAD_ZONE) / (COLLAPSE_RANGE - COLLAPSE_DEAD_ZONE), 0, 1);
+  });
 
   const blockStyle = useAnimatedStyle(() => ({
     height: interpolate(collapse.value, [0, 1], [expandedHeight, COLLAPSED_HEIGHT]),
@@ -182,19 +190,19 @@ export default function ClassScreen() {
               const h = Math.ceil(e.nativeEvent.layout.height);
               if (h > 0 && h !== expandedHeight) setExpandedHeight(h);
             }}>
-            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight">
+            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight text-foreground">
               {data.title}
             </Text>
           </View>
           <Animated.View style={expandedStyle} className="absolute inset-0">
-            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight">
+            <Text className="font-sans-medium text-[20px] leading-[26px] tracking-tight text-foreground">
               {data.title}
             </Text>
           </Animated.View>
           <Animated.View style={collapsedStyle} className="absolute inset-0">
             <Text
               numberOfLines={1}
-              className="font-sans-medium text-[15px] leading-[24px] tracking-tight">
+              className="font-sans-medium text-[15px] leading-[24px] tracking-tight text-foreground">
               {data.title}
             </Text>
           </Animated.View>
@@ -251,7 +259,7 @@ function ConspectView({
 }) {
   const scrollRef = useRef<Animated.ScrollView>(null);
   const qa = useClassQa(classData.id);
-  const speech = useConspectSpeech(classData.contentMd, visible);
+  const speech = useConspectSpeech(classData.contentMd, visible, classData.baseLanguage);
   /** Active word's y within its chunk, reported by HighlightedChunk. */
   const wordYInChunk = useRef<number | null>(null);
   const lastSpokenChunk = useRef(-1);

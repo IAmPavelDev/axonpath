@@ -17,6 +17,8 @@ export type Unit = {
   /** Global word index of the unit's first word. */
   firstGlobal: number;
   wordCount: number;
+  /** Speech language of the unit — its chunk never mixes languages. */
+  lang: string | null;
 };
 
 export type UnitAudio = {
@@ -73,7 +75,13 @@ export const buildUnits = (plan: SpeechPlan): Unit[] => {
         count++;
       }
       if (count > 0) {
-        units.push({ chunkIdx, ...span, firstGlobal: chunk.firstWord + first, wordCount: count });
+        units.push({
+          chunkIdx,
+          ...span,
+          firstGlobal: chunk.firstWord + first,
+          wordCount: count,
+          lang: chunk.lang,
+        });
       }
     }
   });

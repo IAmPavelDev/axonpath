@@ -16,6 +16,8 @@ import { err, ok } from "@/modules/platform/result";
 const LESSON_JSON = JSON.stringify({
   classTitle: "SQL joins from zero",
   classContentMd: "## Introduction\nMeet the join.",
+  baseLanguage: "en",
+  contentLanguages: ["en"],
   lessonSummary: "This lesson introduced inner and left joins with small datasets.",
   questions: [
     {
@@ -180,6 +182,7 @@ describe("makeGenerateFirstLesson", () => {
         index: 0,
         title: "SQL joins from zero",
         contentMd: "## Introduction\nMeet the join.",
+        baseLanguage: "en",
         aiModel: "glm-5.3-flash",
       },
     ]);
@@ -276,6 +279,8 @@ describe("makeGenerateFirstLesson", () => {
       raw: JSON.stringify({
         classTitle: "t",
         classContentMd: "c",
+        baseLanguage: "en",
+        contentLanguages: ["en"],
         lessonSummary: "s",
         questions: [],
         contextSnippets: [],
