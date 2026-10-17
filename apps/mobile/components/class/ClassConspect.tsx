@@ -49,6 +49,8 @@ type Props = {
   onAskAgain?: (block: ClassQaBlock) => void;
   /** Speech state: the word currently being spoken, if read-aloud is on. */
   speechView?: { plan: SpeechPlan; activeWordIndex: number };
+  /** Forwarded to the spoken chunk: active word's y within the chunk root. */
+  onActiveWordLayout?: (y: number | null) => void;
 };
 
 /**
@@ -69,6 +71,7 @@ export const ClassConspect: FC<Props> = ({
   onAskSelection,
   onAskAgain,
   speechView,
+  onActiveWordLayout,
 }) => {
   // The screen header already carries the lesson title; a leading h1 in
   // the body would repeat it.
@@ -153,6 +156,7 @@ export const ClassConspect: FC<Props> = ({
                     plan={speechView.plan}
                     chunkIndex={i}
                     activeWordIndex={speechView.activeWordIndex}
+                    onActiveWordLayout={onActiveWordLayout}
                   />
                 ) : (
                   <ConspectMarkdown

@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { useIsFocused } from 'expo-router';
 import { FlatList, Pressable, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { Text } from '@atomics/text';
@@ -14,11 +15,14 @@ import rpc from '@/utils/rpc';
  * or an honest empty state.
  */
 export const RecommendationsList: FC<{ skillId: number }> = ({ skillId }) => {
+  // The skill page stays mounted under pushed routes; poll only while it is
+  // the focused screen, and only while generating (stops on READY/FAILED).
+  const isFocused = useIsFocused();
   const query = useQuery({
     queryKey: ['recommendations', skillId],
     queryFn: () => rpc.video.recommendations.list({ skillId }),
-    // Poll while generating; stops once READY or FAILED.
-    refetchInterval: (q) => (q.state.data?.status === 'PENDING' ? 5_000 : false),
+    refetchInterval: (q) =>
+      isFocused && q.state.data?.status === 'PENDING' ? 5_000 : false,
   });
 
   const refresh = () => {

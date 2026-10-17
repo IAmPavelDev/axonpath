@@ -3,8 +3,7 @@ import { FONTS, THEME } from '@/lib/theme';
 import { parseChunkLayout, parseInlineSegments, type InlineSegment } from '@/lib/conspect-speech/inline-md';
 import type { SpeechPlan } from '@/lib/conspect-speech/word-map';
 import { useColorScheme } from 'nativewind';
-import { useMemo } from 'react';
-import type { FC } from 'react';
+import { useLayoutEffect, useMemo, useRef, type FC } from 'react';
 import { Text, View } from 'react-native';
 import type { TextStyle, ViewStyle } from 'react-native';
 
@@ -13,6 +12,8 @@ type Props = {
   plan: SpeechPlan;
   chunkIndex: number;
   activeWordIndex: number;
+  /** Reports the active word's y within the chunk root; null until laid out. */
+  onActiveWordLayout?: (y: number | null) => void;
 };
 
 const LIST_MARKER = /^ {0,3}(?:([-*+])|(\d{1,9})[.)])\s+/;
@@ -33,7 +34,13 @@ const HEADING_KEYS = [
  * quiet. Code fences never contain words, so a spoken chunk is always
  * prose-ish: headings, paragraphs, lists, quotes, tables.
  */
-export const HighlightedChunk: FC<Props> = ({ md, plan, chunkIndex, activeWordIndex }) => {
+export const HighlightedChunk: FC<Props> = ({
+  md,
+  plan,
+  chunkIndex,
+  activeWordIndex,
+  onActiveWordLayout,
+}) => {
   const { colorScheme } = useColorScheme();
   const scheme = colorScheme ?? 'light';
   const ink = THEME[scheme];
@@ -127,13 +134,46 @@ export const HighlightedChunk: FC<Props> = ({ md, plan, chunkIndex, activeWordIn
     borderRadius: 4,
   };
 
+  // Scroll-follow bookkeeping: each line Text reports its y inside its block
+  // View, each block View its y inside the chunk root — the sum is the
+  // content-space y of the spoken word's line. A chunk that just mounted
+  // reports null until its layout events land; the screen falls back to the
+  // chunk top in that case.
+  const blocksY = useRef<(number | undefined)[]>([]);
+  const linesY = useRef(new Map<string, number>());
+  useLayoutEffect(() => {
+    if (!onActiveWordLayout) return;
+    let target: number | null = null;
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const li = blocks[bi].lines.findIndex((line) =>
+        line.parts.some((part) => part.index === activeWordIndex),
+      );
+      if (li < 0) continue;
+      const by = blocksY.current[bi];
+      const ly = linesY.current.get(`${bi}:${li}`);
+      if (by !== undefined && ly !== undefined) target = by + ly;
+      break;
+    }
+    onActiveWordLayout(target);
+  }, [activeWordIndex, blocks, onActiveWordLayout]);
+
   return (
     <View>
       {blocks.map((block, bi) => (
-        <View key={bi} style={block.container}>
+        <View
+          key={bi}
+          style={block.container}
+          onLayout={(e) => {
+            blocksY.current[bi] = e.nativeEvent.layout.y;
+          }}>
           {block.lines.map((line, li) =>
             line.skip ? null : (
-              <Text key={li} style={block.textStyle}>
+              <Text
+                key={li}
+                style={block.textStyle}
+                onLayout={(e) => {
+                  linesY.current.set(`${bi}:${li}`, e.nativeEvent.layout.y);
+                }}>
                 {line.marker ? (
                   <Text style={mdStyles.list_item_bullet_marker}>{line.marker} </Text>
                 ) : null}

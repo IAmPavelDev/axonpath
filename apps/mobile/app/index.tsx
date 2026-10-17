@@ -7,13 +7,14 @@ import { Skill } from '@/types/skill';
 import { usePinnedSkills } from '@/lib/pins';
 import rpc from '@/utils/rpc';
 import { useQuery } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useRouter, useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function Screen() {
   const router = useRouter();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const hydratePins = usePinnedSkills((s) => s.hydrate);
 
@@ -24,8 +25,10 @@ export default function Screen() {
   const { data: skills, isLoading, error, refetch } = useQuery<Skill[]>({
     queryKey: ['skillList'],
     queryFn: () => rpc.skill.list(),
-    // Poll while the Library is on screen; paused when the app is backgrounded.
-    refetchInterval: 10_000,
+    // Poll only while the Library is the focused screen: stack navigation
+    // keeps this screen mounted under pushed routes, and an ungated interval
+    // would keep hitting skill.list from the skill/class pages.
+    refetchInterval: isFocused ? 10_000 : false,
     refetchIntervalInBackground: false,
   });
 

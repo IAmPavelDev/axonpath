@@ -54,7 +54,8 @@
       "expo-status-bar",
       "@react-native-firebase/app",
       "@react-native-firebase/crashlytics",
-      "@react-native-firebase/analytics"
+      "@react-native-firebase/analytics",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

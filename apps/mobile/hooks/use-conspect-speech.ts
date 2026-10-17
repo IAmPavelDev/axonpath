@@ -1,34 +1,32 @@
-import * as Speech from 'expo-speech';
-import { Platform } from 'react-native';
-import type { Timeout } from '@/types/global';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KokoroDriver } from '@/lib/conspect-speech/kokoro';
 import {
   buildSpeechPlan,
-  findChunkForWord,
-  localWordForChar,
   stripLeadingH1,
   type SpeechPlan,
 } from '@/lib/conspect-speech/word-map';
+import { createSystemDriver, type SystemDriver } from '@/lib/conspect-speech/system-driver';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-/** English-only for now; per-class language arrives when classes carry one. */
-const SPEECH_LANGUAGE = 'en-US';
-/** Fallback cadence for engines that never fire boundary events. */
-const ESTIMATE_MS_PER_WORD = 340;
-/** Grace window before deciding the engine gives no boundaries. */
-const BOUNDARY_GRACE_MS = 1800;
+export type SpeechStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'done';
 
-export type SpeechStatus = 'idle' | 'playing' | 'paused' | 'done';
+type DriverHooks = {
+  onWord: (index: number) => void;
+  onLoading: () => void;
+  onPlaying: () => void;
+  onDone: () => void;
+  onFail: () => void;
+};
 
-type BoundaryEvent = { charIndex?: number };
+/** What both engines (bundled Kokoro, system expo-speech) expose. */
+type ConspectDriver = Pick<SystemDriver, 'pause' | 'resume' | 'stop' | 'dispose'> & {
+  start(plan: SpeechPlan, fromWord: number): Promise<void> | void;
+};
 
 /**
- * Drives conspect read-aloud on the device TTS engine (expo-speech). The
- * speech plan supplies word offsets; `onBoundary` char offsets map through
- * the in-flight utterance back to plan words, which is what the highlight
- * renderer consumes.
- *
- * `Speech.pause()` is iOS-only in expo-speech, so Android pauses by stopping
- * and later re-speaking from the current word — the same path seeking uses.
+ * Drives conspect read-aloud. The bundled Kokoro-82M engine (on-device,
+ * offline) is primary; if it fails to initialize or synthesize, the session
+ * degrades to the system engine (expo-speech). Both report the word currently
+ * being spoken, which the highlight renderer and the scroll-follow consume.
  */
 export function useConspectSpeech(contentMd: string | null, enabled: boolean) {
   const plan = useMemo(() => buildSpeechPlan(stripLeadingH1(contentMd ?? '')), [contentMd]);
@@ -41,104 +39,88 @@ export function useConspectSpeech(contentMd: string | null, enabled: boolean) {
   statusRef.current = status;
   const wordIndexRef = useRef(wordIndex);
   wordIndexRef.current = wordIndex;
-  /** Mapping for the utterance in flight: its first global word + local starts. */
-  const spoken = useRef({ base: 0, starts: [] as number[] });
-  const gotBoundary = useRef(false);
-  const graceTimer = useRef<Timeout | undefined>(undefined);
-  const estimateTimer = useRef<Timeout | undefined>(undefined);
 
-  const clearTimers = () => {
-    clearTimeout(graceTimer.current);
-    clearInterval(estimateTimer.current);
-    graceTimer.current = undefined;
-    estimateTimer.current = undefined;
+  const hooks = useMemo<DriverHooks>(
+    () => ({
+      onWord: (index) => setWordIndex(index),
+      onLoading: () => setStatus('loading'),
+      onPlaying: () => setStatus('playing'),
+      onDone: () => {
+        setStatus('done');
+        setWordIndex(-1);
+      },
+      onFail: () => {
+        setStatus('idle');
+        setWordIndex(-1);
+      },
+    }),
+    [],
+  );
+
+  const kokoroRef = useRef<KokoroDriver | null>(null);
+  const systemRef = useRef<SystemDriver | null>(null);
+  /** Set once Kokoro has failed; the session then stays on the system engine. */
+  const useSystemRef = useRef(false);
+
+  const getDriver = (): ConspectDriver => {
+    if (useSystemRef.current) {
+      systemRef.current ??= createSystemDriver(hooks);
+      return systemRef.current;
+    }
+    kokoroRef.current ??= new KokoroDriver(hooks);
+    return kokoroRef.current;
   };
 
   const stop = useCallback(() => {
-    clearTimers();
-    Speech.stop();
+    kokoroRef.current?.stop();
+    systemRef.current?.stop();
     setStatus('idle');
     setWordIndex(-1);
   }, []);
 
-  const speakFromRef = useRef<(currentPlan: SpeechPlan, word: number) => void>(() => {});
-  const speakFrom = useCallback(
-    (currentPlan: SpeechPlan, word: number) => {
-      const chunk = findChunkForWord(currentPlan, word);
-      if (!chunk) {
-        setStatus('done');
-        setWordIndex(-1);
-        return;
-      }
-      const chunkIdx = currentPlan.chunks.indexOf(chunk);
-      const local = word - chunk.firstWord;
-      const offset = chunk.starts[local] ?? 0;
-      spoken.current = { base: word, starts: chunk.starts.slice(local).map((s) => s - offset) };
-      gotBoundary.current = false;
-      clearTimers();
-      Speech.stop();
-      Speech.speak(chunk.text.slice(offset), {
-        language: SPEECH_LANGUAGE,
-        onBoundary: (ev: BoundaryEvent) => {
-          if (typeof ev.charIndex !== 'number') return;
-          gotBoundary.current = true;
-          if (estimateTimer.current) {
-            clearInterval(estimateTimer.current);
-            estimateTimer.current = undefined;
-          }
-          const localIdx = localWordForChar(
-            { ...chunk, starts: spoken.current.starts },
-            ev.charIndex,
-          );
-          setWordIndex(spoken.current.base + localIdx);
-        },
-        onDone: () => {
-          if (statusRef.current !== 'playing') return;
-          const next = planRef.current.chunks[chunkIdx + 1];
-          if (next) speakFromRef.current(planRef.current, next.firstWord);
-          else {
-            setStatus('done');
-            setWordIndex(-1);
-          }
-        },
-        onError: () => stop(),
-      } as Speech.SpeechOptions);
-      setStatus('playing');
-      // Engines without boundary events (API < 26, odd OEM TTS): keep the
-      // highlight moving on an estimate; a real boundary cancels it.
-      graceTimer.current = setTimeout(() => {
-        if (gotBoundary.current || statusRef.current !== 'playing') return;
-        estimateTimer.current = setInterval(() => {
-          setWordIndex((w) => Math.min(w + 1, planRef.current.words.length - 1));
-        }, ESTIMATE_MS_PER_WORD);
-      }, BOUNDARY_GRACE_MS);
-    },
-    [stop],
-  );
-  speakFromRef.current = speakFrom;
-
   const toggle = useCallback(() => {
-    if (statusRef.current === 'playing') {
-      if (Platform.OS === 'ios') Speech.pause();
-      else Speech.stop();
-      clearTimers();
+    const st = statusRef.current;
+    if (st === 'playing') {
+      getDriver().pause();
       setStatus('paused');
       return;
     }
-    if (statusRef.current === 'paused') {
-      if (Platform.OS === 'ios') Speech.resume();
-      else speakFrom(planRef.current, Math.max(0, wordIndexRef.current));
+    if (st === 'paused') {
+      getDriver().resume(planRef.current, Math.max(0, wordIndexRef.current));
+      setStatus('playing');
       return;
     }
-    speakFrom(planRef.current, Math.max(0, wordIndexRef.current));
-  }, [speakFrom]);
+    if (st === 'loading') {
+      stop();
+      return;
+    }
+    // Idle or done: (re)start from the current position.
+    const from = Math.max(0, wordIndexRef.current);
+    setWordIndex(from);
+    setStatus('loading');
+    void (async () => {
+      try {
+        await getDriver().start(planRef.current, from);
+      } catch {
+        // Kokoro unavailable (init or synthesis failure) → degrade to the
+        // system engine for the rest of the session.
+        useSystemRef.current = true;
+        kokoroRef.current?.dispose();
+        kokoroRef.current = null;
+        systemRef.current ??= createSystemDriver(hooks);
+        systemRef.current.start(planRef.current, from);
+        setStatus('playing');
+      }
+    })();
+  }, [hooks, stop]);
 
   // Leaving the screen (or flipping to the quiz tab — both views stay
-  // mounted behind a display flip) must silence the engine.
+  // mounted behind a display flip) must silence the engine. Refs are stable,
+  // so the cleanup sees drivers created after mount.
   useEffect(
     () => () => {
-      clearTimers();
-      Speech.stop();
+      kokoroRef.current?.dispose();
+      systemRef.current?.dispose();
     },
     [],
   );

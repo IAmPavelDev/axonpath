@@ -37,6 +37,10 @@ type Tab = 'conspect' | 'quiz';
 /** Collapse runs over the first 140px of scroll. */
 const COLLAPSE_RANGE = 140;
 const COLLAPSED_HEIGHT = 24;
+/** Speech scroll-follow comfort band: scroll only when the spoken word's
+ * line leaves [scrollY+TOP, scrollY+height-BOTTOM], landing it a third down. */
+const FOLLOW_TOP = 120;
+const FOLLOW_BOTTOM = 96;
 /** Expanded height is measured from the rendered title; this only covers pre-measurement. */
 const EXPANDED_HEIGHT_FALLBACK = 64;
 
@@ -248,6 +252,10 @@ function ConspectView({
   const scrollRef = useRef<Animated.ScrollView>(null);
   const qa = useClassQa(classData.id);
   const speech = useConspectSpeech(classData.contentMd, visible);
+  /** Active word's y within its chunk, reported by HighlightedChunk. */
+  const wordYInChunk = useRef<number | null>(null);
+  const lastSpokenChunk = useRef(-1);
+  const viewportH = useRef(0);
 
   // Anchor mode: pill → banner → every chunk is tap-to-anchor; the composer
   // opens on the chosen chunk. Follow-ups reuse the composer without mode.
@@ -301,6 +309,27 @@ function ConspectView({
     }, 150);
   };
 
+  // Scroll-follow: while read-aloud plays, keep the spoken word's line on
+  // screen — only when it leaves the comfort band, so reading ahead by hand
+  // within a paragraph is never fought. On a chunk switch the word y is not
+  // measured yet, and the chunk top is the right target anyway.
+  useEffect(() => {
+    if (!visible || speech.status !== 'playing' || speech.wordIndex < 0) return;
+    const word = speech.plan.words[speech.wordIndex];
+    if (!word) return;
+    const chunkChanged = word.chunk !== lastSpokenChunk.current;
+    lastSpokenChunk.current = word.chunk;
+    const chunkY = groupYs.current.get(word.chunk)?.chunk;
+    if (chunkY === undefined) return;
+    const vh = viewportH.current;
+    if (vh <= 0) return;
+    const wordY = chunkChanged ? null : wordYInChunk.current;
+    const target = chunkY + (wordY ?? 0);
+    const y = scrollY.value;
+    if (target >= y + FOLLOW_TOP && target <= y + vh - FOLLOW_BOTTOM) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, target - vh * 0.33), animated: true });
+  }, [speech.wordIndex, speech.status, speech.plan, visible, scrollY]);
+
   const submitQuestion = (question: string) => {
     if (!composer) return;
     const { anchor, excerpt, selected } = composer;
@@ -351,6 +380,9 @@ function ConspectView({
 
       <Animated.ScrollView
         ref={scrollRef}
+        onLayout={(e) => {
+          viewportH.current = e.nativeEvent.layout.height;
+        }}
         onScroll={scrollHandler}
         scrollEventThrottle={16}
         contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 96 }}>
@@ -367,6 +399,9 @@ function ConspectView({
               ? { plan: speech.plan, activeWordIndex: speech.wordIndex }
               : undefined
           }
+          onActiveWordLayout={(y) => {
+            wordYInChunk.current = y;
+          }}
           animateInsertions={insertionFx}
           onAskSelection={(index, text) =>
             setComposer({ anchor: index, excerpt: text, selected: true })
