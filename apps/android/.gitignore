@@ -1,0 +1,13 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.kotlin/
+captures/
+externalNativeBuild/
+cxx/
+
+# sherpa-onnx AAR is downloaded from k2-fsa GitHub releases (48 MB) —
+# see docs/MIGRATION_PLAN.md for the one-line fetch command.
+app/libs/*.aar
