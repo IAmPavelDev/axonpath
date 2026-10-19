@@ -1,15 +1,9 @@
 package com.iampauld3v.axon.feature.classroom
 
-import android.annotation.SuppressLint
-import android.os.Handler
-import android.os.Looper
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,25 +29,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import com.iampauld3v.axon.core.di.AppContainer
 import com.iampauld3v.axon.core.ui.theme.MetaStyle
 import com.iampauld3v.axon.data.dto.SponsorSegment
-import kotlinx.coroutines.delay
 import kotlin.math.min
 
 /**
- * RN VideoPlayerCard: click-to-play YouTube embed with sponsor-segment skip
- * (watchdog seek) and optional clip bounds (start at startSeconds, pause at
- * endSeconds−0.3). Height = min(234, (width−48)·9/16). The thumbnail stays
- * visible with a progress spinner until the embed reports ready; embed
- * errors revert to the thumbnail instead of a black screen. After ready,
- * the embed shows YouTube's own play button (RN parity) — one in-player tap
- * starts playback.
+ * RN VideoPlayerCard port on the official android-youtube-player (IFrame API
+ * with robust plumbing — same mechanism RN's youtube_iframe used). Thumbnail
+ * + spinner until the player reports ready; embed errors revert to the
+ * thumbnail with retry. Sponsor-segment skip + clip-end pause run off the
+ * library's onCurrentSecond listener (no hand-rolled JS bridge). Height =
+ * min(234, (width−48)·9/16). Used by the Videos tab AND lesson clips.
  */
 @Composable
 fun VideoPlayerCard(
@@ -69,7 +65,6 @@ fun VideoPlayerCard(
     var embedReady by remember(videoId) { mutableStateOf(false) }
     var embedFailed by remember(videoId) { mutableStateOf(false) }
     var segments by remember(videoId) { mutableStateOf<List<SponsorSegment>>(emptyList()) }
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
 
     LaunchedEffect(videoId) {
         runCatching { container.api.sponsorSegments(videoId) }
@@ -78,25 +73,22 @@ fun VideoPlayerCard(
 
     Column {
         BoxWithHeight { height ->
-            val showEmbed = playing && embedReady && !embedFailed
             when {
                 !playing || embedFailed -> Thumbnail(
                     videoId = videoId,
                     title = title,
                     height = height,
-                    loading = playing && !embedFailed, // spinner while embed warms up
+                    loading = playing && !embedFailed, // spinner while the player warms up
                     onClick = {
                         embedFailed = false
                         playing = true
                     },
                 )
 
-                else -> YouTubeEmbed(
+                else -> LibraryEmbed(
                     videoId = videoId,
                     startSeconds = startSeconds,
-                    segments = segments,
-                    endSeconds = endSeconds,
-                    mainHandler = mainHandler,
+                    segmentsState = remember(videoId) { mutableStateOf(segments to endSeconds) },
                     onReady = { embedReady = true },
                     onEmbedError = { embedFailed = true },
                     modifier = Modifier.fillMaxWidth().height(height),
@@ -181,6 +173,60 @@ private fun Thumbnail(
     }
 }
 
+/**
+ * The library's player. [segmentsState] is read at callback time (not
+ * captured at factory time) so late-arriving sponsor segments still apply.
+ */
+@Composable
+private fun LibraryEmbed(
+    videoId: String,
+    startSeconds: Double,
+    segmentsState: androidx.compose.runtime.State<Pair<List<SponsorSegment>, Double?>>,
+    onReady: () -> Unit,
+    onEmbedError: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val readyCb = remember { { onReady() } }
+    val errorCb = remember { { onEmbedError() } }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    AndroidView(
+        factory = { ctx ->
+            YouTubePlayerView(ctx).apply {
+                lifecycleOwner.lifecycle.addObserver(this)
+                enableAutomaticInitialization = false
+                initialize(object : AbstractYouTubePlayerListener() {
+                    override fun onReady(p: YouTubePlayer) {
+                        readyCb()
+                        p.loadVideo(videoId, startSeconds.toFloat())
+                    }
+
+                    override fun onCurrentSecond(p: YouTubePlayer, second: Float) {
+                        val (segments, clipEnd) = segmentsState.value
+                        if (clipEnd != null && second >= clipEnd - 0.3) {
+                            p.pause()
+                            return
+                        }
+                        val hit = segments.firstOrNull {
+                            second >= it.startSeconds - 0.2 && second < it.endSeconds - 0.05
+                        }
+                        if (hit != null) p.seekTo(hit.endSeconds.toFloat())
+                    }
+
+                    override fun onError(p: YouTubePlayer, error: PlayerConstants.PlayerError) {
+                        errorCb()
+                    }
+                }, handleNetworkEvents = false)
+            }
+        },
+        onRelease = { view ->
+            lifecycleOwner.lifecycle.removeObserver(view)
+            view.release()
+        },
+        modifier = modifier,
+    )
+}
+
 private fun formatTimestamp(seconds: Double): String {
     val total = seconds.toInt()
     return "%d:%02d".format(total / 60, total % 60)
@@ -193,99 +239,4 @@ private fun BoxWithHeight(content: @Composable (androidx.compose.ui.unit.Dp) -> 
         val height = min(234f, cardWidth.value * 9f / 16f)
         content(height.dp)
     }
-}
-
-@SuppressLint("SetJavaScriptEnabled")
-@Composable
-private fun YouTubeEmbed(
-    videoId: String,
-    startSeconds: Double,
-    segments: List<SponsorSegment>,
-    endSeconds: Double?,
-    mainHandler: Handler,
-    onReady: () -> Unit,
-    onEmbedError: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val readyCb = remember { { onReady() } }
-    val errorCb = remember { { onEmbedError() } }
-    val webViewRef = remember { mutableStateOf<WebView?>(null) }
-    val bridge = remember(videoId, segments, endSeconds) {
-        object {
-            @JavascriptInterface
-            fun onReady() {
-                mainHandler.post { readyCb() }
-            }
-
-            @JavascriptInterface
-            fun onEmbedError() {
-                mainHandler.post { errorCb() }
-            }
-
-            @JavascriptInterface
-            fun onTime(seconds: Double, state: Int) {
-                mainHandler.post {
-                    val wv = webViewRef.value ?: return@post
-                    if (endSeconds != null && state == 1 && seconds >= endSeconds - 0.3) {
-                        wv.evaluateJavascript("typeof player!=='undefined'&&player.pauseVideo()", null)
-                        return@post
-                    }
-                    if (state == 1) {
-                        val hit = segments.firstOrNull {
-                            seconds >= it.startSeconds - 0.2 && seconds < it.endSeconds - 0.05
-                        }
-                        if (hit != null) {
-                            wv.evaluateJavascript(
-                                "typeof player!=='undefined'&&player.seekTo(${hit.endSeconds},true)",
-                                null,
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    val html = remember(videoId, startSeconds) {
-        """
-        <!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-        <style>html,body{margin:0;padding:0;background:#000;overflow:hidden}
-        #player{position:absolute;top:0;left:0;width:100%;height:100%}</style></head>
-        <body><div id="player"></div>
-        <script src="https://www.youtube.com/iframe_api"></script>
-        <script>
-        var player; var ready = false;
-        function onYouTubeIframeAPIReady() {
-          player = new YT.Player('player', {
-            videoId: '$videoId',
-            playerVars: {autoplay: 1, start: ${startSeconds.toInt()}, modestbranding: 1, rel: 0, playsinline: 1},
-            events: {
-              onReady: function() { ready = true; Android.onReady(); },
-              onError: function() { Android.onEmbedError(); }
-            }
-          });
-        }
-        setInterval(function() {
-          if (ready && player && player.getCurrentTime) {
-            Android.onTime(player.getCurrentTime(), player.getPlayerState ? player.getPlayerState() : -1);
-          }
-        }, 250);
-        </script></body></html>
-        """.trimIndent()
-    }
-
-    AndroidView(
-        factory = { ctx ->
-            WebView(ctx).apply {
-                settings.javaScriptEnabled = true
-                settings.mediaPlaybackRequiresUserGesture = false
-                settings.domStorageEnabled = true
-                addJavascriptInterface(bridge, "Android")
-                loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
-                webViewRef.value = this
-            }
-        },
-        onRelease = { it.destroy() },
-        modifier = modifier.aspectRatio(16f / 9f).background(Color.Black),
-    )
 }
