@@ -418,6 +418,14 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return settled;
     },
+    delete: async (id) => {
+      state.skills.delete(id);
+      nextClassJobRows.delete(id);
+      for (const [clsId, cls] of state.classes) {
+        if (cls.skillId === id) state.classes.delete(clsId);
+      }
+      state.vectors = state.vectors.filter((vector) => vector.skillId !== id);
+    },
   };
 
   const classRepo: ClassRepository = {
@@ -834,6 +842,10 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           tokenCount: vector.tokenCount ?? null,
         }));
       return ok(hits.slice(0, input.topK ?? 5));
+    },
+    deleteBySkill: async (skillId) => {
+      state.vectors = state.vectors.filter((vector) => vector.skillId !== skillId);
+      return ok(null);
     },
   };
 

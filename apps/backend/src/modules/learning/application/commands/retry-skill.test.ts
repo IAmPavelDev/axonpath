@@ -57,6 +57,9 @@ const makeFakeDeps = (
     claimStaleFirstLesson: async () => {
       throw new Error("not used in retry tests");
     },
+    delete: async () => {
+      throw new Error("not used in retry tests");
+    },
   };
 
   const jobs: JobQueuePort = {

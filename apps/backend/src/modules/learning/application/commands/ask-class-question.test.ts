@@ -91,6 +91,7 @@ const makeDeps = (
       throw new Error("not used in ask tests");
     },
     claimStaleFirstLesson: async () => [],
+    delete: async () => {},
   };
 
   const qaRepo: ClassQaRepository = {

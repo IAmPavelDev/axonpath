@@ -63,6 +63,16 @@ const updateStatus = oc
   .input(schema.UpdateSkillStatusInput)
   .output(schema.StatusOnly);
 
+const destroy = oc
+  .route({
+    method: "DELETE",
+    path: `${BASE_PATH}/:id`,
+    summary: "Permanently delete a skill and everything in it",
+    tags: ["Skill", "Delete"],
+  })
+  .input(schema.SkillIdInput)
+  .output(schema.DeleteSkillOutput);
+
 
 const mistakes = oc
   .route({
@@ -92,7 +102,8 @@ export const skillContract = {
   progress,
   updateStatus,
   retry,
-  mistakes
+  mistakes,
+  delete: destroy,
 }
 
 export type SkillContractType = typeof skillContract;

@@ -202,6 +202,7 @@ const makeDeps = (
       throw new Error("not used in answer tests");
     },
     claimStaleFirstLesson: async () => [],
+    delete: async () => {},
   };
 
   const eventRepo: EventRepository = {

@@ -66,6 +66,7 @@ const makeDeps = (overrides: {
       settleStaleGenerating: async () => [],
       claimStaleInit: async () => [],
       claimStaleFirstLesson: async () => [],
+      delete: async () => {},
     } satisfies SkillRepository,
     eventRepo: {
       findUsageEvents: async () => [],

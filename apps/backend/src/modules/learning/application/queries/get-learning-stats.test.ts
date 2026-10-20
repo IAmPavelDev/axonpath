@@ -65,6 +65,7 @@ const makeDeps = (
       throw new Error("not used");
     },
     claimStaleFirstLesson: async () => [],
+    delete: async () => {},
   };
   const quizRepo: Pick<QuizRepository, "findAnswerActivityByUser"> = {
     findAnswerActivityByUser: async () => options.activity ?? [],

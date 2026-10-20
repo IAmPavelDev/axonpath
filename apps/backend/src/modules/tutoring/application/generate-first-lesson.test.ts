@@ -109,6 +109,7 @@ const makeDeps = (overrides: Overrides = {}) => {
       settleStaleGenerating: async () => [],
       claimStaleInit: async () => [],
       claimStaleFirstLesson: async () => [],
+      delete: async () => {},
     } satisfies SkillRepository,
     classRepo: {
       findQuestionCountsByClassIds: async () => [],

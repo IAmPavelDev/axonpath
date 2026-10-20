@@ -8,7 +8,7 @@ a phase.
 | Decision | Choice | Why |
 |---|---|---|
 | Stack | Kotlin 2.2 + Compose M3, single module | Android-only; no runtime tax; most AI/human-known Android stack |
-| applicationId | `com.iampauld3v.axon` (same) + debug.keystore copied | Firebase/Google OAuth SHA-1 + package keep working with zero console changes; replaces RN app on install |
+| applicationId | `com.iampauld3v.axon` (same) + committed debug.keystore as `storeFile` | deterministic SHA-1 on every machine; needs its fingerprint registered on the Firebase Android app (one console step) |
 | TTS model | download-on-first-run to `filesDir` | APK ~10MB vs ~160MB; repo stays small |
 | API | Retrofit + kotlinx.serialization over oRPC `/rpc` batch endpoint | contract package untouched, DTOs mirror it |
 | DI | manual `AppContainer` | app is small; no codegen |
@@ -30,8 +30,16 @@ a phase.
 - sherpa AAR is gitignored; fetch once after cloning:
   `curl -L -o apps/android/app/libs/sherpa-onnx-1.13.8.aar https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar`
 - [ ] Real release keystore decision (currently debug-signed release for
-  migration installs). Debug keystore SHA-1 (already registered in Firebase
-  via the RN app): `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
+  migration installs). Committed debug keystore SHA-1 (used by both build
+  types since the storeFile fix): `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
+- [ ] Google sign-in on local builds is BROKEN until one console step:
+  Firebase only has the old EAS-build keystore (`8d6cb4d8…`) for
+  `com.iampauld3v.axon`, so Credential Manager throws NoCredentialException
+  ("no Google account on this device"). Fix = Firebase console → Project
+  settings → the `com.iampauld3v.axon` Android app → Add fingerprint with the
+  SHA-1 above → re-download google-services.json into `apps/android/app/` →
+  uninstall the previous install once (signing cert changed from
+  `~/.android/debug.keystore` to the committed keystore) → rebuild.
 - [ ] Emulator caveat: WebView video renderer crashes under SwiftShader
   (GPU emulation) — video embeds need a real device to verify. RN used the
   identical WebView mechanism, so phone behavior is expected to match RN.

@@ -52,6 +52,9 @@ const makeFakeDeps = (skill: {
     claimStaleFirstLesson: async () => {
       throw new Error("not used in edit tests");
     },
+    delete: async () => {
+      throw new Error("not used in edit tests");
+    },
   };
 
   const classRepo = {

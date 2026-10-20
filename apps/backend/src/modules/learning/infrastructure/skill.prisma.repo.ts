@@ -225,5 +225,14 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
     `;
     return rows.map((row) => row.id);
   },
+  delete: async (id) => {
+    // The NextClassJob marker is FK-free, so it does not ride the cascade —
+    // drop it in the same transaction (a committed skill without its marker
+    // can never be re-armed by the reconciler; it is gone).
+    await prisma.$transaction([
+      prisma.nextClassJob.deleteMany({ where: { skillId: id } }),
+      prisma.skill.delete({ where: { id } }),
+    ]);
+  },
 });
 

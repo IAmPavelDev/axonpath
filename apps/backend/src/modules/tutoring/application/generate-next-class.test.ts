@@ -140,6 +140,7 @@ const makeDeps = (
         throw new Error("not used in next-class tests");
       },
       claimStaleFirstLesson: async () => [],
+      delete: async () => {},
     },
     classRepo: {
       findQuestionCountsByClassIds: async () => {

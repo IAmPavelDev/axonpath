@@ -251,6 +251,7 @@ export const configureContainer = ({
     qaRepo,
     quizRepo,
     eventRepo,
+    vectorStore,
     vectorMetadata,
     scraper: makeYoutubeScraperClient(),
     chatModel: config.ai.models.chat,

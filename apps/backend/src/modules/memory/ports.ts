@@ -78,4 +78,12 @@ export type VectorStorePort = {
     skillId?: number;
     excludeSkillId?: number;
   }): Promise<Result<SearchSimilarHit[], VectorStoreError>>;
+  /**
+   * Remove every point belonging to one skill from the embedding store.
+   * Best-effort companion to skill deletion: the relational Vector rows are
+   * the source of truth (dedup checks, spend aggregates) and cascade away
+   * with the skill; this only keeps Qdrant retrieval from resurfacing
+   * deleted-skill snippets.
+   */
+  deleteBySkill(skillId: number): Promise<Result<null, VectorStoreError>>;
 };

@@ -41,6 +41,9 @@ export const GetSkillByIdOutput = z.object({
 
 export const StatusOnly = z.object({ status: z.string() });
 
+/** skill.delete never returns a body worth echoing — just the confirmation. */
+export const DeleteSkillOutput = z.object({ deleted: z.literal(true) });
+
 /** User-settable lifecycle targets — GENERATING/FAILED are machine-managed. */
 export const UpdateSkillStatusInput = z.object({
   id: z.number().int().positive().min(1),

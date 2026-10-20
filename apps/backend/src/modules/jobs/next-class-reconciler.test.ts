@@ -61,6 +61,7 @@ const makeDeps = ({
       settleStaleGenerating: async () => [],
       claimStaleInit: async () => notUsed("claimStaleInit"),
       claimStaleFirstLesson: async () => notUsed("claimStaleFirstLesson"),
+      delete: async () => notUsed("delete"),
     } satisfies SkillRepository,
     classRepo: {
       findQuestionCountsByClassIds: async () =>

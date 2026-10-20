@@ -1,5 +1,6 @@
 package com.iampauld3v.axon.feature.login
 
+import android.app.Activity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +45,9 @@ fun LoginScreen(
 ) {
     val ext = axonExtended()
     val colors = MaterialTheme.colorScheme
+    // ComponentActivity from setContent — Credential Manager needs it to
+    // route the picker result back (app context silently loses it).
+    val activity = LocalContext.current as? Activity
 
     Column(
         modifier = Modifier
@@ -147,7 +152,7 @@ fun LoginScreen(
             }
 
             OutlinedButton(
-                onClick = vm::continueWithGoogle,
+                onClick = { activity?.let(vm::continueWithGoogle) },
                 enabled = vm.busy == null,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = MaterialTheme.shapes.medium,

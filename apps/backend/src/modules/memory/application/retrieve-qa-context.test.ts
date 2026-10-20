@@ -39,6 +39,7 @@ const makeFakeDeps = (options: {
       }
       return options.crossSearch ?? ok([]);
     },
+    deleteBySkill: async () => ok(null),
   };
 
   const deps: RetrieveQaContextDeps = { ai, vectorStore };

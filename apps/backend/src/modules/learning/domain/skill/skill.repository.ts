@@ -45,6 +45,12 @@ export type SkillRepository = {
     description: string;
     status: string;
   }>;
+  /**
+   * Hard delete. Postgres FKs cascade classes, questions, answers, progress,
+   * events, vectors, and recommendations; the FK-free NextClassJob marker is
+   * removed explicitly in the same transaction.
+   */
+  delete(id: number): Promise<void>;
   findById(id: number): Promise<SkillCoreRow | null>;
   /** Archived skills leave the list unless explicitly included (deep links still reach them). */
   listByUser(

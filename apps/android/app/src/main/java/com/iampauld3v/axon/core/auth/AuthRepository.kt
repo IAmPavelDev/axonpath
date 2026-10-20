@@ -1,5 +1,7 @@
 package com.iampauld3v.axon.core.auth
 
+import android.app.Activity
+
 import com.google.android.gms.tasks.Task
 import com.google.firebase.FirebaseNetworkException
 import com.google.firebase.auth.FirebaseAuth
@@ -61,10 +63,10 @@ class AuthRepository(
         AuthResult.Success
     }
 
-    suspend fun signInWithGoogle(): AuthResult {
+    suspend fun signInWithGoogle(activity: Activity): AuthResult {
         if (auth == null) return AuthResult.Failure(NOT_CONFIGURED)
         val idToken = try {
-            google.signInIdToken() ?: return AuthResult.Canceled
+            google.signInIdToken(activity) ?: return AuthResult.Canceled
         } catch (e: GoogleSignInException) {
             return AuthResult.Failure(
                 "Google sign-in failed${e.detail?.let { " — $it" } ?: ""} — try again.",

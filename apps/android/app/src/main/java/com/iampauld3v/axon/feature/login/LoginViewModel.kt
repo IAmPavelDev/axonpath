@@ -1,5 +1,6 @@
 package com.iampauld3v.axon.feature.login
 
+import android.app.Activity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -74,12 +75,12 @@ class LoginViewModel(private val auth: AuthRepository) : ViewModel() {
         }
     }
 
-    fun continueWithGoogle() {
+    fun continueWithGoogle(activity: Activity) {
         if (busy != null) return
         busy = Busy.GOOGLE
         viewModelScope.launch {
             val result = try {
-                auth.signInWithGoogle()
+                auth.signInWithGoogle(activity)
             } catch (e: Exception) {
                 AuthResult.Failure("Google sign-in failed — try again.")
             }

@@ -36,6 +36,9 @@ const makeFakeDeps = () => {
     claimStaleFirstLesson: async () => {
       throw new Error("not used in create tests");
     },
+    delete: async () => {
+      throw new Error("not used in create tests");
+    },
   };
 
   const jobs: JobQueuePort = {

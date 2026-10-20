@@ -36,8 +36,8 @@ export const buildSkillRouter = (deps: SkillApiDeps) => {
     get: rpc.skill.get.handler(handlers.get),
     list: rpc.skill.list.handler(handlers.list),
     progress: rpc.skill.progress.handler(handlers.progress),
-    retry: rpc.skill.retry.handler(handlers.retry),
     mistakes: rpc.skill.mistakes.handler(handlers.mistakes),
+    delete: rpc.skill.delete.handler(handlers.delete),
   };
 };
 

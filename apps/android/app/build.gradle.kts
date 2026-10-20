@@ -23,8 +23,13 @@ android {
     }
 
     signingConfigs {
-        // Debug keystore reused from the RN app so Firebase / Google Sign-In SHA-1 keeps working.
+        // Committed RN-template keystore → identical SHA-1 on every machine.
+        // Google Play services resolves the Sign-In OAuth client by
+        // (package, SHA-1): this fingerprint MUST be registered on the
+        // Firebase Android app com.iampauld3v.axon or Credential Manager
+        // fails with NoCredentialException (see docs/MIGRATION_PLAN.md).
         getByName("debug") {
+            storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"

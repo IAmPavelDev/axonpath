@@ -104,6 +104,7 @@ const makeDeps = (
       throw new Error("not used in list tests");
     },
     claimStaleFirstLesson: async () => [],
+    delete: async () => {},
   };
 
   const qaRepo: ClassQaRepository = {

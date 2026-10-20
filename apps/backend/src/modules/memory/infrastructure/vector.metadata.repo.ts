@@ -156,6 +156,28 @@ export const makeVectorStoreAdapter = (): VectorStorePort => ({
       });
     }
   },
+
+  /**
+   * Remove every point belonging to one skill from the embedding store.
+   * Best-effort companion to skill deletion: the relational Vector rows are
+   * the source of truth (dedup checks, spend aggregates) and cascade away
+   * with the skill; this only keeps Qdrant retrieval from resurfacing
+   * deleted-skill snippets.
+   */
+  deleteBySkill: async (skillId): Promise<Result<null, VectorStoreError>> => {
+    try {
+      await getQdrantClient().delete(QDRANT_COLLECTION, {
+        wait: true,
+        filter: { must: [{ key: "skillId", match: { value: skillId } }] },
+      });
+      return ok(null);
+    } catch (errLike) {
+      return err({
+        kind: "VectorStoreUnavailable",
+        detail: detailOf(errLike),
+      });
+    }
+  },
 });
 
 /**
