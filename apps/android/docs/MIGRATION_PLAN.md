@@ -8,7 +8,7 @@ a phase.
 | Decision | Choice | Why |
 |---|---|---|
 | Stack | Kotlin 2.2 + Compose M3, single module | Android-only; no runtime tax; most AI/human-known Android stack |
-| applicationId | `com.iampauld3v.axon` (same) + committed debug.keystore as `storeFile` | deterministic SHA-1 on every machine; needs its fingerprint registered on the Firebase Android app (one console step) |
+| applicationId | `com.iampavlo.axon` (same) + committed debug.keystore as `storeFile` | deterministic SHA-1 on every machine; needs its fingerprint registered on the Firebase Android app (one console step) |
 | TTS model | download-on-first-run to `filesDir` | APK ~10MB vs ~160MB; repo stays small |
 | API | Retrofit + kotlinx.serialization over oRPC `/rpc` batch endpoint | contract package untouched, DTOs mirror it |
 | DI | manual `AppContainer` | app is small; no codegen |
@@ -24,7 +24,7 @@ a phase.
 | 5 | Auth: Credential Manager + email/password, LoginScreen, nav gating | done |
 | 6 | Features: home (pins), skill create flow, skill detail, conspect reader (markdown + QA + anchor), quiz, settings, video player | done |
 | 7 | TTS: sherpa AAR, model download, word-boundary scroll-follow | done — emulator-verified: download, extract, Kokoro init (FP32 fallback), word pill, scroll-follow; user-phone audio pass pending |
-| 8 | Parity: R8 + arm64 done; Google sign-in error handling fixed + emulator-verified; insets fixed + verified; video player hardened (ready-gate, spinner, error-revert, retry) | in progress — release signing + analytics events + phone sweep pending |
+| 8 | Parity: R8 + arm64 done; Google sign-in error handling fixed + emulator-verified; insets fixed + verified; video player hardened (ready-gate, spinner, error-revert, retry); analytics events + long-press selection ask landed (unit-tested, emulator pass pending) | in progress — release signing + phone sweep pending |
 
 ## Open items / risks log
 - sherpa AAR is gitignored; fetch once after cloning:
@@ -34,19 +34,25 @@ a phase.
   types since the storeFile fix): `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
 - [ ] Google sign-in on local builds is BROKEN until one console step:
   Firebase only has the old EAS-build keystore (`8d6cb4d8…`) for
-  `com.iampauld3v.axon`, so Credential Manager throws NoCredentialException
+  `com.iampavlo.axon`, so Credential Manager throws NoCredentialException
   ("no Google account on this device"). Fix = Firebase console → Project
-  settings → the `com.iampauld3v.axon` Android app → Add fingerprint with the
+  settings → the `com.iampavlo.axon` Android app → Add fingerprint with the
   SHA-1 above → re-download google-services.json into `apps/android/app/` →
   uninstall the previous install once (signing cert changed from
   `~/.android/debug.keystore` to the committed keystore) → rebuild.
 - [ ] Emulator caveat: WebView video renderer crashes under SwiftShader
   (GPU emulation) — video embeds need a real device to verify. RN used the
   identical WebView mechanism, so phone behavior is expected to match RN.
-- [ ] Long-press-selection "Ask AI" deferred (Compose SelectionContainer has
-  no custom-menu hook; anchor-mode tap covers the flow).
-- [ ] Analytics events port (login/class_view/conspect_read/quiz_opened/
-  quiz_completed/lesson_opened + screen tracking).
+- [x] Long-press-selection "Ask AI": long-press a word → its sentence is
+  selected (highlight wash) → bottom-center ✕/Ask AI pill → composer with
+  the verbatim sentence as excerpt + anchorText. Compose has no custom
+  selection-menu hook, so the pill replaces RN's native menu item and the
+  granularity is sentence-level (RN: arbitrary drag selection).
+- [x] Analytics events port: login/class_view/conspect_read/quiz_opened/
+  quiz_completed/lesson_opened + screen_view tracking via
+  core/analytics/Analytics (Firebase logEvent, best-effort like RN
+  lib/analytics.ts). quizFocusAt moved to quiz-tab open (RN parity), so
+  per-answer timing + quiz_completed measure the quiz session itself.
 - Environment note: Gradle/AGP/deps verified downloadable 2026-10-17. If DNS
   errors appear while the Tailscale exit node is up — known accepted
   constraint, report, don't touch Tailscale.

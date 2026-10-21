@@ -6,7 +6,7 @@ Rewrite of `apps/mobile` (React Native, frozen reference) for Android-only.
 ## Package layout
 
 ```
-com.iampauld3v.axon
+com.iampavlo.axon
 ├── AxonApp.kt              # Application; owns AppContainer
 ├── MainActivity.kt         # single activity, Compose NavHost
 ├── core/

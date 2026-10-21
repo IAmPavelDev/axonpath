@@ -155,6 +155,43 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:711087014342:android:f70df074a0a117e599f2c7",
+        "android_client_info": {
+          "package_name": "com.iampavlo.axon"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "711087014342-30sq7c5su7b8cm98bhl4p4irc1j1uo8k.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.iampavlo.axon",
+            "certificate_hash": "9a6647db204058dac1388ad56a3c26895d1f961d"
+          }
+        },
+        {
+          "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6-9y2N0rcH7xLSAy8OTLP-nFx0i1jefg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

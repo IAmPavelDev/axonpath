@@ -1,11 +1,11 @@
 # kotlinx.serialization: keep generated serializers for our DTOs.
 -keepattributes *Annotation*, InnerClasses, Signature
 -dontnote kotlinx.serialization.**
--keep,includedescriptorclasses class com.iampauld3v.axon.**$$serializer { *; }
--keepclassmembers class com.iampauld3v.axon.** {
+-keep,includedescriptorclasses class com.iampavlo.axon.**$$serializer { *; }
+-keepclassmembers class com.iampavlo.axon.** {
     *** Companion;
 }
--keepclasseswithmembers class com.iampauld3v.axon.** {
+-keepclasseswithmembers class com.iampavlo.axon.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
 

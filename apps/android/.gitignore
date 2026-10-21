@@ -11,3 +11,7 @@ cxx/
 # sherpa-onnx AAR is downloaded from k2-fsa GitHub releases (48 MB) —
 # see docs/MIGRATION_PLAN.md for the one-line fetch command.
 app/libs/*.aar
+
+# Android Studio "Generate Signed APK" drops builds in app/release/ — build
+# output, never commit (mapping.txt alone is ~51 MB of R8 de-obfuscation data).
+app/release/

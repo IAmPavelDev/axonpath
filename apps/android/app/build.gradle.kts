@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
@@ -8,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.iampauld3v.axon"
-    compileSdk = 36
+    namespace = "com.iampavlo.axon"
+    compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.iampauld3v.axon"
+        applicationId = "com.iampavlo.axon"
         minSdk = 24
         targetSdk = 36
         versionCode = 1
@@ -26,7 +25,7 @@ android {
         // Committed RN-template keystore → identical SHA-1 on every machine.
         // Google Play services resolves the Sign-In OAuth client by
         // (package, SHA-1): this fingerprint MUST be registered on the
-        // Firebase Android app com.iampauld3v.axon or Credential Manager
+        // Firebase Android app com.iampavlo.axon or Credential Manager
         // fails with NoCredentialException (see docs/MIGRATION_PLAN.md).
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -70,6 +69,7 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+    compileSdkMinor = 2
 }
 
 kotlin {
