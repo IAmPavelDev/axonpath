@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { schema } from "@axon/api-contract";
-import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
-import { toORPCError } from "@/modules/platform/api/error-mapping";
+import type { ApiHandler } from "@/modules/platform/api/handler";
+import { toHttpError } from "@/modules/platform/api/error-mapping";
 import { isErr } from "@/modules/platform/result";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import { makeCreateSkill, type CreateSkillDeps } from "@/modules/learning/application/commands/create-skill";
@@ -36,43 +36,43 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const deleteSkill = makeDeleteSkill(deps);
 
   return {
-    create: (async ({ input, context }) => {
+    create: (async (input, context) => {
       const result = await createSkill({
         prompt: input.prompt,
         userId: context.user.id,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.CreateSkillInput>,
       z.infer<typeof schema.skill.CreateSkillOutput>
     >,
 
-    edit: (async ({ input, context }) => {
+    edit: (async (input, context) => {
       const result = await editSkill({
         id: input.id,
         userId: context.user.id,
         topic: input.topic,
         description: input.description,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.EditSkillInput>,
       z.infer<typeof schema.skill.StatusOnly>
     >,
 
 
-    get: (async ({ input }) => {
+    get: (async (input) => {
       const result = await getSkillById({ skillId: input.id });
       if (isErr(result)) {
-        throw toORPCError(result.error);
+        throw toHttpError(result.error);
       }
       return result.value;
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.GetSkillByIdOutput>
     >,
 
-    list: (async ({ input, context }) => {
+    list: (async (input, context) => {
       const { skills } = await getSkillsList(context.user.id, {
         includeArchived: input?.includeArchived ?? false,
       });
@@ -86,63 +86,63 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
         learnedPoints: skill.learnedPoints,
         lastActivityAt: skill.lastActivityAt,
       }));
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.GetSkillListInput>,
       z.infer<typeof schema.skill.GetSkillListOutput>
     >,
 
-    retry: (async ({ input, context }) => {
+    retry: (async (input, context) => {
       const result = await retrySkill({
         skillId: input.id,
         userId: context.user.id,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.StatusOnly>
     >,
 
-    updateStatus: (async ({ input, context }) => {
+    updateStatus: (async (input, context) => {
       const result = await setSkillStatus({
         skillId: input.id,
         userId: context.user.id,
         status: input.status,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.UpdateSkillStatusInput>,
       z.infer<typeof schema.skill.StatusOnly>
     >,
 
-    progress: (async ({ input, context }) => {
+    progress: (async (input, context) => {
       const result = await getSkillProgress({
         skillId: input.id,
         userId: context.user.id,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.SkillProgressOutput>
     >,
 
-    mistakes: (async ({ input, context }) => {
+    mistakes: (async (input, context) => {
       const result = await getSkillMistakes({
         skillId: input.id,
         userId: context.user.id,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.SkillMistakesOutput>
     >,
 
-    delete: (async ({ input, context }) => {
+    delete: (async (input, context) => {
       const result = await deleteSkill({
         skillId: input.id,
         userId: context.user.id,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.skill.SkillIdInput>,
       z.infer<typeof schema.skill.DeleteSkillOutput>
     >,

@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 
 /**
  * DTOs mirroring packages/api-contract zod schemas 1:1. Dates (z.date()) ride
- * the oRPC wire as ISO-8601 strings — kept as String here, parsed at usage.
+ * the wire as ISO-8601 strings — kept as String here, parsed at usage.
  */
 
 // ---- skill ----

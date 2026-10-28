@@ -1,146 +1,109 @@
-# Axon — API Surface (contract-first, oRPC)
+# Axon — API Surface (REST/JSON, OpenAPI-generated)
 
-> Source of truth: **`packages/api-contract`** (contracts + Zod schemas) and the backend routers
-> that implement them. This doc mirrors the actual code. Anything marked **[UNWIRED]** exists in a
-> schema/contract but is not reachable end-to-end.
+> Source of truth: **`packages/api-contract/src/routes.ts`** (route table) + the zod schemas in
+> `packages/api-contract/src/schema/`. The committed spec `packages/api-contract/openapi.json` is
+> emitted from the table (`pnpm --filter @axon/api-contract build`) and drift-checked in CI.
+> This doc mirrors the actual code (rewritten 2026-10-28 for the oRPC → OpenAPI cutover).
 
 ## 1. Transport
 
-- All RPC calls go through **POST** to the oRPC handler at prefix **`/rpc`**.
-- Single server factory also serves **`/spec.json`** (OpenAPI 3, generated) and **`/`** (Scalar
-  docs UI for that spec).
-- Fastify-native routes: `GET /health`, `GET /ready`, `GET /info`.
-- Client is a **typed oRPC client** (`createORPCClient` + `RPCLink`); the mobile app imports the
-  shared `AppContract` type so calls are compile-checked.
+- Plain **REST/JSON on Fastify** — no RPC envelope: success responses carry the bare output object;
+  failures carry the flat error body (§3). The old oRPC `{"json": …}` envelope is gone.
+- Single server (`buildApp()` in `apps/backend/src/app.ts`) serves:
+  - the 24 API routes (§2), all behind Firebase auth (§2 note);
+  - `GET /spec.json` — the committed OpenAPI **3.0.3** artifact, served verbatim;
+  - `GET /` — Scalar docs UI pointed at `/spec.json`;
+  - Fastify-native `GET /health`, `GET /ready`, `GET /info`.
+- Requests ride the Lambda (`axon-api`, serverless-http → `app.routing`) behind API Gateway
+  (eu-central-1); API Gateway caps requests at 30 s.
+- Client: **generated Kotlin Retrofit client** (openapi-generator, `jvm-retrofit2` +
+  kotlinx-serialization) from the committed spec. `apps/android` never hand-writes paths or
+  payload shapes; `data/api/AxonApi.kt` is a thin mapping facade onto the generated services.
+- Batching: the old oRPC client coalesced parallel screen-mount calls into one `/rpc/__batch__`
+  round trip. That is gone (D9) — screens launch parallel suspend calls (~60 ms RTT, wall time
+  comparable). See GAPS.md.
 
-> The OpenAPI spec exposes declared `method`+`path` per route (e.g. `GET /skill/list`), but the
-> wire protocol the client actually uses is the oRPC RPC format on `/rpc`. Both are generated from
-> the same contract.
+## 2. Route table (24 routes — all require auth)
 
-## 2. Router tree
+Auth = `Authorization: Bearer <Firebase ID token>` on **every** API route; the Fastify
+preValidation hook (`apps/backend/src/lib/auth-hook.ts`) verifies against Google's public keys and
+resolves/provisions the local User row onto `request.user`. Health/ready/info/spec/docs are
+unauthenticated. Auth failures → 401 `{"code":"UNAUTHORIZED","message":…}`.
+
+| Method | Path | Input | Output |
+|---|---|---|---|
+| GET | `/auth/me` | — | `MeOutput` |
+| GET | `/skill/list` | query `includeArchived?` (default false) | `GetSkillListOutput` |
+| POST | `/skill/create` | body `CreateSkillInput` | `CreateSkillOutput` |
+| GET | `/skill/{id}` | path | `GetSkillByIdOutput` |
+| POST | `/skill/{id}/edit` | path + body `{topic?, description?}` | `StatusOnly` |
+| POST | `/skill/{id}/retry` | path | `StatusOnly` |
+| GET | `/skill/{id}/progress` | path | `SkillProgressOutput` |
+| POST | `/skill/{id}/status` | path + body `{status}` | `StatusOnly` |
+| DELETE | `/skill/{id}` | path | `{deleted: true}` |
+| GET | `/skill/{id}/mistakes` | path | `SkillMistakesOutput` |
+| GET | `/class/list` | query `skillId` | `GetClassListOutput` |
+| GET | `/class/{id}` | path | `GetClassByIdOutput` |
+| GET | `/class/qa/list` | query `classId` | `ListClassQaOutput` |
+| POST | `/class/qa/ask` | body `AskClassQuestionInput` | `AskClassQuestionOutput` |
+| POST | `/class/qa/retry` | body `RetryClassQaInput` | `AskClassQuestionOutput` |
+| GET | `/quiz/{classId}` | path | `GetQuizByClassIdOutput` |
+| POST | `/quiz/{classId}/submit` | path + body `{answers[]}` | `SubmitQuizAnswersOutput` |
+| GET | `/quiz/{classId}/result` | path | `GetQuizResultOutput` |
+| GET | `/video/recommendations/list` | query `skillId` | `SkillRecommendationsOutput` |
+| POST | `/video/recommendations/refresh` | body `{skillId}` | `RefreshRecommendationsOutput` |
+| GET | `/video/sponsor-segments` | query `videoId` | `SponsorSegmentsOutput` |
+| POST | `/video/probe` | body `ProbeYouTubeAccessInput` | `ProbeYouTubeAccessOutput` |
+| GET | `/stats/overview` | — | `StatsOverviewOutput` |
+| GET | `/usage/report` | query `skillId?` | `UsageReportOutput` |
+
+Wire notes:
+
+- Path/query values arrive as strings; the Fastify layer coerces number/boolean leaves before
+  zod validation (schema-informed probe in `apps/backend/src/lib/routes.ts`). Failures → 422.
+- `createdAt`-style fields are **ISO-8601 strings** on the wire (`z.date()` ↔ date-time JSON
+  Schema; Fastify serializes `Date` → ISO; Kotlin maps them as `String`).
+- `POST /quiz/{classId}/submit` answers synchronously; long class-qa answers ride the worker tick
+  (≤2 min) — unchanged from the previous build.
+- `POST /video/probe` is a deployment-time diagnostic, documented in the public spec by design (D7).
+
+## 3. Error model (D6)
+
+Flat body + real HTTP status on every failure:
+
+```json
+{"code": "NOT_FOUND", "message": "…"}
+```
+
+- Codes reuse the previous transport's vocabulary: `BAD_REQUEST`, `UNAUTHORIZED`, `NOT_FOUND`,
+  `CONFLICT`, `VALIDATION`, `TOO_MANY_REQUESTS`, `INTERNAL_SERVER_ERROR`, `FORBIDDEN`.
+- Statuses: 400/401/403/404/409/422/429/500 per code (oRPC's COMMON_ERROR_STATUS_MAP baseline).
+- Domain mapping (`toHttpError` in `modules/platform/api/error-mapping.ts`): tagged
+  `*NotFound`/`NotOwned` → 404 (NotOwned hides behind 404 so skill existence never leaks);
+  `InvalidSkillTransition`/`*NotAllowed` → 409; zod input failures → 422 `VALIDATION`;
+  untyped throws → generic 500, internals never leak.
+- Kotlin side: `ApiException(status, code, message)` parsed from the error body.
+
+## 4. Spec & client generation chain
 
 ```
-router
-├── skill
-│   ├── create
-│   └── list
-├── class
-│   ├── list
-│   └── get
-└── quiz
-    ├── get
-    └── submit   ← [UNWIRED] contract declares submit, no router/handler
+schema/*.ts (zod, unchanged — D2)
+  → routes.ts (method+path+schemas meet exactly once — D3)
+    → emit-openapi.ts → openapi.json (committed, CI-drift-checked — D4)
+      ├── backend: lib/routes.ts registers all 24 Fastify routes FROM the table
+      └── android: gradle openApiGenerate → com.iampavlo.axon.data.generated.* (D5)
 ```
 
-## 3. Skill
+## 5. How to add an endpoint
 
-### `skill.create` → POST `/skill/create`
-Input (`CreateSkillInput`):
-```ts
-{ topic: string }
-```
-Output (`CreateSkillOutput`):
-```ts
-{ id: number, status: string }   // status = "DRAFT"
-```
-Behavior: creates a `Skill` (DRAFT), then **detached** (`setImmediate`) background job runs Gemini:
-create Class index 0 → create Questions → embed contextSnippets → insert Vectors. Client returns
-immediately with id + status. **No progress/error channel.**
-
-### `skill.list` → GET `/skill/list`
-Output (`GetSkillListOutput`):
-```ts
-Array<{ id: number, topic: string, status: string, createdAt: Date }>
-```
-Behavior: returns current user's skills.
-
-## 4. Class
-
-### `class.list` → GET `/class/list`
-Input (`GetClassListInput`):
-```ts
-{ skillId: number }
-```
-Output (`GetClassListOutput`):
-```ts
-Array<{ id: number, title: string }>
-```
-> Only `{id, title}` — not `contentMd`. Use `class.get` for content.
-
-### `class.get` → GET `/class/:id`
-Input (`GetClassByIdInput`):
-```ts
-{ id: number }
-```
-Output (`GetClassByIdOutput`):
-```ts
-{ id: number, title: string, contentMd: string }
-```
-Behavior: throws `"Class not found"` if missing.
-
-## 5. Quiz
-
-### `quiz.get` → GET `/quiz/:id`
-Input (`GetQuizByClassIdInput`):
-```ts
-{ classId: number }
-```
-Output (`GetQuizByClassIdOutput`):
-```ts
-Array<{
-  id: number
-  type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "OPEN_ENDED"
-  text: string
-  choices: string[]        // note: choices is REQUIRED non-nullable in schema
-}>
-```
-> The output schema drops `answerKey` (never sent to client — good for cheating avoidance).
-
-### `quiz.submit` → POST `/quiz/:id/submit` — **[UNWIRED]**
-Contract:
-```ts
-Input:  { answers: Array<{ questionId: number, answer: string }> }
-Output: Array<Question>   // same shape as quiz.get
-```
-**Reality:** `quiz.contract.ts` declares `submit`, but the exported `quizContract` omits it — so
-`rpc.quiz.submit` is unreachable — and `router/quiz.router.ts` only wires `get`.
-A controller for it **already exists** as dead code (`controllers/quiz.controller.ts:22`,
-`submitQuizHandler` → `QuizService.submitAnswers`) — it is never wired by the router.
-`QuizService.submitAnswers` itself only re-fetches questions — it does **not** record answers,
-score them, or derive vectors. **Nothing calls it. The mobile Submit button does nothing.**
-
-## 6. Auth context
-
-Every handler receives `context.user` injected by `authMiddleware`. Today that is always the
-hard-coded user **id 1** (John Doe, ADMIN). There is **no real authentication** — password is never
-checked, the client's `Bearer token` is ignored. See ARCHITECTURE §4.5 and ROADMAP.
-
-## 7. Schema vs. service coverage (implemented surface by file)
-
-| Contract op | contract exists | service fn | router wired | controller | reachable |
-|---|---|---|---|---|---|
-| skill.create | ✅ | `SkillService.createSkill` | ✅ | ✅ | ✅ |
-| skill.list | ✅ | `SkillService.getSkillsList` | ✅ | ✅ | ✅ |
-| class.list | ✅ | `ClassService.getClassesList` | ✅ | ✅ | ✅ |
-| class.get | ✅ | `ClassService.getClassById` | ✅ | ✅ | ✅ |
-| quiz.get | ✅ | `QuizService.getQuestionsByClassId` | ✅ | ✅ | ✅ |
-| quiz.submit | ⚠️ | `QuizService.submitAnswers` (stub) | ❌ | ⚠️ handler exists, unwired | ❌ |
-> `quiz.submit` is declared in `quiz.contract.ts` but omitted from the exported `quizContract`, so
-> the typed client (`AppContract`) has no `quiz.submit` to call either.
-
-## 8. Out-of-band endpoints (Fastify, not RPC)
-
-- `GET /health` — status, uptime, env, version.
-- `GET /ready` — simple alive probe.
-- `GET /info` — service metadata + endpoint list.
-- `GET /` — Scalar API docs HTML.
-- `GET /spec.json` — OpenAPI 3 spec.
-
-## 9. How to add an endpoint (pattern to follow)
-
-1. Add route + schemas in `packages/api-contract` (`contract/<ns>.contract.ts`, `schema/<ns>.schema.ts`).
-2. Rebuild the package (`pnpm --filter @axon/api-contract build`) so `dist/` updates.
-3. Add service function in `apps/backend/src/services/<ns>/<ns>.service.ts`.
-4. Add controller in `apps/backend/src/controllers/<ns>.controller.ts` (`OrpcHandler`).
-5. Wire in `apps/backend/src/router/<ns>.router.ts` via `rpc.<ns>.<op>.handler(handler)`.
-6. Add to root `src/router/index.ts` if new namespace.
+1. Add the zod schema in `packages/api-contract/src/schema/<ns>.schema.ts`.
+2. Add a `RouteDef` entry in `packages/api-contract/src/routes.ts` (path placeholders must match
+   the schema field names).
+3. `pnpm --filter @axon/api-contract build` — regenerates `openapi.json` (committed).
+4. Add the handler in `apps/backend/src/modules/<ns>/api/<ns>.handlers.ts` and register it under
+   its operationId in `apps/backend/src/router/index.ts` (`buildApiHandlers`). Registration fails
+   loudly if an operationId is missing.
+5. Regenerate the Kotlin client (automatic on next `./gradlew` build) and extend the
+   `AxonApi` facade + dtos mapping if the UI consumes it.
+6. Drift check: rebuilding the contract with an unchanged `openapi.json` is a no-op; a schema
+   change without re-emitting fails CI (`spec-drift` job).

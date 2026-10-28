@@ -17,10 +17,10 @@ Only 5 packages are direct dependencies; everything else is transitive.
 
 | Package | Severity | Where | Installed | Fix |
 |---|---|---|---|---|
-| @orpc/client | **CRITICAL** | backend, mobile | 1.8.5 / 1.8.6 | ≥ 1.13.6 (prototype pollution in RPC deserialization) |
-| @orpc/openapi | HIGH | backend | 1.8.6 | ≥ 1.13.9 (stored XSS in OpenAPI reference plugin) |
-| @orpc/server | MODERATE | backend, api-contract | 1.8.5 / 1.8.6 | ≥ 1.14.8 (CORS vary-header injection) |
-| @orpc/zod | MODERATE | backend | 1.8.6 | ≥ 1.14.10 (prototype injection in coercion) |
+| @orpc/client | **CRITICAL** | backend, mobile | ~~1.8.5 / 1.8.6~~ | ✅ **RESOLVED-BY-REMOVAL 2026-10-28** — oRPC abandoned for OpenAPI (`knowledge-base/OPENAPI_MIGRATION.md`); dep deleted from all package.jsons |
+| @orpc/openapi | HIGH | backend | ~~1.8.6~~ | ✅ **RESOLVED-BY-REMOVAL 2026-10-28** — same cutover; spec now committed/emitted from the route table |
+| @orpc/server | MODERATE | backend, api-contract | ~~1.8.5 / 1.8.6~~ | ✅ **RESOLVED-BY-REMOVAL 2026-10-28** — same cutover; Fastify routes replace the RPC handler |
+| @orpc/zod | MODERATE | backend | ~~1.8.6~~ | ✅ **RESOLVED-BY-REMOVAL 2026-10-28** — same cutover; ZodSmartCoercion replaced by transport-owned coercion in `lib/routes.ts` |
 | fastify | HIGH | backend | 5.5.0 | ≥ 5.12.2 (header validation bypass; also pulls find-my-way ≥ 9.7) |
 
 ### Transitive, grouped by real exposure

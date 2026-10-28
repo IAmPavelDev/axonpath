@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { schema } from "@axon/api-contract";
-import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
-import { toORPCError } from "@/modules/platform/api/error-mapping";
+import type { ApiHandler } from "@/modules/platform/api/handler";
+import { toHttpError } from "@/modules/platform/api/error-mapping";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import {
   makeGetQuiz,
@@ -24,34 +24,34 @@ export const makeQuizHandlers = (deps: QuizApiDeps) => {
   const getQuizResult = makeGetQuizResult(deps);
 
   return {
-    get: (async ({ input }) => {
+    get: (async (input) => {
       const questions = await getQuiz(input.classId);
       return questions;
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.quiz.GetQuizByClassIdInput>,
       z.infer<typeof schema.quiz.GetQuizByClassIdOutput>
     >,
 
-    submit: (async ({ input, context }) => {
+    submit: (async (input, context) => {
       const result = await submitQuiz({
         classId: input.classId,
         userId: context.user.id,
         answers: input.answers,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.quiz.SubmitQuizAnswersInput>,
       z.infer<typeof schema.quiz.SubmitQuizAnswersOutput>
     >,
 
-    result: (async ({ input, context }) => {
+    result: (async (input, context) => {
       return {
         result: await getQuizResult({
           classId: input.classId,
           userId: context.user.id,
         }),
       };
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.quiz.GetQuizResultInput>,
       z.infer<typeof schema.quiz.GetQuizResultOutput>
     >,

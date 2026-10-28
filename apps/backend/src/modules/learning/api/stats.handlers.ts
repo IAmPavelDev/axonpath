@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { schema } from "@axon/api-contract";
-import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
-import { toORPCError } from "@/modules/platform/api/error-mapping";
+import type { ApiHandler } from "@/modules/platform/api/handler";
+import { toHttpError } from "@/modules/platform/api/error-mapping";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import {
   makeGetLearningStats,
@@ -19,19 +19,19 @@ export const makeStatsHandlers = (deps: StatsApiDeps) => {
   const getUsageReport = makeGetUsageReport(deps);
 
   return {
-    overview: (async ({ context }) =>
-      getLearningStats({ userId: context.user.id })) satisfies OrpcHandler<
+    overview: (async (_, context) =>
+      getLearningStats({ userId: context.user.id })) satisfies ApiHandler<
       unknown,
       z.infer<typeof schema.stats.StatsOverviewOutput>
     >,
 
-    report: (async ({ input, context }) => {
+    report: (async (input, context) => {
       const result = await getUsageReport({
         userId: context.user.id,
         skillId: input?.skillId,
       });
-      return unwrapOrThrow(result, toORPCError);
-    }) satisfies OrpcHandler<
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
       z.infer<typeof schema.stats.UsageReportInput>,
       z.infer<typeof schema.stats.UsageReportOutput>
     >,

@@ -13,7 +13,7 @@
   report the blocker, and let the user decide (e.g. they pause the exit node
   themselves, or you fall back to cached/base images).
 
-## Project state (actualized 2026-10-08)
+## Project state (actualized 2026-10-28)
 - Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
   `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth.
   Backend 286/286 tests and mobile `tsc --noEmit` green as of 2026-10-02.
@@ -34,8 +34,10 @@
   Lambda `axon-api` (30 s) + `axon-worker`
   (15 min, EventBridge `rate(1 minute)`) behind API Gateway HTTPS
   (`https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com`, baked into the APK via
-  `apps/mobile/eas.json`), Postgres on **Neon free** (pooled URL, project
-  `ep-jolly-boat-b1hgyqni`), vectors on **Qdrant Cloud free** (new account — the old
+  `apps/mobile/eas.json`), Postgres on **RDS** (Postgres 18, `db.t4g.micro`
+  single-AZ, instance `axon-db`; replaced Neon free 2026-10-28 — the 1-min
+  worker tick kept Neon compute awake ~720 h/mo and blew its compute-hours
+  quota monthly), vectors on **Qdrant Cloud free** (new account — the old
   account's free tier allowed only one cluster). One image serves both functions:
   `pnpm backend:image:lambda` → push to
   ECR → `bash scripts/provision-serverless.sh` (idempotent, eu-central-1; run it

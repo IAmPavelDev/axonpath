@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "noEmit": true,
-    "outDir": "dist",
+    "types": ["node"],
     "rootDir": "src",
     "target": "ES2021",
     "lib": [
@@ -20,8 +20,7 @@
     "allowImportingTsExtensions": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@schema/*": ["./src/schema/*"],
-      "@contract/*": ["./src/contract/*"]
+      "@schema/*": ["./src/schema/*"]
     }
   },
   "exclude": [

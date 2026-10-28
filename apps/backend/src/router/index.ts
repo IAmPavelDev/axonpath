@@ -1,4 +1,4 @@
-import { rpc } from "@/lib/orpc";
+import type { ApiHandlers } from "@/lib/routes";
 import {
   makeSkillHandlers,
   type SkillApiDeps,
@@ -16,7 +16,6 @@ import {
   makeStatsHandlers,
   type StatsApiDeps,
 } from "@/modules/learning/api/stats.handlers";
-
 import {
   makeVideoHandlers,
   type VideoApiDeps,
@@ -28,74 +27,49 @@ export type LearningApiDeps = SkillApiDeps &
   StatsApiDeps &
   VideoApiDeps;
 
-export const buildSkillRouter = (deps: SkillApiDeps) => {
-  const handlers = makeSkillHandlers(deps);
-  return {
-    create: rpc.skill.create.handler(handlers.create),
-    edit: rpc.skill.edit.handler(handlers.edit),
-    get: rpc.skill.get.handler(handlers.get),
-    list: rpc.skill.list.handler(handlers.list),
-    progress: rpc.skill.progress.handler(handlers.progress),
-    mistakes: rpc.skill.mistakes.handler(handlers.mistakes),
-    delete: rpc.skill.delete.handler(handlers.delete),
-  };
-};
+/**
+ * Flat handler registry keyed by the route table's operationId — the pairing
+ * that `registerApiRoutes` consumes. Keys must match `ROUTES[].id` in
+ * @axon/api-contract (a missing key fails loudly at registration).
+ */
+export const buildApiHandlers = (deps: LearningApiDeps): ApiHandlers => {
+  const skill = makeSkillHandlers(deps);
+  const cls = makeClassHandlers(deps);
+  const quiz = makeQuizHandlers(deps);
+  const auth = makeAuthHandlers();
+  const stats = makeStatsHandlers(deps);
+  const video = makeVideoHandlers(deps);
 
-export const buildClassRouter = (deps: ClassApiDeps) => {
-  const handlers = makeClassHandlers(deps);
   return {
-    list: rpc.class.list.handler(handlers.list),
-    get: rpc.class.get.handler(handlers.get),
-    qa: {
-      ask: rpc.class.qa.ask.handler(handlers.qa.ask),
-      retry: rpc.class.qa.retry.handler(handlers.qa.retry),
-      list: rpc.class.qa.list.handler(handlers.qa.list),
-    },
+    // auth
+    getMe: auth.me,
+    // skill
+    listSkills: skill.list,
+    createSkill: skill.create,
+    getSkillById: skill.get,
+    editSkill: skill.edit,
+    retrySkill: skill.retry,
+    getSkillProgress: skill.progress,
+    updateSkillStatus: skill.updateStatus,
+    deleteSkill: skill.delete,
+    listSkillMistakes: skill.mistakes,
+    // class
+    listClasses: cls.list,
+    getClassById: cls.get,
+    listClassQa: cls.qa.list,
+    askClassQuestion: cls.qa.ask,
+    retryClassQa: cls.qa.retry,
+    // quiz
+    getQuiz: quiz.get,
+    submitQuizAnswers: quiz.submit,
+    getQuizResult: quiz.result,
+    // video
+    listSkillRecommendations: video.recommendationsList,
+    refreshRecommendations: video.recommendationsRefresh,
+    listSponsorSegments: video.sponsorSegments,
+    probeYouTubeAccess: video.probe,
+    // stats
+    getStatsOverview: stats.overview,
+    getUsageReport: stats.report,
   };
 };
-
-export const buildQuizRouter = (deps: QuizApiDeps) => {
-  const handlers = makeQuizHandlers(deps);
-  return {
-    get: rpc.quiz.get.handler(handlers.get),
-    submit: rpc.quiz.submit.handler(handlers.submit),
-    result: rpc.quiz.result.handler(handlers.result),
-  };
-};
-
-export const buildAuthRouter = () => {
-  const handlers = makeAuthHandlers();
-  return {
-    me: rpc.auth.me.handler(handlers.me),
-  };
-};
-
-export const buildStatsRouter = (deps: StatsApiDeps) => {
-  const handlers = makeStatsHandlers(deps);
-  return {
-    overview: rpc.stats.overview.handler(handlers.overview),
-    report: rpc.stats.report.handler(handlers.report),
-  };
-};
-export const buildVideoRouter = (deps: VideoApiDeps) => {
-  const handlers = makeVideoHandlers(deps);
-  return {
-    probe: rpc.video.probe.handler(handlers.probe),
-    recommendations: {
-      list: rpc.video.recommendations.list.handler(handlers.recommendationsList),
-      refresh: rpc.video.recommendations.refresh.handler(
-        handlers.recommendationsRefresh,
-      ),
-    },
-    sponsorSegments: rpc.video.sponsorSegments.handler(handlers.sponsorSegments),
-  };
-};
-
-export const buildRouters = (deps: LearningApiDeps) => ({
-  skill: buildSkillRouter(deps),
-  class: buildClassRouter(deps),
-  quiz: buildQuizRouter(deps),
-  auth: buildAuthRouter(),
-  stats: buildStatsRouter(deps),
-  video: buildVideoRouter(deps),
-});

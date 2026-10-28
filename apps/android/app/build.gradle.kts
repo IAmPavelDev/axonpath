@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.crashlytics)
+    alias(libs.plugins.openapi.generator)
 }
 
 android {
@@ -69,13 +70,46 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
-    compileSdkMinor = 2
-}
+    sourceSets {
+        getByName("main") {
+            // openapi-generator output (D5) — task wired below via preBuild.
+            kotlin.srcDir("$buildDir/generated/openapi/src/main/kotlin")
+        }
+    }
 
+}
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
+}
+
+// Generated Retrofit client from the committed contract spec (migration D4/D5):
+// packages/api-contract/openapi.json → com.iampavlo.axon.data.generated.*.
+// P0-tested flags; spec is the committed artifact — builds never hit a server.
+openApiGenerate {
+    generatorName.set("kotlin")
+    library.set("jvm-retrofit2")
+    inputSpec.set("${project.rootDir}/../../packages/api-contract/openapi.json")
+    outputDir.set("$buildDir/generated/openapi")
+    cleanupOutput.set(true)
+    apiPackage.set("com.iampavlo.axon.data.generated.apis")
+    packageName.set("com.iampavlo.axon.data.generated")
+    modelPackage.set("com.iampavlo.axon.data.generated.model")
+    configOptions.set(
+        mapOf(
+            "packageName" to "com.iampavlo.axon.data.generated",
+            "apiPackage" to "com.iampavlo.axon.data.generated.apis",
+            "modelPackage" to "com.iampavlo.axon.data.generated.model",
+            "serializationLibrary" to "kotlinx_serialization",
+            "dateLibrary" to "string",
+            "useCoroutines" to "true",
+        ),
+    )
+}
+
+tasks.named("preBuild") {
+    dependsOn("openApiGenerate")
 }
 
 dependencies {
@@ -103,6 +137,7 @@ dependencies {
 
     implementation(libs.retrofit.core)
     implementation(libs.retrofit.serialization)
+    implementation(libs.retrofit.scalars)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.kotlinx.serialization.json)

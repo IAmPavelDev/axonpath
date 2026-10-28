@@ -1,20 +1,17 @@
 import fastify from 'fastify';
-import type { FastifyError, FastifyServerFactoryHandler } from 'fastify';
-import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { RPCHandler } from '@orpc/server/node';
-import { ORPCError } from '@orpc/server';
-import { decodeJwt } from 'jose';
+import type { FastifyError } from 'fastify';
 import { logger } from '@/lib/logger';
-import { BatchHandlerPlugin, CORSPlugin } from '@orpc/server/plugins';
 import sensible from '@fastify/sensible';
 import env from '@fastify/env';
-import { buildRouters } from '@router/index';
-import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
-import { experimental_ZodSmartCoercionPlugin as ZodSmartCoercionPlugin } from '@orpc/zod/zod4';
-import { OpenAPIGenerator } from '@orpc/openapi';
+import { buildApiHandlers } from '@router/index';
+import { registerApiRoutes } from '@/lib/routes';
+import { makeAuthHookDeps } from '@/lib/auth-hook';
+// The committed contract artifact (D4) — emitted by the api-contract build,
+// which must run first (repo build-order rule).
+import spec from '@axon/api-contract/dist/openapi.json';
 
-// Wiring: container (repositories/use cases/jobs) → oRPC routers → RPC handler.
+// Wiring: container (repositories/use cases/jobs) → handler registry →
+// Fastify routes generated from the contract route table.
 import { configureContainer } from './container';
 
 interface AppConfig {
@@ -29,194 +26,51 @@ declare module 'fastify' {
   }
 }
 
+const SCALAR_DOCS_HTML = `
+  <!doctype html>
+  <html>
+    <head>
+      <title>My Client</title>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <link rel="icon" type="image/svg+xml" href="https://scalar.com/favicon.svg" />
+    </head>
+    <body>
+      <div id="app"></div>
+      <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+      <script>
+        Scalar.createApiReference('#app', {
+          url: '/spec.json',
+          authentication: {
+            securitySchemes: {
+              bearerAuth: {
+                token: 'default-token',
+              },
+            },
+          },
+        })
+      </script>
+    </body>
+  </html>
+`;
+
 /**
  * Build the whole app exactly once, shared by both entrypoints:
- * - main.ts: `app.listen` on the container (long-lived server, EC2 today).
- * - lambda-api.ts: no listen; `handleRequest` is wrapped by serverless-http
- *   with Fastify's router as the fallback handler.
+ * - main.ts: `app.listen` on the container (long-lived server, dev compose).
+ * - lambda-api.ts: no listen; the serverless-http wrapper drives
+ *   `app.routing` directly.
  */
 export const buildApp = async () => {
   const container = configureContainer();
 
-  const routers = buildRouters(container);
-
-  const rpc = new RPCHandler(routers, {
-    plugins: [
-      new CORSPlugin(),
-      new ZodSmartCoercionPlugin(),
-      // Mobile fires a screen's parallel queries in one tick; the batch plugin
-      // collapses them into a single HTTP round trip. Buffered mode:
-      // serverless-http / API Gateway cannot stream a batch response body.
-      new BatchHandlerPlugin(),
-    ],
-    // Procedure-level error capture: oRPC turns undeclared throws into an
-    // INTERNAL response without logging anything, so this is the only place
-    // the actual error (with stack) reaches CloudWatch. Client-fault 4xx
-    // (expired/malformed token → UNAUTHORIZED, missing rows → NOT_FOUND) is
-    // a routine outcome — debug keeps it queryable without inflating the
-    // Axon/Backend Errors metric; undeclared throws and 5xx log at error.
-    clientInterceptors: [
-      async (options) => {
-        try {
-          return await options.next();
-        } catch (error) {
-          if (error instanceof ORPCError && error.status < 500) {
-            logger.debug({ err: error, path: options.path }, 'RPC client error');
-          } else {
-            logger.error({ err: error, path: options.path }, 'RPC error');
-          }
-          throw error;
-        }
-      },
-    ],
-  });
-
-  const openAPIGenerator = new OpenAPIGenerator({
-    schemaConverters: [new ZodToJsonSchemaConverter()],
-  });
-
-  /**
-   * The one raw-Node request path. RPC routes bypass Fastify's router
-   * (oRPC handles req/res directly); the OpenAPI spec and docs endpoints are
-   * served here too; everything else falls through to Fastify.
-   */
-  const handleRequest = async (
-    req: IncomingMessage,
-    res: ServerResponse,
-    fastifyHandler: FastifyServerFactoryHandler,
-  ): Promise<void> => {
-    const startedAt = Date.now();
-    try {
-      // Handle RPC routes first
-      const { matched: rpcMatched } = await rpc.handle(req, res, {
-        context: { headers: req.headers },
-        prefix: '/rpc',
-      });
-      if (rpcMatched) {
-        // Fastify's request logger never sees this path (raw router bypass),
-        // so this line is the API's access log in CloudWatch: request
-        // counts, latency, and distinct users via count_distinct(userId).
-        const authHeader = req.headers.authorization;
-        let userId: string | undefined;
-        if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-          try {
-            userId = decodeJwt(authHeader.slice('Bearer '.length).trim()).sub;
-          } catch {
-            // Malformed token — auth middleware will have rejected it; the
-            // request line still logs, just without user attribution.
-          }
-        }
-        const log = {
-          method: req.method,
-          url: req.url,
-          status: res.statusCode,
-          durationMs: Date.now() - startedAt,
-          userId,
-        };
-        if (res.statusCode >= 500) logger.error(log, 'request');
-        else logger.info(log, 'request');
-        return;
-      }
-
-      // Handle OpenAPI spec endpoint
-      if (req.url === '/spec.json') {
-        try {
-          const spec = await openAPIGenerator.generate(routers, {
-            info: {
-              title: 'My Playground',
-              version: '1.0.0',
-            },
-            servers: [{ url: '/rpc' }],
-            security: [{ bearerAuth: [] }],
-            components: {
-              securitySchemes: {
-                bearerAuth: {
-                  type: 'http',
-                  scheme: 'bearer',
-                },
-              },
-            },
-          });
-
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify(spec));
-          return;
-        } catch (error) {
-          res.writeHead(500, { 'Content-Type': 'application/json' });
-          res.end(
-            JSON.stringify({ error: 'Failed to generate OpenAPI spec' }),
-          );
-          return;
-        }
-      }
-
-      // For root path, serve documentation
-      if (req.url === '/') {
-        const html = `
-          <!doctype html>
-          <html>
-            <head>
-              <title>My Client</title>
-              <meta charset="utf-8" />
-              <meta name="viewport" content="width=device-width, initial-scale=1" />
-              <link rel="icon" type="image/svg+xml" href="https://orpc.unnoq.com/icon.svg" />
-            </head>
-            <body>
-              <div id="app"></div>
-
-              <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-              <script>
-                Scalar.createApiReference('#app', {
-                  url: '/spec.json',
-                  authentication: {
-                    securitySchemes: {
-                      bearerAuth: {
-                        token: 'default-token',
-                      },
-                    },
-                  },
-                })
-              </script>
-            </body>
-          </html>
-        `;
-
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(html);
-        return;
-      }
-
-      // Let Fastify handle all other routes (including /health)
-      fastifyHandler(req, res);
-    } catch (error) {
-      logger.error({ err: error }, 'Server factory error');
-      if (!res.headersSent) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Internal server error' }));
-      }
-    }
-  };
+  const handlers = buildApiHandlers(container);
 
   const app = fastify({
     loggerInstance: logger,
-    serverFactory: (fastifyHandler) => {
-      const server = createServer(
-        {
-          // Node's default keepAliveTimeout is 5s: the server closes an idle
-          // pooled keep-alive connection right as the client (mobile okhttp)
-          // reuses it → "unexpected end of stream". 72s keeps the server quiet
-          // well past typical client/intermediary idle windows (~60s), so it is
-          // never the side that hangs up first. Fastify's own keepAliveTimeout
-          // option cannot apply: the socket is created here, not by Fastify.
-          keepAliveTimeout: 72_000,
-        },
-        async (req, res) => {
-          await handleRequest(req, res, fastifyHandler);
-        },
-      );
-
-      return server;
-    },
+    // Fastify owns the socket; 72s keeps the server quiet past typical
+    // client/intermediary idle windows (~60s) so it is never the side that
+    // hangs up first ("unexpected end of stream" on pooled okhttp clients).
+    keepAliveTimeout: 72_000,
   });
 
   const envSchema = {
@@ -276,9 +130,33 @@ export const buildApp = async () => {
         ready: '/ready',
         docs: '/',
         spec: '/spec.json',
-        rpc: '/rpc/*',
       },
     };
+  });
+
+  // Committed OpenAPI spec (D4) + Scalar docs on the same origin.
+  app.get('/spec.json', async (_request, reply) => reply.send(spec));
+  app.get('/', async (_request, reply) => {
+    reply.type('text/html').send(SCALAR_DOCS_HTML);
+  });
+
+  // All 24 API routes, auth-hooked and table-driven. The scoped plugin keeps
+  // the auth hook + access log off the health/docs endpoints.
+  await app.register(async (api) => {
+    // The API access log in CloudWatch (the previous transport needed a raw
+    // access log in CloudWatch: request counts, latency, distinct users.
+    api.addHook('onResponse', async (request, reply) => {
+      const log = {
+        method: request.method,
+        url: request.url,
+        status: reply.statusCode,
+        durationMs: reply.elapsedTime.toFixed(0),
+        userId: request.user?.id,
+      };
+      if (reply.statusCode >= 500) api.log.error(log, 'request');
+      else api.log.info(log, 'request');
+    });
+    registerApiRoutes(api, handlers, makeAuthHookDeps());
   });
 
   // Error handler
@@ -314,5 +192,5 @@ export const buildApp = async () => {
     });
   });
 
-  return { app, container, handleRequest };
+  return { app, container };
 };

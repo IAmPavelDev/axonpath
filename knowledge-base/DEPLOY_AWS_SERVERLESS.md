@@ -1,4 +1,4 @@
-# Axon — Serverless deployment (Lambda + API Gateway + Neon + Qdrant Cloud)
+# Axon — Serverless deployment (Lambda + API Gateway + RDS + Qdrant Cloud)
 
 > Written 2026-10-02. **Execution authority for the serverless deployment.**
 >
@@ -10,6 +10,15 @@
 > HTTPS connection), which dominated perceived latency while Lambda itself
 > served warm requests in ~20 ms (p50). Secrets live in `.env.aws.serverless.eu`.
 > The old us-east-1 stack (`5m849jukxl…`) is retired after device verification.
+>
+> **2026-10-28 DB move:** Neon free → **RDS** (`axon-db`, Postgres 18,
+> `db.t4g.micro` single-AZ, eu-central-1, publicly reachable, `sslmode=require`).
+> Cause: the EventBridge minute tick keeps Postgres compute awake ~720 h/mo —
+> structurally incompatible with any Neon free compute-hours quota (prod 500s
+> "Authentication failed" from 09:50 UTC when the quota went hard). Fresh
+> start: schema migrated, data dropped (3 test users relogin via Firebase;
+> uids unchanged, so Qdrant vectors stay valid). New expected total: **~$20/mo**
+> (RDS on-demand; the 2026-10-02 cost note below is history).
 >
 > Cost decision (2026-10-02): the AWS account was created 2024-05-05, so the
 > classic 12-month free tier expired 2025-05-05 and the post-2025-07 credits
@@ -26,7 +35,7 @@
 |---|---|---|
 | API | Lambda `axon-api` (30 s cap) + API Gateway HTTP API (payload 1.0) | `serverless-http` wraps the shared raw handler (`src/app.ts`); Fastify's router serves `/health` `/ready` `/info`; oRPC handles `/rpc/*` before Fastify |
 | Jobs | Lambda `axon-worker` (15 min cap), EventBridge Scheduler `rate(1 minute)` | One sweep per tick: next-class reconcile + claim + generation **awaited inline**, class-qa stranded requeue, then `jobQueueIdle()` drains every setImmediate job incl. follow-ups |
-| Postgres | Neon free plan, **pooled** endpoint | Durable job queues (`FOR UPDATE SKIP LOCKED`) unchanged; migrations run from the dev machine — no migrate step in Lambda |
+| Postgres | **RDS** `axon-db` (Postgres 18, `db.t4g.micro` single-AZ, public, TLS) | Durable job queues (`FOR UPDATE SKIP LOCKED`) unchanged; migrations run from the dev machine — no migrate step in Lambda |
 | Vectors | Qdrant Cloud free cluster | Same collection shape (3072-dim cosine + userId/skillId indexes) via `qdrant-migrate.mts` |
 | Auth | Firebase (unchanged) | JWKS fetch needs public egress — the reason there is **no VPC and no NAT Gateway** (NAT alone would be ~$33/mo) |
 
@@ -40,8 +49,12 @@ jobs (see `next-class-job.repository.ts`).
 
 1. Install the AWS CLI and configure credentials:
    `sudo pacman -S aws-cli && aws configure` (keys from IAM console).
-2. Create a **Neon** project (neon.tech, free plan) → copy the **pooled**
-   connection string → `DATABASE_URL`.
+2. Create the **RDS** instance (done 2026-10-28; recreate only if rebuilding):
+   `aws rds create-db-instance --region eu-central-1 --db-instance-identifier axon-db
+   --engine postgres --db-instance-class db.t4g.micro --allocated-storage 20
+   --storage-type gp3 --db-name axon --master-username axon_admin
+   --publicly-accessible --no-multi-az --backup-retention-period 7 --deletion-protection`
+   → assemble `DATABASE_URL=postgresql://axon_admin:<pwd>@<endpoint>:5432/axon?sslmode=require`.
 3. Create a **Qdrant Cloud** free cluster → API key → `QDRANT_URL` + `QDRANT_API_KEY`.
 4. Fill `.env.aws.serverless.eu` (template: `.env.aws.serverless.example`).
 

@@ -87,3 +87,34 @@ register the app in Firebase console (axon-9e88e) with its SHA-1 — done
 8d6cb4d85ce3ae0ec8c5d24159d2d3bb6011a1aa (error 10 before that). Any future
 package change or new signing key must repeat this; (d) iOS `bundleIdentifier` still
 `com.axon.app` (untouched) — align it in the same production pass if iOS ships.
+
+## 🟠 17. Prod Postgres on Neon free — compute-hours quota incompatible with the worker
+
+Closed 2026-10-28. The EventBridge `rate(1 minute)` worker tick keeps Postgres
+compute awake ~720 h/mo; Neon free compute-hours quota dies mid-month every
+month. Went hard on 2026-10-28 ~09:50 UTC: every connection refused, and
+`auth.middleware.ts` masked the Prisma connect failure as 500 "Authentication
+failed" (diagnosed only via CloudWatch + direct psql). Fix: moved to RDS
+`axon-db` (Postgres 18, `db.t4g.micro` single-AZ, eu-central-1, publicly
+reachable with TLS, ~$20/mo). Schema migrated fresh (`prisma migrate deploy`,
+21 migrations); relational data dropped deliberately — 3 test users relogin via
+Firebase, uids unchanged so Qdrant vectors remain valid. Endpoint + credentials
+in `.env.aws.serverless.eu` (`RDS_MASTER_PASSWORD`, `DATABASE_URL` with
+`sslmode=require`). Neon project `ep-jolly-boat-b1hgyqni` is dead — delete it
+in the Neon console.
+
+## 🟡 18. oRPC batch coalescing lost in the OpenAPI cutover (accepted — D9)
+
+Opened 2026-10-28 (`knowledge-base/OPENAPI_MIGRATION.md`). The oRPC client
+coalesced a screen's parallel queries into one `/rpc/__batch__` HTTP round trip
+(8 ms window). The REST transport has no batching: screen-mount calls go out as
+2–4 parallel HTTPS requests (~60 ms RTT each, eu-central-1 — wall time
+comparable, no user-visible regression expected or measured). The Kotlin
+ViewModels already launch concurrent suspend calls, so no serialization was
+introduced. Revisit only if screen-mount latency regresses on-device; a
+server-side batch endpoint or HTTP/2 multiplexing (API Gateway + OkHttp do
+HTTP/2 already) would be the levers.
+
+P0 quirks recorded during the cutover (generator version, zod v4 openapi-3.0
+target behaviors, BigDecimal-for-bare-number mapping, single-tag API-class
+grouping) live in `knowledge-base/OPENAPI_MIGRATION.md` §9.

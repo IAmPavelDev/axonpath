@@ -1,0 +1,2669 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Axon API",
+    "version": "1.0.0",
+    "description": "Generated from packages/api-contract zod schemas — do not edit by hand; change routes.ts and re-run the emitter."
+  },
+  "servers": [
+    {
+      "url": "https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Firebase ID token",
+        "description": "Firebase ID token issued at client sign-in."
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Machine-readable error code (vocabulary continuity: BAD_REQUEST, UNAUTHORIZED, NOT_FOUND, CONFLICT, VALIDATION, TOO_MANY_REQUESTS, INTERNAL_SERVER_ERROR, ...)"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "getMeResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "email": {
+            "type": "string"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "photoUrl": {
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "emailVerified": {
+            "type": "boolean"
+          },
+          "firebaseUid": {
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "firstName",
+          "lastName",
+          "photoUrl",
+          "role",
+          "status",
+          "emailVerified",
+          "firebaseUid"
+        ],
+        "additionalProperties": false
+      },
+      "listSkillsResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "topic": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "lessonCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "completedLessons": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "learnedPoints": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "lastActivityAt": {
+              "nullable": true,
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "topic",
+            "status",
+            "createdAt",
+            "lessonCount",
+            "completedLessons",
+            "learnedPoints",
+            "lastActivityAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "createSkillResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "createSkillRequest": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      },
+      "getSkillByIdResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "topic",
+          "description",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "editSkillResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "editSkillRequest": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "retrySkillResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "getSkillProgressResponse": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "number"
+          },
+          "topic": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "lessonCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "completedLessons": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "learnedPoints": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "accuracy": {
+                "nullable": true,
+                "type": "number"
+              }
+            },
+            "required": [
+              "lessonCount",
+              "completedLessons",
+              "learnedPoints",
+              "accuracy"
+            ],
+            "additionalProperties": false
+          },
+          "classes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "classId": {
+                  "type": "number"
+                },
+                "index": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "title": {
+                  "type": "string"
+                },
+                "questionCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "answeredCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "correctCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "completed": {
+                  "type": "boolean"
+                },
+                "accuracy": {
+                  "nullable": true,
+                  "type": "number"
+                }
+              },
+              "required": [
+                "classId",
+                "index",
+                "title",
+                "questionCount",
+                "answeredCount",
+                "correctCount",
+                "completed",
+                "accuracy"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "skillId",
+          "topic",
+          "status",
+          "totals",
+          "classes"
+        ],
+        "additionalProperties": false
+      },
+      "updateSkillStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "updateSkillStatusRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PAUSED",
+              "ACTIVE",
+              "COMPLETED",
+              "ARCHIVED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "deleteSkillResponse": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "additionalProperties": false
+      },
+      "listSkillMistakesResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "questionId": {
+              "type": "number"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "MULTIPLE_CHOICE",
+                "TRUE_FALSE",
+                "OPEN_ENDED"
+              ]
+            },
+            "questionText": {
+              "type": "string"
+            },
+            "choices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "yourAnswer": {
+              "type": "string"
+            },
+            "correctAnswer": {
+              "nullable": true,
+              "type": "string"
+            },
+            "feedback": {
+              "nullable": true,
+              "type": "string"
+            },
+            "score": {
+              "nullable": true,
+              "type": "number"
+            },
+            "classId": {
+              "nullable": true,
+              "type": "number"
+            },
+            "classIndex": {
+              "nullable": true,
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "answeredAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "questionId",
+            "type",
+            "questionText",
+            "choices",
+            "yourAnswer",
+            "correctAnswer",
+            "feedback",
+            "score",
+            "classId",
+            "classIndex",
+            "answeredAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "listClassesResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "title": {
+              "type": "string"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "questionCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "learnedPoints": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "lastActivityAt": {
+              "nullable": true,
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "createdAt",
+            "questionCount",
+            "learnedPoints",
+            "lastActivityAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "getClassByIdResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "skillId": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "contentMd": {
+            "type": "string"
+          },
+          "baseLanguage": {
+            "nullable": true,
+            "type": "string"
+          },
+          "clipStatus": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "READY",
+              "SKIPPED"
+            ]
+          },
+          "videoClips": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "number"
+                },
+                "anchorParagraph": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "videoId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "channel": {
+                  "type": "string"
+                },
+                "startSeconds": {
+                  "type": "number"
+                },
+                "endSeconds": {
+                  "type": "number"
+                },
+                "transcriptExcerpt": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "concept": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "anchorParagraph",
+                "videoId",
+                "title",
+                "channel",
+                "startSeconds",
+                "endSeconds",
+                "transcriptExcerpt",
+                "concept"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "skillId",
+          "title",
+          "contentMd",
+          "baseLanguage",
+          "clipStatus",
+          "videoClips"
+        ],
+        "additionalProperties": false
+      },
+      "listClassQaResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "classId": {
+              "type": "number"
+            },
+            "anchorParagraph": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "anchorText": {
+              "nullable": true,
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "answer": {
+              "nullable": true,
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "PENDING",
+                "ANSWERED",
+                "FAILED"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "classId",
+            "anchorParagraph",
+            "anchorText",
+            "question",
+            "answer",
+            "status",
+            "createdAt"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "askClassQuestionResponse": {
+        "type": "object",
+        "properties": {
+          "blockId": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ANSWERED",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "blockId",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "askClassQuestionRequest": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "number"
+          },
+          "anchorParagraph": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "anchorText": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        },
+        "required": [
+          "classId",
+          "anchorParagraph",
+          "question"
+        ]
+      },
+      "retryClassQaResponse": {
+        "type": "object",
+        "properties": {
+          "blockId": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "ANSWERED",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "blockId",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "retryClassQaRequest": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "number"
+          },
+          "blockId": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "classId",
+          "blockId"
+        ]
+      },
+      "getQuizResponse": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "number"
+            },
+            "type": {
+              "type": "string",
+              "enum": [
+                "MULTIPLE_CHOICE",
+                "TRUE_FALSE",
+                "OPEN_ENDED"
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "choices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "text",
+            "choices"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "submitQuizAnswersResponse": {
+        "type": "object",
+        "properties": {
+          "score": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "perQuestion": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questionId": {
+                  "type": "number"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "MULTIPLE_CHOICE",
+                    "TRUE_FALSE",
+                    "OPEN_ENDED"
+                  ]
+                },
+                "isCorrect": {
+                  "nullable": true,
+                  "type": "boolean"
+                },
+                "correctAnswer": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "userAnswer": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "questionId",
+                "type",
+                "isCorrect",
+                "correctAnswer",
+                "userAnswer"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "score",
+          "total",
+          "perQuestion"
+        ],
+        "additionalProperties": false
+      },
+      "submitQuizAnswersRequest": {
+        "type": "object",
+        "properties": {
+          "answers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "questionId": {
+                  "type": "number"
+                },
+                "answer": {
+                  "type": "string"
+                },
+                "timeSpentMs": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "questionId",
+                "answer"
+              ]
+            }
+          }
+        },
+        "required": [
+          "answers"
+        ]
+      },
+      "getQuizResultResponse": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "nullable": true,
+            "type": "object",
+            "properties": {
+              "score": {
+                "type": "number"
+              },
+              "total": {
+                "type": "number"
+              },
+              "perQuestion": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "questionId": {
+                      "type": "number"
+                    },
+                    "type": {
+                      "type": "string",
+                      "enum": [
+                        "MULTIPLE_CHOICE",
+                        "TRUE_FALSE",
+                        "OPEN_ENDED"
+                      ]
+                    },
+                    "isCorrect": {
+                      "nullable": true,
+                      "type": "boolean"
+                    },
+                    "correctAnswer": {
+                      "nullable": true,
+                      "type": "string"
+                    },
+                    "userAnswer": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "questionId",
+                    "type",
+                    "isCorrect",
+                    "correctAnswer",
+                    "userAnswer"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "score",
+              "total",
+              "perQuestion"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "listSkillRecommendationsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "READY",
+              "FAILED"
+            ]
+          },
+          "videos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "videoId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "channel": {
+                  "type": "string"
+                },
+                "durationSeconds": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "rank": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "videoId",
+                "title",
+                "channel",
+                "durationSeconds",
+                "rank"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "status",
+          "videos"
+        ],
+        "additionalProperties": false
+      },
+      "refreshRecommendationsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "READY",
+              "FAILED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "refreshRecommendationsRequest": {
+        "type": "object",
+        "properties": {
+          "skillId": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "skillId"
+        ]
+      },
+      "listSponsorSegmentsResponse": {
+        "type": "object",
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "startSeconds": {
+                  "type": "number"
+                },
+                "endSeconds": {
+                  "type": "number"
+                },
+                "category": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "startSeconds",
+                "endSeconds",
+                "category"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "segments"
+        ],
+        "additionalProperties": false
+      },
+      "probeYouTubeAccessResponse": {
+        "type": "object",
+        "properties": {
+          "ranAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "egressIp": {
+            "nullable": true,
+            "type": "string"
+          },
+          "search": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "httpStatus": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "detail": {
+                "nullable": true,
+                "type": "string"
+              },
+              "query": {
+                "type": "string"
+              },
+              "resultCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "topResults": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "videoId": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "channel": {
+                      "type": "string"
+                    },
+                    "durationSeconds": {
+                      "nullable": true,
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "viewCountText": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "videoId",
+                    "title",
+                    "channel",
+                    "durationSeconds",
+                    "viewCountText"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "ok",
+              "latencyMs",
+              "httpStatus",
+              "detail",
+              "query",
+              "resultCount",
+              "topResults"
+            ],
+            "additionalProperties": false
+          },
+          "watchPage": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "httpStatus": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "detail": {
+                "nullable": true,
+                "type": "string"
+              },
+              "videoId": {
+                "type": "string"
+              },
+              "playabilityStatus": {
+                "nullable": true,
+                "type": "string"
+              },
+              "playabilityReason": {
+                "nullable": true,
+                "type": "string"
+              },
+              "title": {
+                "nullable": true,
+                "type": "string"
+              },
+              "durationSeconds": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "required": [
+              "ok",
+              "latencyMs",
+              "httpStatus",
+              "detail",
+              "videoId",
+              "playabilityStatus",
+              "playabilityReason",
+              "title",
+              "durationSeconds"
+            ],
+            "additionalProperties": false
+          },
+          "transcript": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "boolean"
+              },
+              "latencyMs": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "httpStatus": {
+                "nullable": true,
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "detail": {
+                "nullable": true,
+                "type": "string"
+              },
+              "videoId": {
+                "type": "string"
+              },
+              "language": {
+                "nullable": true,
+                "type": "string"
+              },
+              "isAutoGenerated": {
+                "nullable": true,
+                "type": "boolean"
+              },
+              "segmentCount": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "samples": {
+                "maxItems": 3,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "startSeconds": {
+                      "type": "number"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "startSeconds",
+                    "text"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "ok",
+              "latencyMs",
+              "httpStatus",
+              "detail",
+              "videoId",
+              "language",
+              "isAutoGenerated",
+              "segmentCount",
+              "samples"
+            ],
+            "additionalProperties": false
+          },
+          "verdict": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ranAt",
+          "egressIp",
+          "search",
+          "watchPage",
+          "transcript",
+          "verdict"
+        ],
+        "additionalProperties": false
+      },
+      "probeYouTubeAccessRequest": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "default": "javascript closures explained",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "videoId": {
+            "type": "string",
+            "pattern": "^[\\w-]{11}$"
+          }
+        }
+      },
+      "getStatsOverviewResponse": {
+        "type": "object",
+        "properties": {
+          "weeklyActiveSkills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weekStart": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "activeSkills": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "weekStart",
+                "activeSkills"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "currentStreakDays": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "answersThisWeek": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "lessonsCompletedThisWeek": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "skillId": {
+                  "type": "number"
+                },
+                "topic": {
+                  "type": "string"
+                },
+                "lessonCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "completedLessons": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "lastActivityAt": {
+                  "nullable": true,
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "skillId",
+                "topic",
+                "lessonCount",
+                "completedLessons",
+                "lastActivityAt"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "weeklyActiveSkills",
+          "currentStreakDays",
+          "answersThisWeek",
+          "lessonsCompletedThisWeek",
+          "skills"
+        ],
+        "additionalProperties": false
+      },
+      "getUsageReportResponse": {
+        "type": "object",
+        "properties": {
+          "totals": {
+            "type": "object",
+            "properties": {
+              "promptTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "completionTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "embeddingTokens": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "estimatedCostUsd": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "promptTokens",
+              "completionTokens",
+              "embeddingTokens",
+              "estimatedCostUsd"
+            ],
+            "additionalProperties": false
+          },
+          "byKind": {
+            "type": "object",
+            "properties": {
+              "skillInit": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "promptTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "completionTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "estimatedCostUsd": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "events",
+                  "promptTokens",
+                  "completionTokens",
+                  "estimatedCostUsd"
+                ],
+                "additionalProperties": false
+              },
+              "nextClass": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "promptTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "completionTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "estimatedCostUsd": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "events",
+                  "promptTokens",
+                  "completionTokens",
+                  "estimatedCostUsd"
+                ],
+                "additionalProperties": false
+              },
+              "qa": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "promptTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "completionTokens": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991
+                  },
+                  "estimatedCostUsd": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "events",
+                  "promptTokens",
+                  "completionTokens",
+                  "estimatedCostUsd"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "skillInit",
+              "nextClass",
+              "qa"
+            ],
+            "additionalProperties": false
+          },
+          "eventsWithoutUsage": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "vectorsWithoutTokenCount": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "window": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time"
+              },
+              "to": {
+                "nullable": true,
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "from",
+              "to"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "totals",
+          "byKind",
+          "eventsWithoutUsage",
+          "vectorsWithoutTokenCount",
+          "window"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/auth/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Get the authenticated user profile",
+        "tags": [
+          "Auth"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getMeResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skill/list": {
+      "get": {
+        "operationId": "listSkills",
+        "summary": "List skills (archived excluded unless included)",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listSkillsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "default": false,
+              "type": "boolean"
+            }
+          }
+        ]
+      }
+    },
+    "/skill/create": {
+      "post": {
+        "operationId": "createSkill",
+        "summary": "Create a skill from a freeform learning brief",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/createSkillResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/createSkillRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skill/{id}": {
+      "get": {
+        "operationId": "getSkillById",
+        "summary": "Get skill by id",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getSkillByIdResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteSkill",
+        "summary": "Delete a skill and its classes",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/deleteSkillResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/skill/{id}/edit": {
+      "post": {
+        "operationId": "editSkill",
+        "summary": "Edit skill topic/description",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/editSkillResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/editSkillRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skill/{id}/retry": {
+      "post": {
+        "operationId": "retrySkill",
+        "summary": "Retry a failed skill generation",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/retrySkillResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/skill/{id}/progress": {
+      "get": {
+        "operationId": "getSkillProgress",
+        "summary": "Per-class progress for a skill",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getSkillProgressResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/skill/{id}/status": {
+      "post": {
+        "operationId": "updateSkillStatus",
+        "summary": "Set user-owned skill lifecycle status",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/updateSkillStatusResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/updateSkillStatusRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skill/{id}/mistakes": {
+      "get": {
+        "operationId": "listSkillMistakes",
+        "summary": "Latest wrong answer per question, newest first",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listSkillMistakesResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/class/list": {
+      "get": {
+        "operationId": "listClasses",
+        "summary": "List classes of a skill",
+        "tags": [
+          "Class"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listClassesResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/class/{id}": {
+      "get": {
+        "operationId": "getClassById",
+        "summary": "Get class by id",
+        "tags": [
+          "Class"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getClassByIdResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/class/qa/list": {
+      "get": {
+        "operationId": "listClassQa",
+        "summary": "List Q&A blocks for a class, ordered by anchor",
+        "tags": [
+          "Class"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listClassQaResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/class/qa/ask": {
+      "post": {
+        "operationId": "askClassQuestion",
+        "summary": "Ask a question anchored in the class conspect",
+        "tags": [
+          "Class"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/askClassQuestionResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/askClassQuestionRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/class/qa/retry": {
+      "post": {
+        "operationId": "retryClassQa",
+        "summary": "Restart a failed Q&A block in place (same id, same anchor)",
+        "tags": [
+          "Class"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/retryClassQaResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/retryClassQaRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz/{classId}": {
+      "get": {
+        "operationId": "getQuiz",
+        "summary": "Get quiz by id",
+        "tags": [
+          "Quiz"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getQuizResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/quiz/{classId}/submit": {
+      "post": {
+        "operationId": "submitQuizAnswers",
+        "summary": "Submit quiz answers",
+        "tags": [
+          "Quiz"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/submitQuizAnswersResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/submitQuizAnswersRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/quiz/{classId}/result": {
+      "get": {
+        "operationId": "getQuizResult",
+        "summary": "Get the learner's latest quiz attempt for a class",
+        "tags": [
+          "Quiz"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getQuizResultResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "classId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/video/recommendations/list": {
+      "get": {
+        "operationId": "listSkillRecommendations",
+        "summary": "Top-10 whole-video recommendations for a skill (PENDING while generating)",
+        "tags": [
+          "Video"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listSkillRecommendationsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/video/recommendations/refresh": {
+      "post": {
+        "operationId": "refreshRecommendations",
+        "summary": "Re-run recommendations generation for a skill",
+        "tags": [
+          "Video"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/refreshRecommendationsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/refreshRecommendationsRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/video/sponsor-segments": {
+      "get": {
+        "operationId": "listSponsorSegments",
+        "summary": "SponsorBlock community skip segments (sponsor/selfpromo/interaction) for a video",
+        "tags": [
+          "Video"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/listSponsorSegmentsResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "videoId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[\\w-]{11}$"
+            }
+          }
+        ]
+      }
+    },
+    "/video/probe": {
+      "post": {
+        "operationId": "probeYouTubeAccess",
+        "summary": "Probe unofficial YouTube access paths (InnerTube search, watch page, transcript) from the current runtime",
+        "tags": [
+          "Video"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/probeYouTubeAccessResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/probeYouTubeAccessRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/stats/overview": {
+      "get": {
+        "operationId": "getStatsOverview",
+        "summary": "Learning stats: streak, weekly activity, per-skill totals",
+        "tags": [
+          "Stats"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getStatsOverviewResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/report": {
+      "get": {
+        "operationId": "getUsageReport",
+        "summary": "AI token usage and estimated cost (per user, optionally per skill)",
+        "tags": [
+          "Stats"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getUsageReportResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "skillId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    }
+  }
+}

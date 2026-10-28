@@ -10,7 +10,7 @@ a phase.
 | Stack | Kotlin 2.2 + Compose M3, single module | Android-only; no runtime tax; most AI/human-known Android stack |
 | applicationId | `com.iampavlo.axon` (same) + committed debug.keystore as `storeFile` | deterministic SHA-1 on every machine; needs its fingerprint registered on the Firebase Android app (one console step) |
 | TTS model | download-on-first-run to `filesDir` | APK ~10MB vs ~160MB; repo stays small |
-| API | Retrofit + kotlinx.serialization over oRPC `/rpc` batch endpoint | contract package untouched, DTOs mirror it |
+| API | ~~Retrofit + kotlinx.serialization over oRPC `/rpc` batch endpoint~~ **SUPERSEDED 2026-10-28**: generated Retrofit client from `packages/api-contract/openapi.json` (openapi-generator; D5) — oRPC abandoned repo-wide | see `knowledge-base/OPENAPI_MIGRATION.md` |
 | DI | manual `AppContainer` | app is small; no codegen |
 | Release | R8 + shrinkResources, `arm64-v8a` only | bundle size goal |
 

@@ -10,18 +10,17 @@ type ServerlessInvoke = serverlessHttp.Handler;
 let cached: Promise<ServerlessInvoke> | null = null;
 
 const bootstrap = async (): Promise<ServerlessInvoke> => {
-  const { app, handleRequest } = await buildApp();
+  const { app } = await buildApp();
   await app.ready();
 
-  // Fastify's raw router takes over everything the shared handler doesn't
-  // claim (/health, /ready, /info, 404s) — the same fallback the listening
-  // server passes into its serverFactory.
+  // Fastify's raw router answers everything: the table-driven API routes,
+  // /health /ready /info, /spec.json, the docs page, and 404s.
   const fastifyRouting = (
     app as unknown as { routing: FastifyServerFactoryHandler }
   ).routing.bind(app);
 
   return serverlessHttp((req: IncomingMessage, res: ServerResponse) =>
-    handleRequest(req, res, fastifyRouting),
+    fastifyRouting(req, res),
   );
 };
 

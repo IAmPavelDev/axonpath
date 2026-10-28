@@ -8,9 +8,9 @@
 
 | Surface | Data | Login | Free forever |
 |---|---|---|---|
-| **Grafana Cloud** (recommended add) | `AiAttempt` SQL panels via Neon Postgres datasource + Lambda metrics/logs via CloudWatch datasource | Built-in users/orgs | Yes — 3 users, 10k series, 50 GB logs ([limits](https://grafana.com/docs/grafana-cloud/account-management/usage-limits/)) |
+| **Grafana Cloud** (recommended add) | `AiAttempt` SQL panels via RDS Postgres datasource + Lambda metrics/logs via CloudWatch datasource | Built-in users/orgs | Yes — 3 users, 10k series, 50 GB logs ([limits](https://grafana.com/docs/grafana-cloud/account-management/usage-limits/)) |
 | **Firebase console** | Behavior events, DAU/engagement, funnels, retention, geo, device | Google account (project axon-9e88e) | Yes, unlimited events |
-| **psql / Neon SQL editor** | Ad-hoc queries against the query pack below | Neon credentials | Yes |
+| **psql** (against RDS) | Ad-hoc queries against the query pack below | RDS credentials in `.env.aws.serverless.eu` | Yes |
 
 ## Lane 1 — behavior events (Firebase Analytics, mobile)
 
@@ -34,7 +34,7 @@ Firebase setup that pays off: Events → mark `seconds`, `scroll_progress`,
 Funnels: `class_view → quiz_opened → quiz_completed`. Optional: link Firebase
 → BigQuery (free) for raw event SQL.
 
-## Lane 2 — AI attempt metrics (Neon, `AiAttempt` table)
+## Lane 2 — AI attempt metrics (RDS Postgres, `AiAttempt` table)
 
 One row per provider call attempt, written fire-and-forget by the injected
 `recordAiAttempt` dep (impl: `modules/tutoring/infrastructure/ai-attempt.repo.ts`),
@@ -49,7 +49,7 @@ class_options, grade_open, qa_answer) plus container + loop-test fakes.
 - Raw outputs remain in the audit events (SKILL_CREATED, QA_ANSWERED, …) for
   output-quality diffs; `stats.report` already totals cost per operation.
 
-### Query pack (Neon SQL editor or psql)
+### Query pack (psql against RDS)
 
 ```sql
 -- Daily success rate per operation
@@ -128,14 +128,14 @@ needs the free Firebase → BigQuery export (`Events_<date>` table,
 ### Grafana Cloud setup (one-time, ~15 min)
 
 1. grafana.com → free account (org slug of your choice) → 3 users included.
-2. Connections → **Postgres**: host = `ep-jolly-boat-b1hgyqni-pooler.c-5.eu-central-1.aws.neon.tech`, port `5432`, database `neondb`, user = a **read-only** role. Create it once in the Neon SQL editor:
+2. Connections → **Postgres**: host = `axon-db.cf804e0q0vbj.eu-central-1.rds.amazonaws.com`, port `5432`, database `axon`, user = a **read-only** role. Create it once with psql (creds in `.env.aws.serverless.eu`):
    ```sql
    CREATE ROLE grafana_reader LOGIN PASSWORD '<generate-a-long-password>';
    GRANT USAGE ON SCHEMA public TO grafana_reader;
    GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_reader;
    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO grafana_reader;
    ```
-   (Neon requires TLS — enable the SSL/TLS toggle in the datasource.)
+   (RDS requires TLS — enable the SSL/TLS toggle in the datasource.)
 3. Connections → **CloudWatch**: AWS IAM role with `cloudwatch:GetMetricData`,
    `logs:StartQuery/GetQueryResults` on the `axon-*` log groups → panels for
    `Axon/Api Requests`, `Axon/Api Server5xx`, `Axon/Backend Errors`.

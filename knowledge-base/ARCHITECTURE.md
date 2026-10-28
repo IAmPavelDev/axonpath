@@ -1,7 +1,9 @@
 # Axon — System Architecture
 
-> Status: **CURRENT as of 2026-10-12** (backend 46 test files / 310 tests green, mobile
-> `tsc --noEmit` clean; TS 7.0.2, durable next-class job queue, class Q&A /
+> Status: **CURRENT as of 2026-10-28** (backend 50 test files / 344 tests green;
+> oRPC → OpenAPI transport cutover landed — REST routes from the contract route
+> table, committed spec, generated Kotlin client; Kotlin `:app:assembleDebug`
+> clean; TS 7.0.2, durable next-class job queue, class Q&A /
 > Ask-AI, skill.progress, AI token-usage capture + `usage.report`, `stats.overview`,
 > `skill.mistakes`, QA context layering + vector memory, the mastery-ledger spaced
 > review), and **AI-attempt analytics + observability** (AiAttempt table, pino JSON
@@ -10,14 +12,16 @@
 > `e2e-qa-context.mts` SMOKE_PASS 2026-10-02).
 > Execution authority for what is next:
 > `knowledge-base/BUSINESS_DECISIONS.md` §4 (post-backlog horizon — first levers landed,
-> see §4.4). Beta history:
+> see §4.4). **Transport** (API surface, spec, client generation): `knowledge-base/API.md`
+> — the oRPC → OpenAPI cutover completed 2026-10-28
+> (`knowledge-base/OPENAPI_MIGRATION.md`, pending only the post-push device smoke). Beta history:
 > `knowledge-base/BETA_PLAN.md` and `knowledge-base/PHASE6_HARDENING.md` (both DONE).
 > Background: `CONCEPT.md` (vision), `BUSINESS_DECISIONS.md` (decision record), `GAPS.md`
 > (gap ledger), `PHASE3_4_ADAPTIVE_LOOP.md`
 > (how the loop was built).
 > Deployment (production): `knowledge-base/DEPLOY_AWS_SERVERLESS.md` (Lambda
-> `axon-api` + `axon-worker` behind API Gateway HTTPS, Postgres on Neon free
-> (pooled endpoint), vectors on Qdrant Cloud free; one container image, both
+> `axon-api` + `axon-worker` behind API Gateway HTTPS, Postgres on RDS
+> (`axon-db`, db.t4g.micro single-AZ, since 2026-10-28), vectors on Qdrant Cloud free; one container image, both
 > functions, `LAMBDA_ROLE` dispatch; worker drains the durable job queues on an
 > EventBridge minute tick). Superseded beta: `knowledge-base/DEPLOY_AWS_BETA.md`
 > (EC2 t2.micro, terminated 2026-10-02).
@@ -35,22 +39,22 @@ is relational truth.
 
 ```mermaid
 flowchart LR
-    subgraph Mobile["📱 apps/mobile (Expo / React Native)"]
-        M[expo-router screens]
-        Q[TanStack Query + Zustand]
-        RPC[oRPC typed client]
+    subgraph Mobile["📱 apps/android (Kotlin / Compose)"]
+        M[Compose feature screens]
+        Q[ViewModels + DataStore]
+        RPC[Generated Retrofit client]
         FBM[Firebase Auth]
     end
 
-    subgraph Backend["🖥 apps/backend (Fastify + oRPC, DDD modules)"]
-        API["/rpc handler — contract-first"]
+    subgraph Backend["🖥 apps/backend (Fastify REST/OpenAPI, DDD modules)"]
+        API["24 REST routes from the route table"]
         AUTH["identity — Firebase token verification"]
         UC["use cases (learning / tutoring / memory)"]
         JOBS["jobs (setImmediate queue + durable next-class sweeper)"]
     end
 
     subgraph Shared["📦 packages/api-contract"]
-        CONTRACTS["oRPC contracts + zod schemas"]
+        CONTRACTS["route table + zod schemas → openapi.json"]
     end
 
     subgraph Infra["Infrastructure"]
@@ -82,10 +86,10 @@ seam for a broker later.
 ```
 axon/
 ├── apps/
-│   ├── backend/          ← Fastify + oRPC API (TypeScript, tsx dev runner, vitest)
-│   └── mobile/           ← Expo / React Native (expo-router, NativeWind, react-native-reusables)
+│   ├── backend/          ← Fastify REST API, OpenAPI-generated contract (TypeScript, vitest)
+│   └── android/          ← Kotlin/Compose client (generated Retrofit client, manual DI)
 ├── packages/
-│   └── api-contract/     ← Shared oRPC contracts + zod schemas (tsup build → dist/)
+│   └── api-contract/     ← Route table + zod schemas → committed openapi.json (tsup → dist/)
 ├── docker-compose-dev.yaml / docker-compose-prod.yaml / Dockerfile
 ├── .env.example          ← env documentation (root .env is gitignored)
 └── pnpm-workspace.yaml   ← apps/*, packages/*  (packageManager: pnpm@10.14.0)
@@ -96,7 +100,8 @@ Build order matters: `pnpm --filter @axon/api-contract build` before the backend
 
 ## 4. Backend — DDD modular monolith
 
-Layering: `router/` (thin oRPC wiring) → `modules/*/api` (handlers: parse → use case → error
+Layering: `router/` (handler registry keyed by operationId) → `lib/routes.ts` (Fastify
+registration FROM the route table) → `modules/\*/api` (handlers: parse → use case → error
 mapping) → `modules/*/application` (use cases, curried over a deps object = future Effect Layer)
 → `modules/*/domain` (pure types + functions + tagged errors + repository ports) →
 `modules/*/infrastructure` (Prisma / Qdrant / Z.ai / Firebase adapters). `main.ts` bootstraps
@@ -108,13 +113,13 @@ apps/backend/src/
 ├── container.ts           composition root (adapters → use cases → routers/job handlers)
 ├── router/index.ts        buildRouters(container)
 ├── modules/
-│   ├── platform/          Result<T,E>, tagged errors, toORPCError, ports (Clock/JobQueue),
+│   ├── platform/          Result<T,E>, tagged errors, toHttpError, ports (Clock/JobQueue),
 │   │                      config.ts, prisma client, set-immediate job queue
 │   ├── identity/          Firebase email/password + Google; per-request ID-token verification
-│   │                      → context.user; authenticate use case + middleware (unit-tested)
+│   │                      → request.user; authenticate use case + Fastify auth hook
 │   ├── learning/          Skill/Class/Question/Event domain, queries+commands
 │   │                      (create-skill, edit-skill, submit-quiz, get-skill-*), Prisma repos,
-│   │                      oRPC handlers, skill status state machine (canTransition)
+│   │                      REST handlers, skill status state machine (canTransition)
 │   ├── tutoring/          AiPort, personas (TUTOR_SYSTEM/METADATA_SYSTEM), prompt builders,
 │   │                      defensive JSON parsing, zai.client adapter (chat + embeddings),
 │   │                      generate-skill-metadata + generate-first-lesson +
@@ -314,36 +319,41 @@ Embeddings live only in Qdrant (`axon_vectors`, 3072-dim Cosine, payload indexes
 point id = `Vector.id`); Postgres keeps metadata. Embedding model: `gemini-embedding-2` via the
 Gemini OpenAI-compatible endpoint; chat: `glm-5.3-flash` via `https://api.z.ai/api/coding/paas/v4`.
 
-## 6. Mobile (apps/mobile)
 
-Flow: Firebase auth → skill list (home; polls `skill.list` every 10 s while visible;
-`GENERATING` rows show a preparing state, pull-to-refresh, pinning; `FAILED` rows show a
-"Failed to prepare" chip with a retry affordance) → create-skill (freeform prompt
-textarea) → review skill (AI-drafted title/description) → skill
-detail ("Preparing your next lesson…" while `GENERATING`; FAILED shows error copy + retry
-button) → class list (newest first) → class
-screen (Markdown conspect + quiz tabs; native text selection "Ask AI" creates an anchored
-Q&A block via `class.qa.ask` (the verbatim selection rides along as `anchorText`, and the
-card quotes the stored selection over the chunk preview), and the screen polls
-`class.qa.list` while any block is `PENDING`) → quiz (MC/TF/Open) →
-result → "continue" returns to the skill's lesson list; generation completes server-side and
-surfaces as the preparing state above.
+## 6. Android client (apps/android)
 
-- **RPC client** (`utils/rpc.ts`): typed oRPC client; bearer Firebase ID token attached per call
-- **State**: TanStack Query for server data; Zustand (`quiz.store`) for in-screen answers.
-- **Theme**: Source Sans 3 + blue-tinted light/dark palettes; `lib/theme.ts` (RN styles) and
-  `global.css` (NativeWind vars) kept in lockstep via the `theme:check` script. Conspects:
-  markdown rendering, karaoke read-aloud, syntax-highlighted code, selectable text
-  (`components/class/`, `lib/conspect-markdown.tsx`).
-  Read-aloud (2026-10-18): mixed-language lessons tag speech runs at
-  generation — the tutor emits `[[lang:xx]]…[[/lang]]` markers plus required
-  `baseLanguage`/`contentLanguages` JSON fields (validated post-parse,
-  retryable) — and the mobile player routes English runs to the bundled
-  Kokoro-82M engine and everything else to the system engine with the chunk
-  language as a voice hint (`lib/conspect-speech/`, `hooks/use-conspect-speech.ts`).
-  Markers never render: stripped in `ClassConspect`, `ConspectMarkdown`, and
-  QA excerpts. The 152 MB Kokoro model ships in EAS builds via `.easignore`
-  (EAS reads it instead of `.gitignore`; the model stays out of git).
+Native Kotlin/Compose client (replaced the Expo/RN app, deleted 2026-10-28 — its
+flow description lives in git history). Same product flow: Firebase sign-in →
+home (skill list, pinning, delete) → skill create (freeform prompt) → review →
+skill detail → lesson (Markdown conspect + quiz tabs; "Ask AI" anchors a Q&A
+block via `/class/qa/ask`, polls `/class/qa/list` while `PENDING`) → quiz →
+result → next lesson.
+
+Data layer (post-oRPC cutover):
+
+```
+packages/api-contract/openapi.json  (committed spec, D4)
+  └─ gradle openApiGenerate (openapi-generator 7.26.0, jvm-retrofit2 +
+     kotlinx_serialization, dateLibrary=string, useCoroutines)   (D5)
+      → build/generated/openapi → com.iampavlo.axon.data.generated.*
+        (6 Retrofit interfaces: Auth/Class/Quiz/Skill/Stats/VideoApi)
+  └─ data/api/AxonApi.kt  — mapping facade: generated models → UI dtos
+     (data/dto/Dtos.kt). Mapping exists because bare z.number() ids emit
+     BigDecimal in generated models (P0 finding); ids/enum `.value`s are
+     converted here, nowhere else.
+  └─ feature/* ViewModels — call AxonApi only; errors surface via
+     ApiException(status, code, message) parsed from the D6 body.
+```
+
+- **HTTP**: manual DI in `core/di/AppContainer.kt` — one OkHttp (15 s connect /
+  60 s read; API Gateway caps at 30 s) with a bearer-token interceptor feeding
+  the Firebase ID token from `SessionManager`; generated `ApiClient` builds the
+  six services (`createService`). Generated `Serializer` sets
+  `ignoreUnknownKeys = true` (P0 finding — no custom converter needed).
+- **Parallelism**: screens launch concurrent suspend calls on mount (no batch
+  coalescing since D9 — GAPS.md).
+- **Auth**: Credential Manager + Google; committed debug keystore SHA-1 is
+  registered on the Firebase Android app (see apps/android/docs/MIGRATION_PLAN.md).
 
 ## 7. Environment & config
 

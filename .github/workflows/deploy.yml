@@ -30,7 +30,25 @@ permissions:
   contents: read
 
 jobs:
+  # Contract discipline (D4): the committed openapi.json must be exactly what
+  # the route table emits — a schema edit that skips the emitter fails here.
+  spec-drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @axon/api-contract build
+      - name: Fail on spec drift
+        run: git diff --exit-code -- packages/api-contract/openapi.json
+
   deploy:
+    needs: spec-drift
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

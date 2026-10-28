@@ -1,6 +1,6 @@
 package com.iampavlo.axon.data.api
 
-import com.iampavlo.axon.core.network.OrpcClient
+import com.iampavlo.axon.core.network.ApiException
 import com.iampavlo.axon.data.dto.AskResult
 import com.iampavlo.axon.data.dto.ClassDetail
 import com.iampavlo.axon.data.dto.ClassListItem
@@ -11,6 +11,7 @@ import com.iampavlo.axon.data.dto.QaBlock
 import com.iampavlo.axon.data.dto.QuizQuestion
 import com.iampavlo.axon.data.dto.QuizResult
 import com.iampavlo.axon.data.dto.QuizResultEnvelope
+import com.iampavlo.axon.data.dto.RecommendationVideo
 import com.iampavlo.axon.data.dto.RecommendationsEnvelope
 import com.iampavlo.axon.data.dto.SkillDetail
 import com.iampavlo.axon.data.dto.SkillListItem
@@ -19,129 +20,335 @@ import com.iampavlo.axon.data.dto.SkillProgress
 import com.iampavlo.axon.data.dto.SponsorSegmentsEnvelope
 import com.iampavlo.axon.data.dto.StatusOnly
 import com.iampavlo.axon.data.dto.SubmittedAnswer
-import kotlinx.serialization.builtins.ListSerializer
+import com.iampavlo.axon.data.generated.apis.ClassApi
+import com.iampavlo.axon.data.generated.apis.QuizApi
+import com.iampavlo.axon.data.generated.apis.SkillApi
+import com.iampavlo.axon.data.generated.apis.VideoApi
+import com.iampavlo.axon.data.generated.apis.AuthApi
+import com.iampavlo.axon.data.generated.model.AskClassQuestionRequest
+import com.iampavlo.axon.data.generated.model.CreateSkillRequest
+import com.iampavlo.axon.data.generated.model.EditSkillRequest
+import com.iampavlo.axon.data.generated.model.RefreshRecommendationsRequest
+import com.iampavlo.axon.data.generated.model.RetryClassQaRequest
+import com.iampavlo.axon.data.generated.model.SubmitQuizAnswersRequest
+import com.iampavlo.axon.data.generated.model.SubmitQuizAnswersRequestAnswersInner
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import retrofit2.Response
+import java.math.BigDecimal
 
 /**
- * Typed surface over the oRPC procedures the app uses. Paths and payload
- * shapes mirror `packages/api-contract` (skill/class/qa/quiz/video/stats).
+ * Typed surface over the GENERATED Retrofit client (openapi-generator, D5).
+ * The generated models mirror the spec 1:1; this facade maps them onto the
+ * UI-facing dtos. Mapping lives here — and only here — because the schemas
+ * declare id fields as bare numbers (`type: number` → BigDecimal in the
+ * generated models; P0 finding), while the UI works with Ints.
  */
-class AxonApi(private val rpc: OrpcClient) {
+class AxonApi(
+    private val skill: SkillApi,
+    private val clazz: ClassApi,
+    private val quiz: QuizApi,
+    private val video: VideoApi,
+    private val auth: AuthApi,
+) {
+    private val errorJson = Json { ignoreUnknownKeys = true }
 
-    private val json = Json { explicitNulls = false }
+    // ---- transport helpers ----
+
+    private suspend fun <T> Response<T>.orThrow(): T {
+        if (isSuccessful) {
+            return body() ?: throw ApiException(code(), "MALFORMED_RESPONSE", "Empty body (HTTP ${code()})")
+        }
+        val text = runCatching { errorBody()?.string() }.getOrNull()
+        val parsed = text?.let { body ->
+            runCatching {
+                val obj = errorJson.parseToJsonElement(body).jsonObject
+                obj["code"]?.jsonPrimitive?.contentOrNull to
+                    obj["message"]?.jsonPrimitive?.contentOrNull
+            }.getOrNull()
+        }
+        throw ApiException(
+            status = code(),
+            code = parsed?.first ?: "HTTP_${code()}",
+            message = parsed?.second,
+        )
+    }
+
+    private fun BigDecimal?.i(): Int? = this?.toInt()
 
     // ---- skill ----
 
     suspend fun skillList(): List<SkillListItem> =
-        rpc.call("skill/list", null, ListSerializer(SkillListItem.serializer()))
+        skill.listSkills().orThrow().map {
+            SkillListItem(
+                id = it.id.toInt(),
+                topic = it.topic,
+                status = it.status,
+                createdAt = it.createdAt,
+                lessonCount = it.lessonCount,
+                completedLessons = it.completedLessons,
+                learnedPoints = it.learnedPoints,
+                lastActivityAt = it.lastActivityAt,
+            )
+        }
 
     suspend fun skillGet(id: Int): SkillDetail =
-        rpc.call("skill/get", obj { put("id", id) }, SkillDetail.serializer())
+        skill.getSkillById(id).orThrow().let {
+            SkillDetail(
+                id = it.id.toInt(),
+                topic = it.topic,
+                description = it.description,
+                status = it.status,
+            )
+        }
 
     suspend fun skillCreate(prompt: String): CreatedSkill =
-        rpc.call("skill/create", obj { put("prompt", prompt) }, CreatedSkill.serializer())
+        skill.createSkill(CreateSkillRequest(prompt = prompt)).orThrow().let {
+            CreatedSkill(id = it.id.toInt(), status = it.status)
+        }
 
     suspend fun skillEdit(id: Int, topic: String?, description: String?): StatusOnly =
-        rpc.call(
-            "skill/edit",
-            obj {
-                put("id", id)
-                topic?.let { put("topic", it) }
-                description?.let { put("description", it) }
-            },
-            StatusOnly.serializer(),
-        )
+        skill.editSkill(id, EditSkillRequest(topic = topic, description = description)).orThrow().let {
+            StatusOnly(status = it.status)
+        }
 
     suspend fun skillRetry(id: Int): StatusOnly =
-        rpc.call("skill/retry", obj { put("id", id) }, StatusOnly.serializer())
+        skill.retrySkill(id).orThrow().let { StatusOnly(status = it.status) }
 
     suspend fun skillProgress(id: Int): SkillProgress =
-        rpc.call("skill/progress", obj { put("id", id) }, SkillProgress.serializer())
+        skill.getSkillProgress(id).orThrow().let {
+            SkillProgress(
+                skillId = it.skillId.toInt(),
+                topic = it.topic,
+                status = it.status,
+                totals = com.iampavlo.axon.data.dto.ProgressTotals(
+                    lessonCount = it.totals.lessonCount,
+                    completedLessons = it.totals.completedLessons,
+                    learnedPoints = it.totals.learnedPoints,
+                    accuracy = it.totals.accuracy?.toDouble(),
+                ),
+                classes = it.classes.map { c ->
+                    com.iampavlo.axon.data.dto.SkillProgressClassDto(
+                        classId = c.classId.toInt(),
+                        index = c.index,
+                        title = c.title,
+                        questionCount = c.questionCount,
+                        answeredCount = c.answeredCount,
+                        correctCount = c.correctCount,
+                        completed = c.completed,
+                        accuracy = c.accuracy?.toDouble(),
+                    )
+                },
+            )
+        }
 
     suspend fun skillMistakes(id: Int): List<SkillMistake> =
-        rpc.call("skill/mistakes", obj { put("id", id) }, ListSerializer(SkillMistake.serializer()))
+        skill.listSkillMistakes(id).orThrow().map {
+            SkillMistake(
+                questionId = it.questionId.toInt(),
+                type = it.type.value,
+                questionText = it.questionText,
+                choices = it.choices,
+                yourAnswer = it.yourAnswer,
+                correctAnswer = it.correctAnswer,
+                feedback = it.feedback,
+                score = it.score?.toDouble(),
+                classId = it.classId.i(),
+                classIndex = it.classIndex,
+                answeredAt = it.answeredAt,
+            )
+        }
 
     suspend fun skillDelete(id: Int): Deleted =
-        rpc.call("skill/delete", obj { put("id", id) }, Deleted.serializer())
+        skill.deleteSkill(id).orThrow().let { Deleted(deleted = it.deleted) }
 
     // ---- class ----
 
     suspend fun classList(skillId: Int): List<ClassListItem> =
-        rpc.call("class/list", obj { put("skillId", skillId) }, ListSerializer(ClassListItem.serializer()))
+        clazz.listClasses(skillId).orThrow().map {
+            ClassListItem(
+                id = it.id.toInt(),
+                title = it.title,
+                createdAt = it.createdAt,
+                questionCount = it.questionCount,
+                learnedPoints = it.learnedPoints,
+                lastActivityAt = it.lastActivityAt,
+            )
+        }
 
     suspend fun classGet(id: Int): ClassDetail =
-        rpc.call("class/get", obj { put("id", id) }, ClassDetail.serializer())
+        clazz.getClassById(id).orThrow().let {
+            ClassDetail(
+                id = it.id.toInt(),
+                skillId = it.skillId.toInt(),
+                title = it.title,
+                contentMd = it.contentMd,
+                baseLanguage = it.baseLanguage,
+                clipStatus = it.clipStatus.value,
+                videoClips = it.videoClips.map { clip ->
+                    com.iampavlo.axon.data.dto.VideoClipDto(
+                        id = clip.id.toInt(),
+                        anchorParagraph = clip.anchorParagraph,
+                        videoId = clip.videoId,
+                        title = clip.title,
+                        channel = clip.channel,
+                        startSeconds = clip.startSeconds.toDouble(),
+                        endSeconds = clip.endSeconds.toDouble(),
+                        transcriptExcerpt = clip.transcriptExcerpt,
+                        concept = clip.concept,
+                    )
+                },
+            )
+        }
 
     suspend fun qaList(classId: Int): List<QaBlock> =
-        rpc.call("class/qa/list", obj { put("classId", classId) }, ListSerializer(QaBlock.serializer()))
+        clazz.listClassQa(classId).orThrow().map {
+            QaBlock(
+                id = it.id.toInt(),
+                classId = it.classId.toInt(),
+                anchorParagraph = it.anchorParagraph,
+                anchorText = it.anchorText,
+                status = it.status.value,
+                question = it.question,
+                answer = it.answer,
+                createdAt = it.createdAt,
+            )
+        }
 
     suspend fun qaAsk(
         classId: Int,
         anchorParagraph: Int,
         question: String,
         anchorText: String?,
-    ): AskResult = rpc.call(
-        "class/qa/ask",
-        obj {
-            put("classId", classId)
-            put("anchorParagraph", anchorParagraph)
-            put("question", question)
-            anchorText?.let { put("anchorText", it) }
-        },
-        AskResult.serializer(),
-    )
+    ): AskResult =
+        clazz.askClassQuestion(
+            AskClassQuestionRequest(
+                classId = BigDecimal(classId),
+                anchorParagraph = anchorParagraph,
+                question = question,
+                anchorText = anchorText,
+            ),
+        ).orThrow().let { AskResult(blockId = it.blockId.toInt(), status = it.status.value) }
 
     suspend fun qaRetry(classId: Int, blockId: Int): AskResult =
-        rpc.call(
-            "class/qa/retry",
-            obj {
-                put("classId", classId)
-                put("blockId", blockId)
-            },
-            AskResult.serializer(),
-        )
+        clazz.retryClassQa(
+            RetryClassQaRequest(
+                classId = BigDecimal(classId),
+                blockId = BigDecimal(blockId),
+            ),
+        ).orThrow().let { AskResult(blockId = it.blockId.toInt(), status = it.status.value) }
 
     // ---- quiz ----
 
     suspend fun quizGet(classId: Int): List<QuizQuestion> =
-        rpc.call("quiz/get", obj { put("classId", classId) }, ListSerializer(QuizQuestion.serializer()))
+        quiz.getQuiz(classId).orThrow().map {
+            QuizQuestion(
+                id = it.id.toInt(),
+                type = it.type.value,
+                text = it.text,
+                choices = it.choices,
+            )
+        }
 
-    suspend fun quizSubmit(classId: Int, answers: List<SubmittedAnswer>): QuizResult =
-        rpc.call(
-            "quiz/submit",
-            obj {
-                put("classId", classId)
-                put(
-                    "answers",
-                    json.encodeToJsonElement(ListSerializer(SubmittedAnswer.serializer()), answers),
+    suspend fun quizSubmit(classId: Int, answers: List<SubmittedAnswer>): QuizResult {
+        val body = SubmitQuizAnswersRequest(
+            answers = answers.map {
+                SubmitQuizAnswersRequestAnswersInner(
+                    questionId = BigDecimal(it.questionId),
+                    answer = it.answer,
+                    timeSpentMs = it.timeSpentMs?.let { ms -> BigDecimal(ms.toLong()) },
                 )
             },
-            QuizResult.serializer(),
         )
+        return quiz.submitQuizAnswers(classId, body).orThrow().let {
+            QuizResult(
+                score = it.score.toInt(),
+                total = it.total.toInt(),
+                perQuestion = it.perQuestion.map { q ->
+                    com.iampavlo.axon.data.dto.QuestionResult(
+                        questionId = q.questionId.toInt(),
+                        type = q.type.value,
+                        isCorrect = q.isCorrect,
+                        correctAnswer = q.correctAnswer,
+                        userAnswer = q.userAnswer,
+                    )
+                },
+            )
+        }
+    }
 
     suspend fun quizResult(classId: Int): QuizResultEnvelope =
-        rpc.call("quiz/result", obj { put("classId", classId) }, QuizResultEnvelope.serializer())
+        quiz.getQuizResult(classId).orThrow().let {
+            QuizResultEnvelope(
+                result = it.result?.let { r ->
+                    QuizResult(
+                        score = r.score.toInt(),
+                        total = r.total.toInt(),
+                        perQuestion = r.perQuestion.map { q ->
+                            com.iampavlo.axon.data.dto.QuestionResult(
+                                questionId = q.questionId.toInt(),
+                                type = q.type.value,
+                                isCorrect = q.isCorrect,
+                                correctAnswer = q.correctAnswer,
+                                userAnswer = q.userAnswer,
+                            )
+                        },
+                    )
+                },
+            )
+        }
 
     // ---- video ----
 
     suspend fun recommendations(skillId: Int): RecommendationsEnvelope =
-        rpc.call("video/recommendations/list", obj { put("skillId", skillId) }, RecommendationsEnvelope.serializer())
+        video.listSkillRecommendations(skillId).orThrow().let {
+            RecommendationsEnvelope(
+                status = it.status.value,
+                videos = it.videos.map { v ->
+                    RecommendationVideo(
+                        videoId = v.videoId,
+                        title = v.title,
+                        channel = v.channel,
+                        durationSeconds = v.durationSeconds,
+                        rank = v.rank,
+                    )
+                },
+            )
+        }
 
     suspend fun recommendationsRefresh(skillId: Int): StatusOnly =
-        rpc.call("video/recommendations/refresh", obj { put("skillId", skillId) }, StatusOnly.serializer())
+        video.refreshRecommendations(RefreshRecommendationsRequest(skillId = skillId))
+            .orThrow().let { StatusOnly(status = it.status.value) }
 
     suspend fun sponsorSegments(videoId: String): SponsorSegmentsEnvelope =
-        rpc.call("video/sponsorSegments", obj { put("videoId", videoId) }, SponsorSegmentsEnvelope.serializer())
+        video.listSponsorSegments(videoId).orThrow().let {
+            SponsorSegmentsEnvelope(
+                segments = it.segments.map { s ->
+                    com.iampavlo.axon.data.dto.SponsorSegment(
+                        startSeconds = s.startSeconds.toDouble(),
+                        endSeconds = s.endSeconds.toDouble(),
+                        category = s.category,
+                    )
+                },
+            )
+        }
 
-    // ---- auth / stats ----
+    // ---- auth ----
 
-    suspend fun me(): Me = rpc.call("auth/me", null, Me.serializer())
-
-    private fun obj(block: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) =
-        buildJsonObject(block)
+    suspend fun me(): Me =
+        auth.getMe().orThrow().let {
+            Me(
+                id = it.id.toInt(),
+                email = it.email,
+                firstName = it.firstName,
+                lastName = it.lastName,
+                photoUrl = it.photoUrl,
+                role = it.role,
+                status = it.status,
+                emailVerified = it.emailVerified,
+                firebaseUid = it.firebaseUid,
+            )
+        }
 }
-

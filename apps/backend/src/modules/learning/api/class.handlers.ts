@@ -1,7 +1,7 @@
 import type { z } from "zod";
 import { schema } from "@axon/api-contract";
-import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
-import { toORPCError } from "@/modules/platform/api/error-mapping";
+import type { ApiHandler } from "@/modules/platform/api/handler";
+import { toHttpError } from "@/modules/platform/api/error-mapping";
 import { isErr } from "@/modules/platform/result";
 import type { VideoRepository } from "@/modules/video/domain/video-repos";
 import {
@@ -40,17 +40,17 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
   const listClassQa = makeListClassQa(deps);
 
   return {
-    list: (async ({ input, context }) => {
+    list: (async (input, context) => {
       return getClassList(input.skillId, context.user.id);
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.class.GetClassListInput>,
       z.infer<typeof schema.class.GetClassListOutput>
     >,
 
-    get: (async ({ input }) => {
+    get: (async (input) => {
       const result = await getClassById({ classId: input.id });
       if (isErr(result)) {
-        throw toORPCError(result.error);
+        throw toHttpError(result.error);
       }
       const clipState = await deps.videoRepo.getClassClipState(input.id);
       return {
@@ -60,13 +60,13 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
         clipStatus: clipState.clipStatus,
         videoClips: clipState.clips,
       };
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.class.GetClassByIdInput>,
       z.infer<typeof schema.class.GetClassByIdOutput>
     >,
 
     qa: {
-      ask: (async ({ input, context }) => {
+      ask: (async (input, context) => {
         const result = await askClassQuestion({
           classId: input.classId,
           userId: context.user.id,
@@ -75,36 +75,36 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
           question: input.question,
         });
         if (isErr(result)) {
-          throw toORPCError(result.error);
+          throw toHttpError(result.error);
         }
         return result.value;
-      }) satisfies OrpcHandler<
+      }) satisfies ApiHandler<
         z.infer<typeof schema.class.AskClassQuestionInput>,
         z.infer<typeof schema.class.AskClassQuestionOutput>
       >,
 
-      retry: (async ({ input, context }) => {
+      retry: (async (input, context) => {
         const result = await retryClassQuestion({
           classId: input.classId,
           userId: context.user.id,
           blockId: input.blockId,
         });
         if (isErr(result)) {
-          throw toORPCError(result.error);
+          throw toHttpError(result.error);
         }
         return result.value;
-      }) satisfies OrpcHandler<
+      }) satisfies ApiHandler<
         z.infer<typeof schema.class.RetryClassQaInput>,
         z.infer<typeof schema.class.AskClassQuestionOutput>
       >,
 
-      list: (async ({ input, context }) => {
+      list: (async (input, context) => {
         const result = await listClassQa({
           classId: input.classId,
           userId: context.user.id,
         });
         if (isErr(result)) {
-          throw toORPCError(result.error);
+          throw toHttpError(result.error);
         }
         return result.value.map((block) => ({
           id: block.id,
@@ -116,7 +116,7 @@ export const makeClassHandlers = (deps: ClassApiDeps) => {
           status: block.status,
           createdAt: block.createdAt,
         }));
-      }) satisfies OrpcHandler<
+      }) satisfies ApiHandler<
         z.infer<typeof schema.class.ListClassQaInput>,
         z.infer<typeof schema.class.ListClassQaOutput>
       >,

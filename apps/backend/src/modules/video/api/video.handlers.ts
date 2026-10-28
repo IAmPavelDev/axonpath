@@ -1,7 +1,7 @@
-import { ORPCError } from "@orpc/server";
 import type { z } from "zod";
 import { schema } from "@axon/api-contract";
-import type { OrpcHandler } from "@/modules/platform/api/orpc-handler";
+import type { ApiHandler } from "@/modules/platform/api/handler";
+import type { HttpError } from "@/modules/platform/api/error-mapping";
 import type { Clock } from "@/modules/platform/ports/clock";
 import type { YouTubeScraperPort } from "@/modules/video/domain/youtube-access";
 import type { VideoRepository } from "@/modules/video/domain/video-repos";
@@ -22,7 +22,7 @@ const assertSkillOwner = async (
 ): Promise<void> => {
   const owner = await videoRepo.findSkillOwner(skillId);
   if (owner !== userId) {
-    throw new ORPCError("FORBIDDEN", { message: "Not your skill" });
+    throw { status: 403, body: { code: "FORBIDDEN", message: "Not your skill" } } satisfies HttpError;
   }
 };
 
@@ -33,16 +33,16 @@ export const makeVideoHandlers = (deps: VideoApiDeps) => {
   });
 
   return {
-    probe: (async ({ input }) =>
+    probe: (async (input) =>
       probeYoutubeAccess({
         query: input.query,
         videoId: input.videoId ?? null,
-      })) satisfies OrpcHandler<
+      })) satisfies ApiHandler<
       z.infer<typeof schema.video.ProbeYouTubeAccessInput>,
       z.infer<typeof schema.video.ProbeYouTubeAccessOutput>
     >,
 
-    recommendationsList: (async ({ input, context }) => {
+    recommendationsList: (async (input, context) => {
       await assertSkillOwner(deps.videoRepo, input.skillId, context.user.id);
       const [state, rows] = await Promise.all([
         deps.videoRepo.getRecommendationsState(input.skillId),
@@ -58,12 +58,12 @@ export const makeVideoHandlers = (deps: VideoApiDeps) => {
           rank: row.rank,
         })),
       };
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.video.SkillRecommendationsInput>,
       z.infer<typeof schema.video.SkillRecommendationsOutput>
     >,
 
-    recommendationsRefresh: (async ({ input, context }) => {
+    recommendationsRefresh: (async (input, context) => {
       await assertSkillOwner(deps.videoRepo, input.skillId, context.user.id);
       const state = await deps.videoRepo.getRecommendationsState(input.skillId);
       if (state.status !== "PENDING") {
@@ -71,17 +71,17 @@ export const makeVideoHandlers = (deps: VideoApiDeps) => {
         await deps.videoRepo.setRecommendationsStatus(input.skillId, "PENDING");
       }
       return { status: "PENDING" };
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.video.RefreshRecommendationsInput>,
       z.infer<typeof schema.video.RefreshRecommendationsOutput>
     >,
 
-    sponsorSegments: (async ({ input }) => {
+    sponsorSegments: (async (input) => {
       // Degrade silently: no segments (or SponsorBlock down) means the player
       // just plays straight through — skipping is never load-bearing.
       const result = await deps.sponsor.fetchSegments(input.videoId);
       return { segments: result.ok ? result.value : [] };
-    }) satisfies OrpcHandler<
+    }) satisfies ApiHandler<
       z.infer<typeof schema.video.SponsorSegmentsInput>,
       z.infer<typeof schema.video.SponsorSegmentsOutput>
     >,
