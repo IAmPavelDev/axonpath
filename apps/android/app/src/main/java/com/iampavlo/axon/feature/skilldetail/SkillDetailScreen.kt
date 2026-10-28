@@ -307,12 +307,23 @@ private fun LessonsSection(
         )
     }
     when {
-        vm.isGenerating -> Column(Modifier.padding(horizontal = 24.dp)) {
+        // First load: the skill row is still in flight — one skeleton row.
+        vm.skill == null -> Column {
             LessonRowSkeleton()
             Hairline()
         }
         !vm.isGenerating && sorted.isEmpty() -> CenteredMessage("No lessons yet.", MaterialTheme.colorScheme.onSurfaceVariant)
         else -> LazyColumn(modifier = modifier, contentPadding = PaddingValues(bottom = 24.dp)) {
+            // GENERATING = the next lesson is composing (submit-quiz flips the
+            // skill; the pipeline persists the class row fully formed at the
+            // end and then settles ACTIVE). The composing lesson leads
+            // (newest first) as a skeleton; settled lessons stay visible.
+            if (vm.isGenerating) {
+                item {
+                    LessonRowSkeleton()
+                    Hairline()
+                }
+            }
             items(sorted, key = { it.id }) { item ->
                 LessonRow(
                     item = item,

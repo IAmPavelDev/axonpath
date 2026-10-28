@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,7 @@ fun QuizView(
     onContinue: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
+    val ext = com.iampavlo.axon.core.ui.theme.axonExtended()
     val questions = vm.quizQuestions
 
     when {
@@ -70,6 +72,10 @@ fun QuizView(
             val result = vm.quizResult
             val submitted = result != null
             val stillGrading = result?.perQuestion?.any { it.isCorrect == null } == true
+            // The grades header sits above the fold; submission must land on it.
+            LaunchedEffect(submitted) {
+                if (submitted) scroll.scrollTo(0)
+            }
             val questionStyle = MaterialTheme.typography.headlineMedium.copy(fontSize = 22.sp)
 
             Column(
@@ -117,6 +123,7 @@ fun QuizView(
                                 } else {
                                     vm.answers[question.id].orEmpty()
                                 }
+                                Text(verdict?.isCorrect?.toString() ?: "no verdict")
                                 OutlinedTextField(
                                     value = value,
                                     onValueChange = { vm.setAnswer(question.id, it) },
@@ -125,14 +132,15 @@ fun QuizView(
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(10.dp),
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = when {
-                                            submitted && verdict?.isCorrect == true -> colors.primary
-                                            submitted && verdict?.isCorrect == false -> colors.error
+                                        disabledBorderColor = when {
+                                            verdict?.isCorrect == true -> ext.success
+                                            verdict?.isCorrect == false -> colors.error
                                             else -> colors.primary
                                         },
                                         unfocusedBorderColor = colors.outline,
                                         focusedTextColor = colors.onBackground,
                                         unfocusedTextColor = colors.onBackground,
+                                        disabledTextColor = colors.onBackground
                                     ),
                                 )
                             }
@@ -167,7 +175,7 @@ fun QuizView(
                 val unanswered = questions.count { vm.answers[it.id].isNullOrBlank() }
                 Button(
                     onClick = {
-                        if (submitted) onContinue() else vm.submitQuiz(onContinue)
+                        if (submitted) onContinue() else vm.submitQuiz()
                     },
                     enabled = when {
                         vm.quizBusy -> false
@@ -184,7 +192,7 @@ fun QuizView(
                     Text(
                         text = when {
                             vm.quizBusy -> "Checking…"
-                            submitted -> "Continue"
+                            submitted -> "Back to lessons"
                             unanswered > 0 -> "$unanswered unanswered"
                             else -> "Submit answers"
                         },

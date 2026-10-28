@@ -242,7 +242,9 @@ class ClassViewModel(
         answers = answers + (questionId to answer)
     }
 
-    fun submitQuiz(onSubmitted: () -> Unit) {
+    /** Submit stays on the quiz (RN parity): grades render from quizResult
+     *  and navigation is the learner's next tap on "Back to lessons". */
+    fun submitQuiz() {
         val questions = quizQuestions ?: return
         val answered = answers.filterValues { !it.isNullOrBlank() }
         if (quizBusy || answered.isEmpty()) return
@@ -259,7 +261,6 @@ class ClassViewModel(
                 }
                 val result = api.quizSubmit(classId, payload)
                 publishQuizResult(result)
-                onSubmitted()
                 pollGrading()
             } catch (e: Exception) {
                 // RN leaves the form editable on failure; retry via button.
