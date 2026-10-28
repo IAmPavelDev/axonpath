@@ -32,14 +32,12 @@ a phase.
 - [ ] Real release keystore decision (currently debug-signed release for
   migration installs). Committed debug keystore SHA-1 (used by both build
   types since the storeFile fix): `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`.
-- [ ] Google sign-in on local builds is BROKEN until one console step:
-  Firebase only has the old EAS-build keystore (`8d6cb4d8…`) for
-  `com.iampavlo.axon`, so Credential Manager throws NoCredentialException
-  ("no Google account on this device"). Fix = Firebase console → Project
-  settings → the `com.iampavlo.axon` Android app → Add fingerprint with the
-  SHA-1 above → re-download google-services.json into `apps/android/app/` →
-  uninstall the previous install once (signing cert changed from
-  `~/.android/debug.keystore` to the committed keystore) → rebuild.
+- [x] Google sign-in SHA-1 registered (2026-10-28): Firebase console gained the
+  committed-keystore fingerprint for `com.iampavlo.axon` (new Android OAuth
+  client, cert hash `5e8f1606…`), and the re-downloaded google-services.json
+  replaced `apps/android/app/google-services.json`. Symptom until then:
+  NoCredentialException surfaced as "no Google account on this device".
+  Rebuild after the config swap; no reinstall dance (same signing key).
 - [ ] Emulator caveat: WebView video renderer crashes under SwiftShader
   (GPU emulation) — video embeds need a real device to verify. RN used the
   identical WebView mechanism, so phone behavior is expected to match RN.

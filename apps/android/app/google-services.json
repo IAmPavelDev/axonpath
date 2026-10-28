@@ -173,6 +173,14 @@
           }
         },
         {
+          "client_id": "711087014342-l4n984s2s0sfh5kul36scss7uvcc2j24.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.iampavlo.axon",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
           "client_id": "711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com",
           "client_type": 3
         }
