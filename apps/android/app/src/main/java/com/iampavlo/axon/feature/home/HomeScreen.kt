@@ -29,7 +29,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +41,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -136,6 +141,10 @@ fun HomeScreen(
                         onCreateSkill = onCreateSkill,
                         onOpenSettings = onOpenSettings,
                         onRetry = vm::retrySkill,
+                        deletingId = vm.deletingId,
+                        deleteError = vm.deleteError,
+                        onDelete = vm::deleteSkill,
+                        onDismissDelete = vm::dismissDelete,
                     )
                 }
             }
@@ -153,6 +162,10 @@ private fun SkillList(
     onCreateSkill: () -> Unit,
     onOpenSettings: () -> Unit,
     onRetry: (Int) -> Unit,
+    deletingId: Int?,
+    deleteError: String?,
+    onDelete: (Int) -> Unit,
+    onDismissDelete: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -184,8 +197,12 @@ private fun SkillList(
             SkillRow(
                 skill = skill,
                 pinned = skill.id in pinned,
+                deleting = deletingId == skill.id,
+                deleteError = deleteError,
                 onOpen = { onOpenSkill(skill.id) },
                 onTogglePin = { onTogglePin(skill.id) },
+                onDelete = { onDelete(skill.id) },
+                onDismissDelete = onDismissDelete,
                 onRetry = { onRetry(skill.id) },
             )
             Hairline()
@@ -216,83 +233,161 @@ private fun SkillList(
 private fun SkillRow(
     skill: SkillListItem,
     pinned: Boolean,
+    deleting: Boolean,
+    deleteError: String?,
     onOpen: () -> Unit,
     onTogglePin: () -> Unit,
+    onDelete: () -> Unit,
+    onDismissDelete: () -> Unit,
     onRetry: () -> Unit,
 ) {
     val colors = MaterialTheme.colorScheme
     var retrying by remember(skill.id) { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onOpen,
-                onLongClick = onTogglePin,
-            )
-            .padding(horizontal = 24.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (pinned) {
-                Icon(
-                    Icons.Filled.PushPin,
-                    contentDescription = "Pinned",
-                    tint = colors.onSurfaceVariant,
-                    modifier = Modifier.size(13.dp).padding(end = 2.dp),
-                )
-            }
-            Text(
-                text = skill.topic,
-                style = RowTopic,
-                color = colors.onBackground,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (skill.status == STATUS_GENERATING) {
-                Spacer(Modifier.size(6.dp))
-                PulseDot()
-            }
-        }
-        Text(
-            text = "Started ${relativeDate(skill.createdAt)} · Last studied ${relativeDate(skill.lastActivityAt)}",
-            style = MetaStyle,
-            color = colors.onSurfaceVariant,
-        )
-        when (skill.status) {
-            STATUS_GENERATING -> Text(
-                "Preparing…",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.onSurfaceVariant,
-            )
-            STATUS_FAILED -> Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "Failed to prepare",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant,
-                )
-                Spacer(Modifier.size(10.dp))
-                OutlinedButton(
-                    onClick = { retrying = true; onRetry() },
-                    enabled = !retrying,
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                    shape = CircleShape,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline),
-                ) {
-                    Text(
-                        if (retrying) "Retrying…" else "Retry",
-                        style = MetaStyle,
-                        color = colors.onBackground,
+    var menuOpen by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .combinedClickable(onClick = onOpen)
+                .padding(start = 24.dp, top = 14.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (pinned) {
+                    Icon(
+                        Icons.Filled.PushPin,
+                        contentDescription = "Pinned",
+                        tint = colors.onSurfaceVariant,
+                        modifier = Modifier.size(13.dp).padding(end = 2.dp),
                     )
                 }
+                Text(
+                    text = skill.topic,
+                    style = RowTopic,
+                    color = colors.onBackground,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (skill.status == STATUS_GENERATING) {
+                    Spacer(Modifier.size(6.dp))
+                    PulseDot()
+                }
             }
-            else -> Text(
-                "${skill.lessonCount} lesson${if (skill.lessonCount == 1) "" else "s"} · " +
-                    "${skill.completedLessons} done · ${skill.learnedPoints} learned",
+            Text(
+                text = "Started ${relativeDate(skill.createdAt)} · Last studied ${relativeDate(skill.lastActivityAt)}",
                 style = MetaStyle,
                 color = colors.onSurfaceVariant,
             )
+            when (skill.status) {
+                STATUS_GENERATING -> Text(
+                    "Preparing…",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.onSurfaceVariant,
+                )
+                STATUS_FAILED -> Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Failed to prepare",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.size(10.dp))
+                    OutlinedButton(
+                        onClick = { retrying = true; onRetry() },
+                        enabled = !retrying,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                        shape = CircleShape,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.outline),
+                    ) {
+                        Text(
+                            if (retrying) "Retrying…" else "Retry",
+                            style = MetaStyle,
+                            color = colors.onBackground,
+                        )
+                    }
+                }
+                else -> Text(
+                    "${skill.lessonCount} lesson${if (skill.lessonCount == 1) "" else "s"} · " +
+                        "${skill.completedLessons} done · ${skill.learnedPoints} learned",
+                    style = MetaStyle,
+                    color = colors.onSurfaceVariant,
+                )
+            }
         }
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = "Skill options",
+                    tint = colors.onSurfaceVariant,
+                )
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (pinned) "Unpin" else "Pin", color = colors.onBackground) },
+                    onClick = {
+                        menuOpen = false
+                        onTogglePin()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete", color = colors.error) },
+                    onClick = {
+                        menuOpen = false
+                        showDeleteConfirm = true
+                    },
+                )
+            }
+        }
+    }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!deleting) {
+                    showDeleteConfirm = false
+                    onDismissDelete()
+                }
+            },
+            title = {
+                Text("Delete skill?", style = MaterialTheme.typography.titleMedium, color = colors.onBackground)
+            },
+            text = {
+                Column {
+                    Text(
+                        "\"${skill.topic}\" and all of its lessons, answers, and progress will be removed permanently.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant,
+                    )
+                    deleteError?.let {
+                        Spacer(Modifier.height(8.dp))
+                        Text(it, style = MaterialTheme.typography.bodyMedium, color = colors.error)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDelete, enabled = !deleting) {
+                    Text(
+                        if (deleting) "Deleting…" else "Delete",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDismissDelete()
+                    },
+                    enabled = !deleting,
+                ) {
+                    Text("Cancel", style = MaterialTheme.typography.labelLarge, color = colors.onBackground)
+                }
+            },
+            containerColor = colors.surface,
+        )
     }
 }
 

@@ -41,4 +41,17 @@ class PinsStore(private val context: Context, private val scope: CoroutineScope)
             }
         }
     }
+
+    /** Drops one id (deleted skill), keeping the remaining pin order. */
+    fun remove(id: Int) {
+        scope.launch {
+            context.axonDataStore.edit { prefs ->
+                val current = prefs[key]
+                    ?.split(',')
+                    ?.mapNotNull { it.trim().toIntOrNull() }
+                    .orEmpty()
+                if (id in current) prefs[key] = (current - id).joinToString(",")
+            }
+        }
+    }
 }

@@ -78,8 +78,8 @@ a phase.
 - Reader: markdown + code highlight, chunked QA groups with optimistic ask +
   1.6s pending poll, anchor mode + composer (4000 chars), stale-anchor tail
   group, video clips with sponsor-segment skip, clip-gate while PENDING (5s
-  poll), collapsing title (140px span), scroll progress bar, pins on skill
-  rows (long-press), skill retry pills.
+  poll), collapsing title (140px span), scroll progress bar, skill-row 3-dot
+  menu (pin, delete), skill retry pills.
 - Quiz: one-page, MCQ/TF inverted tiles, open-ended textarea, per-answer
   timeSpentMs, result poll 4s while grading (5 min cap), Continue → skill.
 - TTS (phase 7): Kokoro on-device for English, system TTS otherwise,

@@ -28,6 +28,12 @@ class HomeViewModel(
     var refreshing by mutableStateOf(false)
         private set
 
+    /** Row with a delete request in flight, null when idle. */
+    var deletingId by mutableStateOf<Int?>(null)
+        private set
+    var deleteError by mutableStateOf<String?>(null)
+        private set
+
     val pinnedIds: StateFlow<List<Int>> = pins.pinnedIds
 
     init {
@@ -70,4 +76,29 @@ class HomeViewModel(
     }
 
     fun togglePin(id: Int) = pins.toggle(id)
+
+    /** Permanent: server cascades lessons, answers, progress, and vectors. */
+    fun deleteSkill(id: Int) {
+        if (deletingId != null) return
+        deletingId = id
+        deleteError = null
+        viewModelScope.launch {
+            try {
+                api.skillDelete(id)
+                pins.remove(id)
+                (state as? State.Ready)?.let { s ->
+                    state = s.copy(skills = s.skills.filterNot { it.id == id })
+                }
+            } catch (e: Exception) {
+                deleteError = e.message ?: "Couldn't delete the skill — try again."
+            } finally {
+                deletingId = null
+            }
+        }
+    }
+
+    /** Clears a surfaced delete failure so a reopened confirm dialog starts clean. */
+    fun dismissDelete() {
+        deleteError = null
+    }
 }
