@@ -19,6 +19,7 @@ const makeFakeDeps = (skill: {
 } | null) => {
   const updates: { id: number; patch: Record<string, unknown> }[] = [];
   const enqueued: { jobName: string; payload: unknown }[] = [];
+  const drains: number[] = [];
   const classCount: Record<number, number> = {};
 
   const skillRepo: SkillRepository = {
@@ -52,6 +53,7 @@ const makeFakeDeps = (skill: {
     claimStaleFirstLesson: async () => {
       throw new Error("not used in edit tests");
     },
+    claimFirstLessonRun: async () => null,
     delete: async () => {
       throw new Error("not used in edit tests");
     },
@@ -70,8 +72,15 @@ const makeFakeDeps = (skill: {
     },
   };
 
-  const deps: EditSkillDeps = { skillRepo, classRepo, jobs };
-  return { deps, updates, enqueued, classCount };
+  const deps: EditSkillDeps = {
+    skillRepo,
+    classRepo,
+    jobs,
+    awaitDrain: async () => {
+      drains.push(1);
+    },
+  };
+  return { deps, updates, enqueued, drains, classCount };
 };
 
 const SKILL = {
@@ -119,8 +128,16 @@ describe("makeEditSkill", () => {
     ]);
   });
 
+  it("drains the job queue on acceptance so the armed lesson runs in-request", async () => {
+    const { deps, drains } = makeFakeDeps(SKILL);
+
+    await makeEditSkill(deps)(input);
+
+    expect(drains).toHaveLength(1);
+  });
+
   it("updates an ACTIVE skill that already has lessons without arming generation", async () => {
-    const { deps, updates, enqueued, classCount } = makeFakeDeps(SKILL);
+    const { deps, updates, enqueued, drains, classCount } = makeFakeDeps(SKILL);
     classCount[42] = 2;
 
     const result = await makeEditSkill(deps)(input);
@@ -140,6 +157,7 @@ describe("makeEditSkill", () => {
       },
     ]);
     expect(enqueued).toHaveLength(0);
+    expect(drains).toHaveLength(0);
   });
 
   it("does not arm generation from GENERATING (a stage is already in flight)", async () => {

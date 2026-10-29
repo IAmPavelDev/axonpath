@@ -100,6 +100,12 @@ export const makeGenerateClassClips =
         system: PLAN_SYSTEM,
         prompt: [
           `Lesson title: "${klass.title}" (part of a course on "${klass.skillTopic}").`,
+          ...(klass.baseLanguage
+            ? [
+                `The lesson is written in ${klass.baseLanguage} (BCP-47); the videos`,
+                "must teach in that same language — phrase the search queries in it.",
+              ]
+            : []),
           "Lesson content:",
           klass.contentMd.slice(0, PLAN_CONTENT_CHARS),
           "",
@@ -210,6 +216,7 @@ export const makeGenerateClassClips =
           videoId: candidate.videoId,
           concept: concept.query,
           lessonTitle: klass.title,
+          language: klass.baseLanguage,
         });
         if (!selection.ok) {
           logger.warn(

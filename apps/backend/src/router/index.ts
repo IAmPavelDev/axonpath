@@ -49,6 +49,7 @@ export const buildApiHandlers = (deps: LearningApiDeps): ApiHandlers => {
     getSkillById: skill.get,
     editSkill: skill.edit,
     retrySkill: skill.retry,
+    ensureSkillLessons: skill.ensure,
     getSkillProgress: skill.progress,
     updateSkillStatus: skill.updateStatus,
     deleteSkill: skill.delete,

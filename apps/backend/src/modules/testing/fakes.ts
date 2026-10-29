@@ -401,6 +401,19 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
       }
       return accepted;
     },
+    claimFirstLessonRun: async (skillId: number) => {
+      // On-demand ensure claim: lesson-less ACTIVE skills only — the harness
+      // has no clock, so the stale-GENERATING branch is unreachable by
+      // construction and tests control the preconditions via state setup.
+      const skill = state.skills.get(skillId);
+      if (!skill || skill.status !== SkillStatus.ACTIVE) return null;
+      const hasClass = [...state.classes.values()].some(
+        (cls) => cls.skillId === skillId,
+      );
+      if (hasClass) return null;
+      skill.status = SkillStatus.GENERATING;
+      return { id: skill.id, userId: skill.userId };
+    },
     settleStaleGenerating: async () => {
       // No clock in the harness: every abandoned GENERATING skill (has a
       // class, no live next-class marker) is settled; tests control the

@@ -18,6 +18,8 @@ export type GeminiVideoClient = {
     videoId: string;
     concept: string;
     lessonTitle: string;
+    /** Required teaching language (BCP-47); null = no language gate. */
+    language?: string | null;
   }): Promise<Result<ClipSelection, GeminiVideoError>>;
 };
 
@@ -33,7 +35,11 @@ const TIMEOUT_MS = 120_000;
 
 export const VIDEO_MODEL = process.env.GEMINI_VIDEO_MODEL ?? "gemini-flash-latest";
 
-export const buildClipSelectionPrompt = (concept: string, lessonTitle: string): string =>
+export const buildClipSelectionPrompt = (
+  concept: string,
+  lessonTitle: string,
+  language?: string | null,
+): string =>
   [
     `You are selecting the exact segment of this YouTube video that teaches: "${concept}"`,
     `It will be embedded inside a lesson titled "${lessonTitle}".`,
@@ -42,6 +48,12 @@ export const buildClipSelectionPrompt = (concept: string, lessonTitle: string): 
     "  of the explanation through the end of its example or demonstration.",
     "- Skip intros, channel branding, sponsorships and unrelated topics.",
     "- Prefer a segment between 1 and 6 minutes.",
+    ...(language
+      ? [
+          `- The video must teach in ${language} (BCP-47). If its spoken language`,
+          "  differs, answer found=false — a wrong-language clip is worse than none.",
+        ]
+      : []),
     '- Answer ONLY with JSON: {"found": boolean, "startSeconds": number, "endSeconds": number, "summary": string}',
     '- "found" is false when the video does not actually explain the concept.',
   ].join("\n");
@@ -75,7 +87,7 @@ export const parseClipSelection = (raw: string): Result<ClipSelection, GeminiVid
 };
 
 export const makeGeminiVideoClient = (apiKey: string): GeminiVideoClient => ({
-  selectClipSegment: async ({ videoId, concept, lessonTitle }) => {
+  selectClipSegment: async ({ videoId, concept, lessonTitle, language }) => {
     let res: Response;
     try {
       res = await fetch(`${BASE_URL}/${VIDEO_MODEL}:generateContent`, {
@@ -86,7 +98,7 @@ export const makeGeminiVideoClient = (apiKey: string): GeminiVideoClient => ({
           contents: [
             {
               parts: [
-                { text: buildClipSelectionPrompt(concept, lessonTitle) },
+                { text: buildClipSelectionPrompt(concept, lessonTitle, language) },
                 { file_data: { file_uri: `https://www.youtube.com/watch?v=${videoId}` } },
               ],
             },

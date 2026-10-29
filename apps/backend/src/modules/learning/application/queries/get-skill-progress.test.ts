@@ -50,6 +50,7 @@ const makeFakeDeps = (options: {
     settleStaleGenerating: async () => [],
     claimStaleInit: unused,
     claimStaleFirstLesson: unused,
+    claimFirstLessonRun: unused,
     delete: unused,
   };
   const classRepo: ClassRepository = {

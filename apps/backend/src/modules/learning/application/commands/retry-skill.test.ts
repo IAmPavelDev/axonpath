@@ -57,6 +57,7 @@ const makeFakeDeps = (
     claimStaleFirstLesson: async () => {
       throw new Error("not used in retry tests");
     },
+    claimFirstLessonRun: async () => null,
     delete: async () => {
       throw new Error("not used in retry tests");
     },
@@ -68,7 +69,11 @@ const makeFakeDeps = (
     },
   };
 
-  const deps: RetrySkillDeps = { skillRepo, jobs };
+  const deps: RetrySkillDeps = {
+    skillRepo,
+    jobs,
+    awaitDrain: async () => {},
+  };
   return { deps, updates, enqueued };
 };
 

@@ -38,6 +38,7 @@ const makeFakeDeps = (skill: SkillCoreRow | null) => {
     settleStaleGenerating: async () => [],
     claimStaleInit: unused,
     claimStaleFirstLesson: unused,
+    claimFirstLessonRun: unused,
     delete: unused,
   };
 

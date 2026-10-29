@@ -55,6 +55,12 @@ export type VideoRepository = {
     classId: number,
   ): Promise<{ clipStatus: ClassClipStatus; clips: ClassClipRow[] }>;
   findSkillTopic(skillId: number): Promise<string | null>;
+  /**
+   * The language the skill's lessons teach in — the AI-decided baseLanguage
+   * of the latest lesson (BCP-47), null before lesson 0 exists. Drives the
+   * video pipelines' language gate.
+   */
+  findSkillLanguage(skillId: number): Promise<string | null>;
   findSkillOwner(skillId: number): Promise<number | null>;
   setRecommendationsStatus(skillId: number, status: RecommendationStatus): Promise<void>;
   replaceRecommendations(skillId: number, items: NewRecommendation[]): Promise<void>;
@@ -68,7 +74,13 @@ export type VideoRepository = {
   setClipStatus(classId: number, status: ClassClipStatus): Promise<void>;
   findClassForClips(
     classId: number,
-  ): Promise<{ id: number; title: string; contentMd: string; skillTopic: string } | null>;
+  ): Promise<{
+    id: number;
+    title: string;
+    contentMd: string;
+    skillTopic: string;
+    baseLanguage: string | null;
+  } | null>;
   replaceClassClips(classId: number, clips: NewClassClip[]): Promise<void>;
   findClassClips(classId: number): Promise<ClassClipRow[]>;
 

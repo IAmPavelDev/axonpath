@@ -36,6 +36,7 @@ const makeFakeDeps = () => {
     claimStaleFirstLesson: async () => {
       throw new Error("not used in create tests");
     },
+    claimFirstLessonRun: async () => null,
     delete: async () => {
       throw new Error("not used in create tests");
     },

@@ -83,6 +83,20 @@ export type SkillRepository = {
    */
   claimStaleFirstLesson(olderThan: Date): Promise<Array<{ id: number; userId: number }>>;
   /**
+   * Atomic on-demand claim of the first-lesson pipeline for ONE lesson-less
+   * skill (the ensure-lessons request). Same lease semantics as the sweepers:
+   * a lesson-less ACTIVE skill (draft accepted or abandoned) always claims;
+   * a GENERATING skill claims only when its lease went stale (its arming job
+   * was lost — the serverless API freezes the in-process queue on return).
+   * A fresh GENERATING skill claims nothing: a run is plausibly in flight in
+   * the worker, and regenerating under it would double-spend the AI call.
+   * Returns null when nothing was claimed.
+   */
+  claimFirstLessonRun(
+    skillId: number,
+    staleOlderThan: Date,
+  ): Promise<{ id: number; userId: number } | null>;
+  /**
    * Recovery net for a GENERATING skill whose generation pipeline died after
    * persisting a class but before settling (crash between class-create and
    * settle — e.g. an expired Prisma transaction on the API). Legal GENERATING

@@ -8,6 +8,7 @@ import type { AiPort } from "@/modules/tutoring/ports";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
 import type { RankedRecommendation } from "@/modules/video/domain/video-enrichment";
 import type { YouTubeScraperPort } from "@/modules/video/domain/youtube-access";
+import type { YouTubeSearchHit } from "@/modules/video/domain/youtube-access";
 import { rankCandidates } from "@/modules/video/domain/video-enrichment";
 import type {
   NewRecommendation,
@@ -34,6 +35,116 @@ const RERANK_SCHEMA = {
   type: "object",
   properties: { ranked: { type: "array", items: { type: "integer" } } },
   required: ["ranked"],
+};
+
+const LANGUAGE_SELECT_SYSTEM =
+  "You select educational YouTube videos in a required language. Reply with JSON only.";
+
+const LANGUAGE_SELECT_SCHEMA = {
+  type: "object",
+  properties: { ranked: { type: "array", items: { type: "integer" } } },
+  required: ["ranked"],
+  additionalProperties: false,
+} as const;
+
+const LANGUAGE_CLASSIFY_SYSTEM =
+  "You detect the language a learning skill will be taught in. Reply with JSON only.";
+
+const LANGUAGE_CLASSIFY_SCHEMA = {
+  type: "object",
+  properties: {
+    language: { type: "string", pattern: "^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$" },
+  },
+  required: ["language"],
+  additionalProperties: false,
+} as const;
+
+const BCP47_RE = /^[a-zA-Z]{2,3}(-[a-zA-Z]{2,4})?$/;
+
+/**
+ * The skill's video language: the latest lesson's AI-decided baseLanguage,
+ * or — before lesson 0 exists (recommendations usually generate first) —
+ * one cheap classification of the learner's own prompt.
+ */
+const resolveSkillLanguage = async (
+  videoRepo: VideoRepository,
+  ai: Pick<AiPort, "generateJson">,
+  skillId: number,
+  topic: string,
+): Promise<string | null> => {
+  const fromLessons = await videoRepo.findSkillLanguage(skillId);
+  if (fromLessons !== null) return fromLessons;
+  const result = await ai.generateJson(
+    {
+      system: LANGUAGE_CLASSIFY_SYSTEM,
+      prompt: [
+        "The learner described a skill they want to learn:",
+        `"""${topic.slice(0, 500)}"""`,
+        "The lessons will be written in the learner's own language.",
+        'Answer JSON: {"language": "BCP-47 code"}',
+      ].join("\n"),
+    },
+    {
+      schemaName: "skill_language",
+      responseSchema: LANGUAGE_CLASSIFY_SCHEMA as Record<string, unknown>,
+    },
+  );
+  if (!result.ok) return null;
+  const parsed = extractJsonObject(result.value.raw) as { language?: unknown } | null;
+  return typeof parsed?.language === "string" && BCP47_RE.test(parsed.language)
+    ? parsed.language
+    : null;
+};
+
+/**
+ * Model language gate over the raw search hits: only videos that teach in
+ * the required language survive, best-first. Returns null only when the
+ * model call itself fails — the caller then degrades to the unfiltered
+ * heuristic path. An empty selection is a real verdict (no matching-language
+ * videos in the results) and persists as an empty list.
+ */
+const selectByLanguage = async (
+  ai: Pick<AiPort, "generateJson">,
+  topic: string,
+  hits: YouTubeSearchHit[],
+  language: string,
+): Promise<YouTubeSearchHit[] | null> => {
+  const capped = hits.slice(0, 25);
+  const list = capped
+    .map((hit, index) => `${index}. "${hit.title}" — ${hit.channel}`)
+    .join("\n");
+  const result = await ai.generateJson(
+    {
+      system: LANGUAGE_SELECT_SYSTEM,
+      prompt: [
+        `Skill topic: "${topic}"`,
+        `Required video language: ${language} (BCP-47). The videos must TEACH in it.`,
+        "Candidates (index. title — channel):",
+        list,
+        "",
+        "Select every candidate whose teaching language matches, judging from the",
+        "title and channel. A tutorial advertised for another language (e.g. 'in",
+        "Hindi') never qualifies, however well its topic matches.",
+        "Return the selected indexes best-first for the topic.",
+        'Answer JSON: {"ranked": number[]}',
+      ].join("\n"),
+    },
+    {
+      schemaName: "video_language_select",
+      responseSchema: LANGUAGE_SELECT_SCHEMA as Record<string, unknown>,
+    },
+  );
+  if (!result.ok) return null;
+  const parsed = extractJsonObject(result.value.raw) as { ranked?: unknown } | null;
+  if (!Array.isArray(parsed?.ranked)) return null;
+  const picked = parsed.ranked.filter(
+    (index): index is number =>
+      typeof index === "number" &&
+      Number.isInteger(index) &&
+      index >= 0 &&
+      index < capped.length,
+  );
+  return [...new Set(picked)].map((index) => capped[index]);
 };
 
 /** A model pass only pays off above this candidate count. */
@@ -98,6 +209,40 @@ export const makeGenerateSkillRecommendations =
         await videoRepo.setRecommendationsStatus(input.skillId, "FAILED");
       }
       return;
+    }
+
+    // Language gate first: a wrong-language list is the failure mode this
+    // pipeline exists to prevent (popular regional content dominates topic
+    // searches). Degrades to the unfiltered heuristic path only when the
+    // model pass itself fails; an empty selection persists as an empty list.
+    const language = await resolveSkillLanguage(videoRepo, ai, input.skillId, topic);
+    if (language !== null) {
+      const selected = await selectByLanguage(ai, topic, searchResult.value, language);
+      if (selected !== null) {
+        const items: NewRecommendation[] = selected.map((hit, index) => ({
+          videoId: hit.videoId,
+          title: hit.title,
+          channel: hit.channel,
+          durationSeconds: hit.durationSeconds,
+          rank: index + 1,
+          score: null,
+        }));
+        generationSucceeded(
+          {
+            pipeline: "recommendations",
+            skillId: input.skillId,
+            skillName: topic,
+          },
+          {
+            durationMs: Date.now() - pipelineStartedAt,
+            count: items.slice(0, 10).length,
+            language,
+          },
+        );
+        await videoRepo.replaceRecommendations(input.skillId, items.slice(0, 10));
+        await videoRepo.setRecommendationsStatus(input.skillId, "READY");
+        return;
+      }
     }
 
     const ranked = rankCandidates(searchResult.value, topic, 15);

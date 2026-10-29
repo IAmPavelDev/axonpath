@@ -37,6 +37,7 @@ const acceptDraft = (h: LoopHarness, skillId: number) =>
     skillRepo: h.deps.skillRepo,
     classRepo: h.deps.classRepo,
     jobs: h.jobs,
+    awaitDrain: async () => {},
   })({
     id: skillId,
     userId: 7,
@@ -296,7 +297,7 @@ describe("adaptive loop integration", () => {
     expect(classesOfSkill(h, skillId)).toHaveLength(0);
 
     // skill.retry → GENERATING + a fresh skill-init job with the stored prompt.
-    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs, awaitDrain: async () => {} });
     const retried = await retrySkill({ skillId, userId: 7 });
     expect(retried).toEqual(ok({ status: SkillStatus.GENERATING }));
     expect(h.state.enqueued.at(-1)?.jobName).toBe(SKILL_INIT_JOB);
@@ -337,7 +338,7 @@ describe("adaptive loop integration", () => {
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.FAILED);
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
 
-    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs, awaitDrain: async () => {} });
     const retried = await retrySkill({ skillId, userId: 7 });
     expect(retried).toEqual(ok({ status: SkillStatus.GENERATING }));
     expect(h.state.enqueued.at(-1)?.jobName).toBe(SKILL_FIRST_LESSON_JOB);
@@ -366,7 +367,7 @@ describe("adaptive loop integration", () => {
     const skillId = unwrapOrThrow(created).id;
     await h.runJob(SKILL_INIT_JOB); // → ACTIVE (draft ready, no lesson yet)
 
-    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
+    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs, awaitDrain: async () => {} });
 
     const notOwner = await retrySkill({ skillId, userId: 99 });
     expect(notOwner).toEqual({ ok: false, error: { kind: "NotOwned", skillId } });

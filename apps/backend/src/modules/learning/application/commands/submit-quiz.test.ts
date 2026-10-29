@@ -121,6 +121,7 @@ const makeFakeRepos = (
     settleStaleGenerating: async () => [],
     claimStaleInit: async () => [],
     claimStaleFirstLesson: async () => [],
+    claimFirstLessonRun: async () => null,
     delete: async () => {},
   };
 

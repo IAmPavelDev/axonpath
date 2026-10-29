@@ -209,6 +209,24 @@ export const makePrismaSkillRepository = (): SkillRepository => ({
         AND NOT EXISTS (SELECT 1 FROM "Class" AS klass WHERE klass."skillId" = skill."id")
       RETURNING skill."id", skill."userId"
     `,
+  claimFirstLessonRun: async (skillId, staleOlderThan) => {
+    const rows = await prisma.$queryRaw<
+      Array<{ id: number; userId: number }>
+    >`
+      UPDATE "Skill"
+      SET "status" = 'GENERATING', "updatedAt" = NOW()
+      WHERE "id" = ${skillId}
+        AND NOT EXISTS (
+          SELECT 1 FROM "Class" AS klass WHERE klass."skillId" = "Skill"."id"
+        )
+        AND (
+          "status" = 'ACTIVE'
+          OR ("status" = 'GENERATING' AND "updatedAt" < ${staleOlderThan})
+        )
+      RETURNING "id", "userId"
+    `;
+    return rows[0] ?? null;
+  },
 
   settleStaleGenerating: async (olderThan) => {
     const rows = await prisma.$queryRaw<Array<{ id: number }>>`

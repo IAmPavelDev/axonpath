@@ -99,6 +99,15 @@ export const ROUTES: RouteDef[] = [
     response: skill.StatusOnly,
   },
   {
+    id: "ensureSkillLessons",
+    method: "POST",
+    path: "/skill/{id}/ensure-lessons",
+    summary: "Start lesson generation for a lesson-less skill if not already running",
+    tag: "Skill",
+    params: skill.SkillIdInput,
+    response: skill.StatusOnly,
+  },
+  {
     id: "getSkillProgress",
     method: "GET",
     path: "/skill/{id}/progress",

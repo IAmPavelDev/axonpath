@@ -6,8 +6,9 @@ import { isErr } from "@/modules/platform/result";
 import { unwrapOrThrow } from "@/modules/platform/result";
 import { makeCreateSkill, type CreateSkillDeps } from "@/modules/learning/application/commands/create-skill";
 import { makeRetrySkill, type RetrySkillDeps } from "@/modules/learning/application/commands/retry-skill";
-import { makeSetSkillStatus, type SetSkillStatusDeps } from "@/modules/learning/application/commands/set-skill-status";
+import { makeEnsureSkillLessons, type EnsureSkillLessonsDeps } from "@/modules/learning/application/commands/ensure-skill-lessons";
 import { makeEditSkill, type EditSkillDeps } from "@/modules/learning/application/commands/edit-skill";
+import { makeSetSkillStatus, type SetSkillStatusDeps } from "@/modules/learning/application/commands/set-skill-status";
 import { makeDeleteSkill, type DeleteSkillDeps } from "@/modules/learning/application/commands/delete-skill";
 import { makeGetSkillById, type GetSkillByIdDeps } from "@/modules/learning/application/queries/get-skill-by-id";
 import { makeGetSkillsList, type GetSkillsListDeps } from "@/modules/learning/application/queries/get-skills-list";
@@ -19,6 +20,7 @@ export type SkillApiDeps = CreateSkillDeps &
   GetSkillByIdDeps &
   GetSkillsListDeps &
   RetrySkillDeps &
+  EnsureSkillLessonsDeps &
   SetSkillStatusDeps &
   DeleteSkillDeps &
   GetSkillProgressDeps &
@@ -30,9 +32,10 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
   const getSkillById = makeGetSkillById(deps);
   const getSkillsList = makeGetSkillsList(deps);
   const retrySkill = makeRetrySkill(deps);
-  const setSkillStatus = makeSetSkillStatus(deps);
+  const ensureSkillLessons = makeEnsureSkillLessons(deps);
   const getSkillProgress = makeGetSkillProgress(deps);
   const getSkillMistakes = makeGetSkillMistakes(deps);
+  const setSkillStatus = makeSetSkillStatus(deps);
   const deleteSkill = makeDeleteSkill(deps);
 
   return {
@@ -93,6 +96,17 @@ export const makeSkillHandlers = (deps: SkillApiDeps) => {
 
     retry: (async (input, context) => {
       const result = await retrySkill({
+        skillId: input.id,
+        userId: context.user.id,
+      });
+      return unwrapOrThrow(result, toHttpError);
+    }) satisfies ApiHandler<
+      z.infer<typeof schema.skill.SkillIdInput>,
+      z.infer<typeof schema.skill.StatusOnly>
+    >,
+
+    ensure: (async (input, context) => {
+      const result = await ensureSkillLessons({
         skillId: input.id,
         userId: context.user.id,
       });

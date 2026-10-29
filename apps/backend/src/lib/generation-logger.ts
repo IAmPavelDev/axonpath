@@ -31,7 +31,7 @@ export const generationStarted = (ctx: GenerationContext): void => {
 
 export const generationSucceeded = (
   ctx: GenerationContext,
-  detail: { durationMs: number; classId?: number; className?: string; count?: number },
+  detail: { durationMs: number; classId?: number; className?: string; count?: number; language?: string },
 ): void => {
   logger.info({ ...ctx, ...detail, status: "success" }, "generation.succeeded");
 };

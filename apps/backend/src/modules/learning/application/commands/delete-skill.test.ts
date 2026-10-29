@@ -29,6 +29,7 @@ const makeFakeDeps = (
     listByStatus: unused,
     claimStaleInit: unused,
     claimStaleFirstLesson: unused,
+    claimFirstLessonRun: unused,
     settleStaleGenerating: unused,
     delete: async (id) => {
       deletedIds.push(id);

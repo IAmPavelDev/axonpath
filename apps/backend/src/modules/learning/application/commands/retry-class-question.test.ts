@@ -106,6 +106,7 @@ const makeDeps = (
       throw new Error("not used in retry tests");
     },
     claimStaleFirstLesson: async () => [],
+    claimFirstLessonRun: async () => null,
     delete: async () => {},
   };
 

@@ -54,6 +54,15 @@ export const makeVideoRepository = (): VideoRepository => ({
     return skill?.topic ?? null;
   },
 
+  findSkillLanguage: async (skillId) => {
+    const klass = await prisma.class.findFirst({
+      where: { skillId, baseLanguage: { not: null } },
+      orderBy: { index: "desc" },
+      select: { baseLanguage: true },
+    });
+    return klass?.baseLanguage ?? null;
+  },
+
   findSkillOwner: async (skillId) => {
     const skill = await prisma.skill.findUnique({
       where: { id: skillId },
@@ -125,7 +134,13 @@ export const makeVideoRepository = (): VideoRepository => ({
   findClassForClips: async (classId) => {
     const klass = await prisma.class.findUnique({
       where: { id: classId },
-      select: { id: true, title: true, contentMd: true, skill: { select: { topic: true } } },
+      select: {
+        id: true,
+        title: true,
+        contentMd: true,
+        baseLanguage: true,
+        skill: { select: { topic: true } },
+      },
     });
     if (!klass) return null;
     return {
@@ -133,6 +148,7 @@ export const makeVideoRepository = (): VideoRepository => ({
       title: klass.title,
       contentMd: klass.contentMd,
       skillTopic: klass.skill.topic,
+      baseLanguage: klass.baseLanguage,
     };
   },
 

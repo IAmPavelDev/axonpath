@@ -75,8 +75,37 @@ class SkillDetailViewModel(
                     loadError = skillDeferred.await().exceptionOrNull()?.message
                         ?: "Something went wrong — try again."
                 }
+                maybeEnsureLessons()
             } finally {
                 refreshing = false
+            }
+        }
+    }
+
+    /**
+     * The user never waits stuck: a skill with zero lessons must always be
+     * generating. One fire per screen visit (until lessons land or the skill
+     * fails) — the endpoint is idempotent and the 10s poll + sweeper cover
+     * anything the capped in-request drain leaves running.
+     */
+    private var ensureInFlight = false
+    private var ensuredOnce = false
+    private fun maybeEnsureLessons() {
+        val s = skill ?: return
+        if (classes.isNotEmpty()) {
+            ensuredOnce = false
+            return
+        }
+        if (ensuredOnce || ensureInFlight) return
+        if (s.status != "ACTIVE" && s.status != "GENERATING") return
+        ensureInFlight = true
+        ensuredOnce = true
+        viewModelScope.launch {
+            try {
+                runCatching { api.skillEnsureLessons(skillId) }
+                if (classes.isEmpty()) refresh()
+            } finally {
+                ensureInFlight = false
             }
         }
     }
@@ -129,6 +158,8 @@ class SkillDetailViewModel(
         retrying = true
         viewModelScope.launch {
             runCatching { api.skillRetry(skillId) }
+            // The retry armed a new generation attempt — allow ensure again.
+            ensuredOnce = false
             refresh()
             retrying = false
         }
@@ -138,7 +169,6 @@ class SkillDetailViewModel(
     fun deleteSkill(onDeleted: () -> Unit) {
         if (deleting) return
         deleting = true
-        deleteError = null
         viewModelScope.launch {
             try {
                 api.skillDelete(skillId)

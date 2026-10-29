@@ -7,10 +7,13 @@ import {
   SKILL_FIRST_LESSON_JOB,
   type SkillFirstLessonJobPayload,
 } from "@/modules/tutoring/application/generate-first-lesson";
+import { drainCapped } from "./ensure-skill-lessons";
 
 export type RetrySkillDeps = {
   skillRepo: SkillRepository;
   jobs: JobQueuePort;
+  /** Drain seam — the container's jobQueueIdle (see drainCapped). */
+  awaitDrain: () => Promise<void>;
 };
 export type RetrySkillInput = {
   skillId: number;
@@ -42,7 +45,7 @@ export type RetrySkillError =
  * existing skill.
  */
 export const makeRetrySkill =
-  ({ skillRepo, jobs }: RetrySkillDeps) =>
+  ({ skillRepo, jobs, awaitDrain }: RetrySkillDeps) =>
   async (
     input: RetrySkillInput,
   ): Promise<Result<RetrySkillOutput, RetrySkillError>> => {
@@ -77,6 +80,9 @@ export const makeRetrySkill =
         prompt: skill.prompt,
       } satisfies SkillInitJobPayload);
     }
+    // Same serverless freeze as the acceptance edit: drain in-request
+    // (capped) so the retried stage usually lands within this request.
+    await drainCapped(awaitDrain);
 
     return ok({ status: updated.status });
   };

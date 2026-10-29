@@ -224,6 +224,18 @@
         ],
         "additionalProperties": false
       },
+      "ensureSkillLessonsResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
       "getSkillProgressResponse": {
         "type": "object",
         "properties": {
@@ -1821,6 +1833,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/retrySkillResponse"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
+        ]
+      }
+    },
+    "/skill/{id}/ensure-lessons": {
+      "post": {
+        "operationId": "ensureSkillLessons",
+        "summary": "Start lesson generation for a lesson-less skill if not already running",
+        "tags": [
+          "Skill"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ensureSkillLessonsResponse"
                 }
               }
             }

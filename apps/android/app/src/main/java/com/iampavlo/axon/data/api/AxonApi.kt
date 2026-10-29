@@ -117,6 +117,10 @@ class AxonApi(
     suspend fun skillRetry(id: Int): StatusOnly =
         skill.retrySkill(id).orThrow().let { StatusOnly(status = it.status) }
 
+    /** Idempotent: starts lesson generation for a lesson-less skill if not already running. */
+    suspend fun skillEnsureLessons(id: Int): StatusOnly =
+        skill.ensureSkillLessons(id).orThrow().let { StatusOnly(status = it.status) }
+
     suspend fun skillProgress(id: Int): SkillProgress =
         skill.getSkillProgress(id).orThrow().let {
             SkillProgress(

@@ -91,6 +91,7 @@ const makeDeps = (
       throw new Error("not used in ask tests");
     },
     claimStaleFirstLesson: async () => [],
+    claimFirstLessonRun: async () => null,
     delete: async () => {},
   };
 

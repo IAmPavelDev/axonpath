@@ -259,6 +259,7 @@ export const configureContainer = ({
     getUsageReport,
     clock,
     jobs,
+    awaitDrain: jobQueue.idle,
     jobQueueIdle: jobQueue.idle,
     nextClassJobs,
     nextClassSweeper,

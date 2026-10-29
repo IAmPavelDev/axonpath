@@ -23,6 +23,7 @@ type Repo = Pick<
   VideoRepository,
   | "getRecommendationsState"
   | "findSkillTopic"
+  | "findSkillLanguage"
   | "setRecommendationsStatus"
   | "replaceRecommendations"
 >;
@@ -31,6 +32,7 @@ const makeRepo = (options: {
   status?: "PENDING" | "READY" | "FAILED" | null;
   attempts?: number;
   topic?: string | null;
+  language?: string | null;
 }) => {
   const state = {
     written: [] as NewRecommendation[],
@@ -42,6 +44,7 @@ const makeRepo = (options: {
       attempts: options.attempts ?? 0,
     }),
     findSkillTopic: async () => options.topic ?? "SQL joins",
+    findSkillLanguage: async () => options.language ?? null,
     setRecommendationsStatus: async (_id: number, status: string) => {
       state.finalStatus = status;
     },
@@ -65,6 +68,19 @@ const makeAi = (raw: string | null): Pick<AiPort, "generateJson"> => ({
       ? { ok: false, error: { kind: "AiGenerationFailed" } }
       : { ok: true, value: { raw } },
 });
+
+/** Scripted AI: one raw per generateJson call, in order. */
+const makeAiScripted = (raws: (string | null)[]): Pick<AiPort, "generateJson"> => {
+  let call = 0;
+  return {
+    generateJson: async () => {
+      const raw = raws[call++] ?? null;
+      return raw === null
+        ? { ok: false, error: { kind: "AiGenerationFailed" } }
+        : { ok: true, value: { raw } };
+    },
+  };
+};
 
 const HITS = [HIT("aaa11111111", "SQL joins tutorial"), HIT("bbb22222222", "Advanced SQL joins")];
 
@@ -104,6 +120,53 @@ describe("makeGenerateSkillRecommendations", () => {
     )({ skillId: 7 });
     expect(state.written).toEqual([]);
     expect(state.finalStatus).toBeNull();
+  });
+  it("keeps only the required language when the lesson language is known", async () => {
+    const { repo, state } = makeRepo({ language: "en" });
+    const hits = [
+      HIT("hhh11111111", "SQL JOINs in Hindi — आसान तरीका"),
+      HIT("aaa11111111", "SQL joins tutorial"),
+      HIT("hhh22222222", "Complete SQL JOINs For Beginners | SQL Tutorial in Hindi"),
+    ];
+    const ai = makeAiScripted(['{"ranked":[1]}']);
+
+    await makeGenerateSkillRecommendations(makeDeps(repo, makeSearch(hits), ai))({
+      skillId: 7,
+    });
+
+    expect(state.finalStatus).toBe("READY");
+    expect(state.written.map((item) => item.videoId)).toEqual(["aaa11111111"]);
+    expect(state.written[0]?.rank).toBe(1);
+  });
+
+  it("classifies the skill language from the topic before lesson 0 exists", async () => {
+    const { repo, state } = makeRepo({ topic: "حل معادلات من الدرجة الثانية" });
+    const ai = makeAiScripted(['{"language":"ar"}', '{"ranked":[0,1]}']);
+
+    await makeGenerateSkillRecommendations(
+      makeDeps(repo, makeSearch(HITS), ai),
+    )({ skillId: 7 });
+
+    expect(state.finalStatus).toBe("READY");
+    expect(state.written.map((item) => item.videoId)).toEqual([
+      "aaa11111111",
+      "bbb22222222",
+    ]);
+  });
+
+  it("degrades to the unfiltered heuristic path when the language pass fails", async () => {
+    const { repo, state } = makeRepo({ language: "en" });
+    const ai = makeAiScripted([null]); // selectByLanguage model call fails
+
+    await makeGenerateSkillRecommendations(
+      makeDeps(repo, makeSearch(HITS), ai),
+    )({ skillId: 7 });
+
+    expect(state.finalStatus).toBe("READY");
+    expect(state.written.map((item) => item.videoId)).toEqual([
+      "aaa11111111",
+      "bbb22222222",
+    ]);
   });
 
   it("marks FAILED after the attempts budget is exhausted", async () => {
