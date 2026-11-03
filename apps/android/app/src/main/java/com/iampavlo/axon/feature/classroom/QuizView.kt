@@ -82,6 +82,8 @@ fun QuizView(
                 Modifier
                     .fillMaxSize()
                     .verticalScroll(scroll)
+                    // Start below the floating tabs; scrolled content passes under them.
+                    .padding(top = 48.dp)
                     .padding(horizontal = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {

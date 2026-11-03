@@ -13,18 +13,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-/** RN SegmentedControl port: muted track, active segment lifts in card color. */
+/** RN SegmentedControl port: muted track, active segment lifts in card color.
+ *  Pass [trackColor] = Color.Transparent to let underlying content show
+ *  through the track gaps (floating-tab look). */
 @Composable
 fun <T> SegmentedControl(
     options: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
+    trackColor: Color? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     Row(
         modifier = modifier
-            .background(colors.surfaceVariant, RoundedCornerShape(10.dp))
+            .background(trackColor ?: colors.surfaceVariant, RoundedCornerShape(10.dp))
             .padding(2.dp),
     ) {
         options.forEach { (value, label) ->
@@ -35,7 +38,7 @@ fun <T> SegmentedControl(
                     .clickable { onSelect(value) }
                     .padding(3.dp)
                     .background(
-                        if (isSelected) colors.background else Color.Transparent,
+                        colors.background,
                         RoundedCornerShape(8.dp),
                     )
                     .padding(vertical = 5.dp),
@@ -44,7 +47,7 @@ fun <T> SegmentedControl(
                 Text(
                     label,
                     style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) colors.onBackground else colors.onSurfaceVariant,
+                    color = colors.onBackground,
                 )
             }
         }

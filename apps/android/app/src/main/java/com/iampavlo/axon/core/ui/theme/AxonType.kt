@@ -51,7 +51,7 @@ val LabelStyle = TextStyle(
 val MetaStyle = TextStyle(
     fontFamily = SourceSans3,
     fontWeight = FontWeight.Normal,
-    fontSize = 13.sp,
+    fontSize = 16.sp,
     lineHeight = 18.sp,
     fontFeatureSettings = "tnum",
 )

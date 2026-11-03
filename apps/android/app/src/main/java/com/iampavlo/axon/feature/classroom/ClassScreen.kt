@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -45,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.iampavlo.axon.core.conspect.splitConspectChunks
 import com.iampavlo.axon.core.conspect.stripLanguageMarkers
@@ -169,20 +171,22 @@ fun ClassScreen(
 
             CollapsingClassHeader(title = klass?.title ?: "", scroll = scroll)
 
-            SegmentedControl(
-                options = ClassTab.entries.map { it to it.label },
-                selected = tab,
-                onSelect = { onTabChange(it) },
-                modifier = Modifier.padding(horizontal = 24.dp),
-            )
-
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .onSizeChanged { viewportHeightPx = it.height },
-            ) {
-                TabPane(visible = tab == ClassTab.CONSPECT) {
-                    Column(Modifier.fillMaxSize().verticalScroll(scrollConspect)) {
+            // Floating tabs: both tabs overlay the scrolling panes (zIndex 2f),
+            // content scrolls underneath and shows through the transparent track.
+            Box(Modifier.fillMaxSize()) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { viewportHeightPx = it.height },
+                ) {
+                    TabPane(visible = tab == ClassTab.CONSPECT) {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(scrollConspect)
+                            // Start below the floating tabs; scrolled content passes under them.
+                            .padding(top = 48.dp),
+                    ) {
                         if (klass == null && vm.loadError != null) {
                             Text(
                                 "Failed to load class: ${vm.loadError}",
@@ -211,7 +215,18 @@ fun ClassScreen(
                     )
                 }
             }
+
+            SegmentedControl(
+                options = ClassTab.entries.map { it to it.label },
+                selected = tab,
+                onSelect = { onTabChange(it) },
+                trackColor = Color.Transparent,
+                modifier = Modifier
+                    .padding(horizontal = 24.dp)
+                    .zIndex(1f),
+            )
         }
+    }
 
         if (tab == ClassTab.CONSPECT && !vm.isPreparing && klass != null) {
             // Read-aloud FAB (48dp circle) sits above the Ask-AI pill, RN parity.

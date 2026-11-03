@@ -93,7 +93,7 @@ fun ConspectView(
         followedChunk = word.chunk
     }
 
-    Column(Modifier.padding(horizontal = 24.dp)) {
+    Column(Modifier.padding(start = 24.dp, top = 16.dp, end = 24.dp, bottom = 24.dp)) {
         chunks.forEachIndexed { index, chunk ->
             val activeRange = activeWord
                 ?.takeIf { it.chunk == index }
@@ -111,6 +111,7 @@ fun ConspectView(
                         },
                     ),
             ) {
+                Spacer(Modifier.height(16.dp))
                 ChunkMarkdown(
                     chunk,
                     activeWordRange = activeRange,
