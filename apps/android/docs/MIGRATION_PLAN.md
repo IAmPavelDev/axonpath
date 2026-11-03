@@ -38,6 +38,13 @@ a phase.
   replaced `apps/android/app/google-services.json`. Symptom until then:
   NoCredentialException surfaced as "no Google account on this device".
   Rebuild after the config swap; no reinstall dance (same signing key).
+- [x] Generated-client wire format (2026-10-29): openapi-generator defaults
+  quoted BigDecimal ids (`"classId":"2"`) and emitted explicit nulls for
+  omitted optionals (`"anchorText":null`) — the backend's zod schemas 422'd
+  every numeric body (Ask AI dead: /class/qa/ask, /class/qa/retry,
+  /quiz/{id}/submit). Fixed by a post-openApiGenerate patch in
+  app/build.gradle.kts (BigDecimalAdapter → unquoted JsonPrimitive;
+  encodeDefaults=false), guarded by GeneratedWireFormatTest.
 - [ ] Emulator caveat: WebView video renderer crashes under SwiftShader
   (GPU emulation) — video embeds need a real device to verify. RN used the
   identical WebView mechanism, so phone behavior is expected to match RN.

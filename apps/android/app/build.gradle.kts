@@ -112,6 +112,58 @@ tasks.named("preBuild") {
     dependsOn("openApiGenerate")
 }
 
+// Generator defaults lie about the wire format, and every numeric-typed
+// request body 422s on the backend's zod schemas (Ask AI outage 2026-10-29:
+// POST /class/qa/ask arrived as {"classId":"2","anchorText":null}). Two
+// causes, neither configurable in the generator: BigDecimalAdapter quotes
+// ids (contract says bare `type: number`), and encodeDefaults=true emits
+// explicit nulls for omitted optionals (zod .optional() rejects null).
+// cleanupOutput wipes the output every build, so patch the two generated
+// files here — after openApiGenerate, before Kotlin compilation.
+tasks.named("openApiGenerate") {
+    doLast {
+        val infra = file("$buildDir/generated/openapi/src/main/kotlin/com/iampavlo/axon/data/generated/infrastructure")
+        File(infra, "BigDecimalAdapter.kt").writeText(
+            """
+            package com.iampavlo.axon.data.generated.infrastructure
+
+            import kotlinx.serialization.KSerializer
+            import kotlinx.serialization.descriptors.PrimitiveKind
+            import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+            import kotlinx.serialization.descriptors.SerialDescriptor
+            import kotlinx.serialization.encoding.Decoder
+            import kotlinx.serialization.encoding.Encoder
+            import kotlinx.serialization.json.JsonEncoder
+            import kotlinx.serialization.json.JsonPrimitive
+            import java.math.BigDecimal
+
+            /** Ids are bare JSON numbers in the contract (`type: number`),
+             *  so BigDecimal serializes UNQUOTED. Reads go back through
+             *  decodeString() — the client Json is lenient and accepts number
+             *  tokens for strings. */
+            object BigDecimalAdapter : KSerializer<BigDecimal> {
+                override val descriptor: SerialDescriptor =
+                    PrimitiveSerialDescriptor("BigDecimal", PrimitiveKind.STRING)
+
+                override fun deserialize(decoder: Decoder): BigDecimal =
+                    BigDecimal(decoder.decodeString())
+
+                override fun serialize(encoder: Encoder, value: BigDecimal) {
+                    (encoder as JsonEncoder).encodeJsonElement(JsonPrimitive(value))
+                }
+            }
+            """.trimIndent(),
+        )
+        val serializer = File(infra, "Serializer.kt")
+        serializer.writeText(
+            serializer.readText().replace(
+                "encodeDefaults = true",
+                "encodeDefaults = false",
+            ),
+        )
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
