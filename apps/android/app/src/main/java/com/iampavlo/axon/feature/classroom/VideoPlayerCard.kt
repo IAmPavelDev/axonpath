@@ -63,8 +63,9 @@ import kotlin.math.min
  * thumbnail with retry. Sponsor-segment skip + clip-end pause run off the
  * library's onCurrentSecond listener (no hand-rolled JS bridge). Fullscreen is
  * the player's own button (fs=1) + FullscreenListener window plumbing — no
- * custom player UI. Height = min(234, (width−48)·9/16). Used by the Videos
- * tab AND lesson clips.
+ * custom player UI; the fullscreen lifecycle lives in [VideoFullscreenSession]
+ * (shared per list) so list-item disposal mid-fullscreen can't kill it.
+ * Height = min(234, (width−48)·9/16). Used by the Videos tab AND lesson clips.
  */
 @Composable
 fun VideoPlayerCard(
@@ -74,12 +75,27 @@ fun VideoPlayerCard(
     channel: String,
     startSeconds: Double = 0.0,
     endSeconds: Double? = null,
+    fullscreenSession: VideoFullscreenSession? = null,
 ) {
     val colors = MaterialTheme.colorScheme
     var playing by remember(videoId) { mutableStateOf(false) }
-    var embedReady by remember(videoId) { mutableStateOf(false) }
     var embedFailed by remember(videoId) { mutableStateOf(false) }
     var segments by remember(videoId) { mutableStateOf<List<SponsorSegment>>(emptyList()) }
+    // One fullscreen session per card unless the list shares one; either way it
+    // must live ABOVE the Thumbnail→Embed switch (and above list-item disposal).
+    val session = fullscreenSession ?: remember(videoId) { VideoFullscreenSession() }
+    if (fullscreenSession == null) {
+        // A shared session registers its back handler at list level — once, and
+        // guaranteed present even when every composed card has been disposed.
+        session.backHandler()
+    }
+    DisposableEffect(session) {
+        onDispose {
+            // Only the creator cleans up a card-local session; a shared session
+            // is disposed by its owning list.
+            if (fullscreenSession == null) session.teardown()
+        }
+    }
 
     LaunchedEffect(videoId) {
         runCatching { container.api.sponsorSegments(videoId) }
@@ -104,8 +120,8 @@ fun VideoPlayerCard(
                     videoId = videoId,
                     startSeconds = startSeconds,
                     segmentsState = remember(videoId) { mutableStateOf(segments to endSeconds) },
-                    onReady = { embedReady = true },
                     onEmbedError = { embedFailed = true },
+                    session = session,
                     modifier = Modifier.fillMaxWidth().height(height),
                 )
             }
@@ -194,43 +210,29 @@ private fun Thumbnail(
  *
  * Fullscreen is the library's built-in feature: `fs=1` shows the player's own
  * fullscreen button, and tapping it routes through WebChromeClient custom-view
- * fullscreen to [FullscreenListener]. The listener is the mandatory window
- * plumbing (the library throws without one): it hosts the player's fullscreen
- * surface over the activity content, hides the system bars and rotates to
- * landscape. Back press exits via the player's own exit callback; the player's
- * fullscreen UI can also exit on its own.
+ * fullscreen to [FullscreenListener]. The listener hands the session to
+ * [VideoFullscreenSession] — the session, not this composable, owns the
+ * fullscreen chrome and the back press. That matters because this composable
+ * can be DISPOSED mid-fullscreen: the containing LazyColumn virtualizes items,
+ * and the forced-landscape re-layout can push the playing card out of the
+ * viewport the moment fullscreen starts. Without the session, disposal tore
+ * the fullscreen down and released the player, kicking the user back to the
+ * list with the video dead. With it, the player is handed off (kept alive,
+ * released on exit) and fullscreen survives.
  */
 @Composable
 private fun LibraryEmbed(
     videoId: String,
     startSeconds: Double,
     segmentsState: androidx.compose.runtime.State<Pair<List<SponsorSegment>, Double?>>,
-    onReady: () -> Unit,
     onEmbedError: () -> Unit,
+    session: VideoFullscreenSession,
     modifier: Modifier = Modifier,
 ) {
-    val readyCb = remember { { onReady() } }
     val errorCb = remember { { onEmbedError() } }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     val context = LocalContext.current
     val hostActivity = remember(context) { context.findActivity() }
-    var fullscreenView by remember { mutableStateOf<View?>(null) }
-    var pendingExit by remember { mutableStateOf<(() -> Unit)?>(null) }
-
-    BackHandler(enabled = pendingExit != null) { pendingExit?.invoke() }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            val view = fullscreenView
-            val exit = pendingExit
-            fullscreenView = null
-            pendingExit = null
-            if (view != null) {
-                hostActivity?.let { leaveFullscreenChrome(it, view) }
-                runCatching { exit?.invoke() } // no-op if the player is already released
-            }
-        }
-    }
 
     AndroidView(
         factory = { ctx ->
@@ -243,22 +245,16 @@ private fun LibraryEmbed(
                             exit() // can't fullscreen without a window; stay inline
                             return
                         }
+                        session.enter(view, exit, this@apply, lifecycleOwner)
                         enterFullscreenChrome(activity, view)
-                        fullscreenView = view
-                        pendingExit = exit
                     }
 
                     override fun onExitFullscreen() {
-                        val view = fullscreenView
-                        val activity = hostActivity
-                        if (view != null && activity != null) leaveFullscreenChrome(activity, view)
-                        fullscreenView = null
-                        pendingExit = null
+                        session.teardown()
                     }
                 })
                 initialize(object : AbstractYouTubePlayerListener() {
                     override fun onReady(p: YouTubePlayer) {
-                        readyCb()
                         p.loadVideo(videoId, startSeconds.toFloat())
                     }
 
@@ -275,6 +271,7 @@ private fun LibraryEmbed(
                     }
 
                     override fun onError(p: YouTubePlayer, error: PlayerConstants.PlayerError) {
+                        session.teardown() // no-op unless this player is fullscreen
                         errorCb()
                     }
                 }, handleNetworkEvents = false,
@@ -286,8 +283,14 @@ private fun LibraryEmbed(
             }
         },
         onRelease = { view ->
-            lifecycleOwner.lifecycle.removeObserver(view)
-            view.release()
+            // Handoff: this card's fullscreen session is still running (the
+            // list virtualized the item away mid-fullscreen). Keep the player
+            // alive; the session releases it when fullscreen exits. Otherwise
+            // the card owns a plain finished embed — release it.
+            if (!session.orphanIfOwner(view)) {
+                lifecycleOwner.lifecycle.removeObserver(view)
+                view.release()
+            }
         },
         modifier = modifier,
     )
@@ -297,6 +300,87 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+/**
+ * Fullscreen state for one video list, created above list-item scope so it
+ * survives the disposal of the card that entered fullscreen.
+ *
+ * Why it exists: entering fullscreen rotates the activity to landscape, and
+ * the list re-layout can push the playing card out of the (now short)
+ * viewport — the LazyColumn then disposes the card mid-fullscreen. With the
+ * session owning the fullscreen chrome and the player handoff, that disposal
+ * no longer tears fullscreen down or kills playback: [orphanIfOwner] keeps the
+ * player alive until [teardown] releases it on exit.
+ */
+class VideoFullscreenSession {
+    internal var fullscreenView: View? = null
+        private set
+    internal var exitFullscreen: (() -> Unit)? = null
+        private set
+    internal var playerView: YouTubePlayerView? = null
+        private set
+    private var playerLifecycle: androidx.lifecycle.LifecycleOwner? = null
+    private var playerOrphaned = false
+
+    val active: Boolean get() = fullscreenView != null
+
+    internal fun enter(
+        view: View,
+        exit: () -> Unit,
+        player: YouTubePlayerView,
+        lifecycle: androidx.lifecycle.LifecycleOwner,
+    ) {
+        fullscreenView = view
+        exitFullscreen = exit
+        playerView = player
+        playerLifecycle = lifecycle
+        playerOrphaned = false
+    }
+
+    /**
+     * The card that entered fullscreen is being disposed while the session is
+     * running. Keep chrome and player alive; [teardown] releases the player.
+     *
+     * @return true when ownership was taken (caller must NOT release the view).
+     */
+    internal fun orphanIfOwner(player: YouTubePlayerView): Boolean {
+        if (playerView !== player) return false
+        playerOrphaned = true
+        return true
+    }
+
+    /** Player-initiated exit (its own fullscreen button, or back press). */
+    fun exit() {
+        exitFullscreen?.invoke()
+    }
+
+    /**
+     * End the session: restore window chrome; release the player iff it was
+     * handed off by a disposed card (a live card's embed releases itself).
+     * Idempotent — no-op when fullscreen isn't running.
+     */
+    internal fun teardown() {
+        val view = fullscreenView ?: return
+        fullscreenView = null
+        exitFullscreen = null
+        view.context.findActivity()?.let { leaveFullscreenChrome(it, view) }
+        val player = playerView
+        val lifecycle = playerLifecycle
+        playerView = null
+        playerLifecycle = null
+        if (player != null && playerOrphaned) {
+            lifecycle?.lifecycle?.removeObserver(player)
+            player.release()
+        }
+        playerOrphaned = false
+    }
+}
+
+/** Back press exits the running fullscreen session for this list. */
+@Composable
+fun VideoFullscreenSession.backHandler() {
+    BackHandler(enabled = active) { exit() }
 }
 
 /** Fullscreen on: player's custom view over the activity content, immersive bars, landscape. */

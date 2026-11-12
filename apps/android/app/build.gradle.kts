@@ -18,7 +18,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
 
-        buildConfigField("String", "API_URL", "\"https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com\"")
+        buildConfigField("String", "API_URL", "\"https://election-retired-opposite.ngrok-free.dev\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"711087014342-lbakiok82a9i0pi6l17v9kc77pnkbda5.apps.googleusercontent.com\"")
     }
 
@@ -54,6 +54,16 @@ android {
             // Parity phase: switch to the production keystore. Debug for now so
             // release APKs install during migration.
             signingConfig = signingConfigs.getByName("debug")
+            // The Tailscale exit node sinkholes *.crashlytics.com, so the
+            // mapping upload dies with PKIX/DNS errors on local builds. Upload
+            // deobfuscation mappings only in CI, or when explicitly opted in
+            // via -Paxon.uploadCrashlyticsMappings.
+            tasks.matching { it.name == "uploadCrashlyticsMappingFileRelease" }.configureEach {
+                onlyIf {
+                    providers.environmentVariable("CI").isPresent ||
+                        providers.gradleProperty("axon.uploadCrashlyticsMappings").isPresent
+                }
+            }
         }
     }
 

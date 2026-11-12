@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
 
 /** RN SegmentedControl port: muted track, active segment lifts in card color.
  *  Pass [trackColor] = Color.Transparent to let underlying content show
@@ -38,8 +39,19 @@ fun <T> SegmentedControl(
                     .clickable { onSelect(value) }
                     .padding(3.dp)
                     .background(
-                        colors.background,
+                        colors.surface,
                         RoundedCornerShape(8.dp),
+                    )
+                    .then(
+                        if (isSelected) {
+                            Modifier.border(
+                                width = 1.dp,
+                                color = colors.primary,
+                                shape = RoundedCornerShape(size = 8.dp)
+                            )
+                        } else {
+                            Modifier
+                        }
                     )
                     .padding(vertical = 5.dp),
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,

@@ -19,15 +19,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.iampavlo.axon.core.ui.theme.MetaStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.iampavlo.axon.core.di.AppContainer
+import com.iampavlo.axon.feature.classroom.VideoFullscreenSession
 import com.iampavlo.axon.feature.classroom.VideoPlayerCard
+import com.iampavlo.axon.feature.classroom.backHandler
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -47,6 +51,14 @@ fun RecommendationsSection(
 ) {
     val colors = MaterialTheme.colorScheme
     val status = vm.status
+    // Shared across the list's cards: entering fullscreen rotates to landscape
+    // and the re-layout can dispose the playing item; the session (not the
+    // item) then owns the fullscreen chrome and the player handoff.
+    val fullscreenSession = remember { VideoFullscreenSession() }
+    fullscreenSession.backHandler()
+    DisposableEffect(fullscreenSession) {
+        onDispose { fullscreenSession.teardown() }
+    }
 
     // Focused polling: every 5s only while generating/pending; idle otherwise.
     LaunchedEffect(skillId) {
@@ -110,6 +122,7 @@ fun RecommendationsSection(
                             videoId = video.videoId,
                             title = video.title,
                             channel = video.channel,
+                            fullscreenSession = fullscreenSession,
                         )
                         if (index == vm.videos.lastIndex) {
                             TextButton(onClick = vm::refreshRecommendations) {
