@@ -3,6 +3,14 @@ export const config = {
     // Firebase project used to verify mobile ID tokens (audience + issuer).
     firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? '',
   },
+  jobQueue: {
+    // "memory" = in-process setImmediate (dev/Lambda default);
+    // "rabbit" = RabbitMQ transport, worker container consumes (self-hosted).
+    transport: (process.env.JOB_QUEUE_TRANSPORT ?? 'memory') as
+      | 'memory'
+      | 'rabbit',
+    rabbitUrl: process.env.RABBITMQ_URL ?? 'amqp://rabbitmq:5672',
+  },
   qdrant: {
     url: process.env.QDRANT_URL || 'http://localhost:6333',
     // Qdrant Cloud requires an API key; a self-hosted Qdrant does not.

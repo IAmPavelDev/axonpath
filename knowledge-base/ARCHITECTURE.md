@@ -176,13 +176,23 @@ Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hi
    degrading to `[]` for its missing vectors — accepted beta cost). Otherwise:
    prior-context retrieval (Qdrant, filtered by userId, excludes own skill, degrades to
    []) → one JSON generation briefed with the stored prompt + the accepted description
-   (class 0 + MC/TF + 1–2 open-ended questions + `lessonSummary` + context snippets) →
+   (class 0 + `lessonSummary` + `quizTargets` checklist + context snippets; the quiz is
+   NOT part of this call anymore — see the quiz split below) →
    `CLASS_GENERATED` audit event (action `first_lesson`, full prompt+response) → persist
-   class/questions → embed summary+snippets in one call → vectors: summary `AI_NEXT`,
-   snippets `AI_INITIAL`, `classIndex 0` (best-effort: a vector-store outage does not
-   fail the persisted lesson) → status `ACTIVE`. Any failure → status `FAILED` +
+   class → **status `ACTIVE` immediately** (the learner-facing artifact is done) →
+   enqueue `class-quiz` + `class-content-vectors` → embed summary+snippets in one call →
+   vectors: summary `AI_NEXT`, snippets `AI_INITIAL`, `classIndex 0` (best-effort: BOTH
+   the embedding call and a vector-store outage degrade memory without failing the
+   persisted lesson). Any failure before the class commit → status `FAILED` +
    `ERROR_OCCURRED` event. glm-5.3-flash JSON drift is handled by `extractJsonObject` +
    per-field re-validation (`tutoring/domain/parse.ts`).
+   **Quiz split (2026-11-06)**: lesson completions no longer emit questions — they emit
+   `quizTargets` (the concept checklist) and the `class-quiz` job (RabbitMQ-backed,
+   broker retry budget → `axon.jobs.dlq`) writes the quiz against the FINISHED lesson
+   text (stronger coherence) while the learner is already reading. Replay guard:
+   `findQuestionCountsByClassIds` — a redelivery never double-writes. Rationale: the
+   single mega-completion was the dominant wall-clock (~150 s); the split roughly halves
+   the learner's wait and moves the quiz off the critical path entirely.
 5. **Learn**: mobile submit → `quiz.submit` → `scoreAnswer` (MC/TF exact-match vs `answerKey`;
    open-ended persists `score/isCorrect = null` and is graded asynchronously —
    open-ended generation unlocked (S5)) → `Answer` rows → submit-quiz enqueues
@@ -191,6 +201,14 @@ Error mapping via `toORPCError`: `*NotFound` and `NotOwned` → 404 (NotOwned hi
    `ANSWER_DERIVED` vectors keyed by `answerId` (deduped per answer, best-effort degrade), and
    `grade-open-ended` grades open-ended answers in one batched AI call (feedback merges into
    `Answer.content` as `{ answer, feedback }`).
+   **Class video clips** (`class-clip` pipeline, `CLASS_VIDEO_CLIPS_JOB`): class creation
+   sets `clipStatus PENDING`; the job plans 1–2 concepts (z.ai), searches YouTube, and
+   Gemini picks exact teaching segments. Retry model: lease-based sweeper re-claims
+   PENDING after `CLIPS_LEASE_MS` (8 min), budget `CLIPS_MAX_ATTEMPTS` (3) then silent
+   `SKIPPED`. **Gemini 5xx short-circuits the lease**: the job bumps `clipAttempts` and
+   re-enqueues itself immediately through the broker (same budget), so a transient
+   provider outage retries in seconds instead of idling 8 minutes. Genuine "no videos
+   help this lesson" keeps the lease path.
 6. **Next class** (`generate-next-class`): load skill + highest class (`findTopBySkill`) + this
    user's answers (latest attempt per question) → **mastery ledger** (pure
    `learning/domain/quiz/review-schedule.ts` over `findReviewCandidatesBySkill`: standing

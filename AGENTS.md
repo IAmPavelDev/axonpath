@@ -14,23 +14,25 @@
   themselves, or you fall back to cached/base images).
 
 ## Project state (actualized 2026-10-28)
-- Axon = adaptive AI-learning app: Expo/RN mobile + Fastify/oRPC DDD backend +
-  `@axon/api-contract` (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth.
-  Backend 286/286 tests and mobile `tsc --noEmit` green as of 2026-10-02.
+- Axon = adaptive AI-learning app: native Android app in Kotlin/Jetpack Compose
+  (`apps/android`; replaced the old Expo/RN `apps/mobile`) + Fastify REST DDD backend
+  (declarative route table + Zod schemas in `@axon/api-contract`, OpenAPI emission)
+  (pnpm monorepo). **Beta is DONE** — Phases 1–6 + Firebase auth.
+  Backend 286/286 tests green as of 2026-10-02.
 - Current phase: **serverless production** (Lambda cutover landed 2026-10-02, EC2
   terminated) — execution authority `knowledge-base/DEPLOY_AWS_SERVERLESS.md`.
   Current-state detail: `knowledge-base/ARCHITECTURE.md`; plan history:
   `knowledge-base/BETA_PLAN.md`; gap ledger: `knowledge-base/GAPS.md`.
 - Commands: build `@axon/api-contract` FIRST (backend resolves `dist/`);
-  `pnpm --filter @axon/backend test`; `pnpm --filter @axon/mobile exec tsc --noEmit`
-  (package name is `@axon/mobile`, not `axon-mobile`); dev stack
+  `pnpm --filter @axon/backend test`; dev stack
   `docker compose -f docker-compose-dev.yaml up -d`.
 - TypeScript 7.0.2 upgrade committed (`d974bd2`). Durable Postgres job queue +
   sweeper landed in `5902e68`/`d6508e8`; sweeper gained `tickOnce`/`awaitRuns` and the
   setImmediate queue an `idle()` drain for the Lambda worker (2026-10-02).
 - Deployment (serverless, since 2026-10-02; **eu-central-1 since 2026-10-08** — the
-  us-east-1→eu-central-1 move was a latency fix: RTT from EEST drops ~235→~60 ms;
-  oRPC batch plugins cut screen-mount parallel queries to one HTTP round trip):
+  us-east-1→eu-central-1 move was a latency fix: RTT from EEST drops ~235→~60 ms
+  (note: oRPC and its batch plugins were later removed; the API is now plain
+  Fastify REST over the shared route table)):
   Lambda `axon-api` (30 s) + `axon-worker`
   (15 min, EventBridge `rate(1 minute)`) behind API Gateway HTTPS
   (`https://t3afkc5pj2.execute-api.eu-central-1.amazonaws.com`, baked into the APK via

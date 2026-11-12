@@ -13,9 +13,11 @@ import type { JobHandler, JobQueuePort } from "@/modules/platform/ports/jobs";
  * settled. A parent's counter stays raised until its body finishes, so a
  * child enqueued mid-run can never let `idle()` resolve early.
  */
+export type SetImmediateJobQueue = JobQueuePort & { idle(): Promise<void> };
+
 export const makeSetImmediateJobQueue = (
   handlers: Record<string, JobHandler>,
-): JobQueuePort & { idle(): Promise<void> } => {
+): SetImmediateJobQueue => {
   let pending = 0;
   let drainWaiters: Array<() => void> = [];
 

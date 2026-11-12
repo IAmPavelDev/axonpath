@@ -5,7 +5,14 @@ import { makePrismaClassRepository } from "@/modules/learning/infrastructure/cla
 import { makePrismaClassQaRepository } from "@/modules/learning/infrastructure/class-qa.prisma.repo";
 import { makePrismaQuizRepository } from "@/modules/learning/infrastructure/quiz.prisma.repo";
 import { makePrismaEventRepository } from "@/modules/learning/infrastructure/event.prisma.repo";
-import { makeSetImmediateJobQueue } from "@/modules/platform/infrastructure/set-immediate-jobs";
+import {
+  makeSetImmediateJobQueue,
+  type SetImmediateJobQueue,
+} from "@/modules/platform/infrastructure/set-immediate-jobs";
+import {
+  makeRabbitMqJobQueue,
+  type RabbitMqJobQueue,
+} from "@/modules/platform/infrastructure/rabbitmq-jobs";
 import { makeVectorStoreAdapter } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeVectorMetadataRepository } from "@/modules/memory/infrastructure/vector.metadata.repo";
 import { makeRetrieveRelevantContext } from "@/modules/memory/application/retrieve-relevant-context";
@@ -32,6 +39,7 @@ import { makeVideoRepository } from "@/modules/video/infrastructure/video.prisma
 import { makeSponsorClient } from "@/modules/video/infrastructure/sponsor.client";
 import { makeGenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
 import { makeGenerateClassClips } from "@/modules/video/application/generate-class-clips";
+import { makeGenerateClassQuiz } from "@/modules/tutoring/application/generate-class-quiz";
 import { makeRecommendationsSweeper } from "@/modules/jobs/recommendations-sweeper";
 import { makeClassClipsSweeper } from "@/modules/jobs/class-clips-sweeper";
 import type { RecommendationsSweeper } from "@/modules/jobs/recommendations-sweeper";
@@ -60,9 +68,19 @@ import {
 } from "@/modules/jobs/grading-sweeper";
 import type { LearningApiDeps } from "@/router";
 
+/**
+ * Job queue exposed on the container, whichever transport. `start`/`close`
+ * exist only on the RabbitMQ adapter ([RabbitMqJobQueue]): the worker
+ * entrypoint requires them (runtime-checks before consuming); the API
+ * process never calls them.
+ */
+export type BrokerJobQueue = RabbitMqJobQueue | SetImmediateJobQueue;
+
 export type Container = LearningApiDeps & {
   /** Started by main.ts after listen; stopped on shutdown. */
   nextClassSweeper: NextClassSweeper;
+  /** Broker queue handle; worker.ts needs [start]/[close] (RabbitMQ transport). */
+  jobQueue: BrokerJobQueue;
   classQaSweeper: ClassQaSweeper;
   skillInitSweeper: SkillInitSweeper;
   gradingSweeper: GradingSweeper;
@@ -98,9 +116,18 @@ export const configureContainer = ({
 
   // The generation/QA pipelines enqueue follow-up memory jobs, and the job
   // handlers wrap those same pipelines — the cycle resolves through the
-  // handlers record, which is filled in after the use cases are built
+  // handlers record, which is filled in after the use cases are built.
+  // Transport: in-process setImmediate (default, Lambda/dev) or RabbitMQ
+  // (self-hosted worker split). Both read `jobHandlers` lazily, so the
+  // filled-in-later record works for either.
   const jobHandlers: Record<string, JobHandler> = {};
-  const jobQueue = makeSetImmediateJobQueue(jobHandlers);
+  const jobQueue: BrokerJobQueue =
+    config.jobQueue.transport === "rabbit"
+      ? makeRabbitMqJobQueue({
+          handlers: jobHandlers,
+          url: config.jobQueue.rabbitUrl,
+        })
+      : makeSetImmediateJobQueue(jobHandlers);
   const jobs: JobQueuePort = jobQueue;
 
   const vectorizeClassContent = makeVectorizeClassContent({
@@ -205,6 +232,14 @@ export const configureContainer = ({
     search: makeYoutubeScraperClient(),
     ai,
     gemini: makeGeminiVideoClient(config.ai.GEMINI_API_KEY ?? ""),
+    jobs: jobQueue,
+  });
+  const generateClassQuiz = makeGenerateClassQuiz({
+    ai,
+    recordAiAttempt,
+    skillRepo,
+    classRepo,
+    chatModel: config.ai.models.chat,
   });
   Object.assign(
     jobHandlers,
@@ -219,6 +254,7 @@ export const configureContainer = ({
       gradeOpenEnded,
       generateSkillRecommendations,
       generateClassClips,
+      generateClassQuiz,
     }),
   );
 
@@ -259,6 +295,7 @@ export const configureContainer = ({
     getUsageReport,
     clock,
     jobs,
+    jobQueue,
     awaitDrain: jobQueue.idle,
     jobQueueIdle: jobQueue.idle,
     nextClassJobs,

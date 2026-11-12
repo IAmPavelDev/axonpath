@@ -28,6 +28,7 @@
   "license": "ISC",
   "packageManager": "pnpm@10.14.0",
   "devDependencies": {
+    "@types/amqplib": "^0.10.8",
     "@types/node": "^24.3.0",
     "fastify-tsconfig": "^3.0.0",
     "nodemon": "^3.1.10",
@@ -44,6 +45,7 @@
     "@fastify/type-provider-typebox": "^5.2.0",
     "@prisma/client": "6.19.3",
     "@qdrant/js-client-rest": "1.19.0",
+    "amqplib": "^2.2.1",
     "fastify": "^5.12.5",
     "jose": "^6.2.12",
     "module-alias": "^2.2.3",

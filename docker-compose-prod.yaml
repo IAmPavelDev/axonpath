@@ -9,6 +9,25 @@
 # NOTE: no --build here — the image is built on the dev machine (pnpm
 # backend:image) and shipped via docker save/load (1 GiB server can't build).
 services:
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: axon-rabbitmq
+    restart: unless-stopped
+    # Management UI: http://localhost:15672 (localhost-only binding).
+    environment:
+      RABBITMQ_DEFAULT_USER: axon
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD required}
+    ports:
+      - '127.0.0.1:15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - axon-network
+
   db:
     image: postgres:18
     container_name: axon-db
@@ -32,6 +51,9 @@ services:
     image: qdrant/qdrant:v1.19.1
     container_name: axon-qdrant
     restart: unless-stopped
+    # Dashboard: http://localhost:6333/dashboard (localhost-only binding).
+    ports:
+      - '127.0.0.1:6333:6333'
     volumes:
       - qdrant_data:/qdrant/storage
       - qdrant_snapshots:/qdrant/snapshots
@@ -64,14 +86,22 @@ services:
         condition: service_healthy
       qdrant:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     env_file:
       - .env.aws
     environment:
       - NODE_ENV=production
       - APP_PORT=3001
       - APP_HOST=0.0.0.0
-    # Published publicly: the phone reaches http://<EC2-PUBLIC-IP>:3001 directly.
-    # Guarded by the security group; DB/Qdrant stay internal-only.
+      - JOB_QUEUE_TRANSPORT=rabbit
+      - RABBITMQ_URL=amqp://axon:8IAtX8kABUhw71zyMoDc1I@rabbitmq:5672
+      # Node's happy-eyeballs blackholes on the z.ai Aliyun CDN inside the
+      # docker bridge (undici ETIMEDOUT on all addresses; raw IPv4 sockets
+      # work). Single-address IPv4-first connect fixes it. See RUNBOOK.
+      - NODE_OPTIONS=--no-network-family-autoselection
+    # Published publicly: the phone reaches the API through the ngrok tunnel
+    # bound to localhost:3001. DB/Qdrant/RabbitMQ stay internal-only.
     ports:
       - '3001:3001'
     healthcheck:
@@ -80,6 +110,37 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - axon-network
+
+  worker:
+    # Same image, different entrypoint: RabbitMQ consumer only. Generation
+    # survives API restarts — messages wait durably in the broker.
+    image: axon-backend:local
+    container_name: axon-worker
+    restart: unless-stopped
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.aws
+    environment:
+      - NODE_ENV=production
+      - JOB_QUEUE_TRANSPORT=rabbit
+      - RABBITMQ_URL=amqp://axon:8IAtX8kABUhw71zyMoDc1I@rabbitmq:5672
+      # See backend service: z.ai CDN blackholes under happy-eyeballs here.
+      - NODE_OPTIONS=--no-network-family-autoselection
+    command: >
+      sh -c 'pnpm exec prisma migrate deploy --schema /app/apps/backend/src/prisma/schema.prisma &&
+             node -r /app/apps/backend/alias-register.js /app/apps/backend/dist/src/worker.js'
+    healthcheck:
+      test: ['CMD-SHELL', 'pgrep -f "dist/src/worker.js" >/dev/null || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     networks:
       - axon-network
 
