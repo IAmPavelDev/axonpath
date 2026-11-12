@@ -55,7 +55,8 @@ const makeFakeDeps = (options: {
   };
   const classRepo: ClassRepository = {
     findQuestionCountsByClassIds: unused,
-    createWithQuestions: unused,
+    create: unused,
+    addQuestions: unused,
     listBySkill: unused,
     listBySkillByIndex: async () => options.classes ?? [],
     listByIds: unused,

@@ -25,6 +25,7 @@ import {
 } from "@/modules/memory/application/mine-qa-vectors";
 import { SKILL_ANSWER_VECTORS_JOB } from "@/modules/memory/application/mine-answer-vectors";
 import { GRADE_OPEN_ENDED_JOB } from "@/modules/tutoring/application/grade-open-ended";
+import { CLASS_QUIZ_JOB } from "@/modules/tutoring/application/generate-class-quiz";
 import {
   classesOfSkill,
   firstQuestionOfType,
@@ -115,6 +116,9 @@ describe("adaptive loop integration", () => {
     expect(class0).toHaveLength(1);
     expect(class0[0]).toMatchObject({ index: 0, title: "SQL joins from zero" });
 
+    // The lesson no longer carries questions: the quiz job writes them
+    // against the finished lesson text.
+    await h.runJob(CLASS_QUIZ_JOB);
     const questions = [...h.state.questions.values()].filter(
       (question) => question.classId === class0[0]?.id,
     );
@@ -321,11 +325,10 @@ describe("adaptive loop integration", () => {
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
   });
 
-  it("heals a partial first-lesson persist through retry without regenerating", async () => {
-    // Embeddings fail AFTER the class was persisted (stage 2): FAILED with
-    // class 0 present. The retry routes to stage 2 (a draft exists), whose
-    // guard skips generation and heals to ACTIVE — no duplicate class, no
-    // new lesson AI calls (D2).
+  it("survives an embeddings outage after the persist and still lands the quiz", async () => {
+    // Embeddings fail AFTER the class was persisted (stage 2): memory is
+    // best-effort since the quiz split — the skill still settles ACTIVE,
+    // the quiz job is queued, and no ERROR event is recorded (D2).
     const h = makeLoopHarness({ failEmbeddingsOnce: true });
     const createSkill = makeCreateSkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs });
     const created = await createSkill({ userId: 7, prompt: PROMPT });
@@ -335,28 +338,22 @@ describe("adaptive loop integration", () => {
     await acceptDraft(h, skillId);
     await h.runJob(SKILL_FIRST_LESSON_JOB);
 
-    expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.FAILED);
-    expect(classesOfSkill(h, skillId)).toHaveLength(1);
-
-    const retrySkill = makeRetrySkill({ skillRepo: h.deps.skillRepo, jobs: h.jobs, awaitDrain: async () => {} });
-    const retried = await retrySkill({ skillId, userId: 7 });
-    expect(retried).toEqual(ok({ status: SkillStatus.GENERATING }));
-    expect(h.state.enqueued.at(-1)?.jobName).toBe(SKILL_FIRST_LESSON_JOB);
-    await h.runJob(SKILL_FIRST_LESSON_JOB);
-
     expect(h.state.skills.get(skillId)?.status).toBe(SkillStatus.ACTIVE);
     expect(classesOfSkill(h, skillId)).toHaveLength(1);
-    expect(
-      h.state.aiCalls.filter((call) => call.schemaName === "init_skill"),
-    ).toHaveLength(1);
-    // First run: SKILL_CREATED (metadata) + CLASS_GENERATED (lesson audit)
-    // + ERROR_OCCURRED. The healed run adds nothing — the guard
-    // short-circuits before any event is recorded.
+    expect(h.state.vectors).toHaveLength(0);
     expect(
       h.state.events.filter((event) => event.type === EventType.ERROR_OCCURRED),
-    ).toHaveLength(1);
+    ).toHaveLength(0);
+    // The quiz job is still queued — it is independent of the embedding
+    // outage and lands when run.
     expect(
-      h.state.events.filter((event) => event.type === EventType.CLASS_GENERATED),
+      h.state.enqueued.filter((job) => job.jobName === CLASS_QUIZ_JOB),
+    ).toHaveLength(1);
+    await h.runJob(CLASS_QUIZ_JOB);
+    expect(
+      [...h.state.questions.values()].filter(
+        (question) => question.classId === classesOfSkill(h, skillId)[0]?.id,
+      ),
     ).toHaveLength(1);
   });
 

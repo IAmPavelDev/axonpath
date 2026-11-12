@@ -19,14 +19,7 @@ const LESSON_JSON = JSON.stringify({
   baseLanguage: "en",
   contentLanguages: ["en"],
   lessonSummary: "This lesson introduced inner and left joins with small datasets.",
-  questions: [
-    {
-      type: "TRUE_FALSE",
-      text: "An INNER JOIN drops unmatched rows.",
-      choices: ["True", "False"],
-      answerKey: "True",
-    },
-  ],
+  quizTargets: ["inner join row matching", "unmatched rows are dropped"],
   contextSnippets: ["First exposure to SQL joins"],
 });
 
@@ -114,10 +107,12 @@ const makeDeps = (overrides: Overrides = {}) => {
     } satisfies SkillRepository,
     classRepo: {
       findQuestionCountsByClassIds: async () => [],
-      createWithQuestions: async (cls, questions) => {
+      create: async (cls) => {
         state.createdClasses.push(cls);
-        state.createdQuestions.push(...questions);
         return { id: 77 };
+      },
+      addQuestions: async (_classId, _skillId, questions) => {
+        state.createdQuestions.push(...questions);
       },
       listBySkill: async () => [],
       listBySkillByIndex: async () => [],
@@ -168,7 +163,7 @@ const makeDeps = (overrides: Overrides = {}) => {
 const INPUT = { skillId: 10, userId: 1 };
 
 describe("makeGenerateFirstLesson", () => {
-  it("persists class 0 with questions, memory vectors and settles ACTIVE", async () => {
+  it("persists class 0, settles ACTIVE, and queues quiz + vector jobs", async () => {
     const { deps, state } = makeDeps({
       usage: { promptTokens: 500, completionTokens: 900 },
     });
@@ -176,7 +171,8 @@ describe("makeGenerateFirstLesson", () => {
     const result = await makeGenerateFirstLesson(deps)(INPUT);
 
     expect(result.ok).toBe(true);
-    // Status lifecycle: ACTIVE on success (the acceptance edit set GENERATING).
+    // Status lifecycle: ACTIVE lands immediately after the class commit —
+    // quiz/vectors/clips continue in background.
     expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.ACTIVE });
     expect(state.createdClasses).toEqual([
       {
@@ -188,7 +184,7 @@ describe("makeGenerateFirstLesson", () => {
         aiModel: "glm-5.3-flash",
       },
     ]);
-    expect(state.createdQuestions).toHaveLength(1);
+    expect(state.createdQuestions).toHaveLength(0);
     // Lesson summary is the AI_NEXT memory unit; snippets are AI_INITIAL.
     expect(state.vectors.map((vector) => vector.source)).toEqual([
       VectorSource.AI_NEXT,
@@ -200,8 +196,17 @@ describe("makeGenerateFirstLesson", () => {
       classId: 77,
       classIndex: 0,
     });
-    // Conspect memory rides the fire-and-forget queue with the fresh class id.
+    // Quiz job rides the broker with the lesson's own target checklist;
+    // conspect memory rides it with the fresh class id.
     expect(state.enqueued).toEqual([
+      {
+        jobName: "class-quiz",
+        payload: {
+          classId: 77,
+          skillId: 10,
+          quizTargets: ["inner join row matching", "unmatched rows are dropped"],
+        },
+      },
       { jobName: "class-content-vectors", payload: { classId: 77 } },
     ]);
   });
@@ -276,7 +281,7 @@ describe("makeGenerateFirstLesson", () => {
     expect(state.events[0]).toMatchObject({ type: EventType.ERROR_OCCURRED });
   });
 
-  it("fails AiResponseInvalid when the model returns no questions", async () => {
+  it("queues the quiz job with the lesson's quizTargets (empty list tolerated)", async () => {
     const { deps, state } = makeDeps({
       raw: JSON.stringify({
         classTitle: "t",
@@ -284,17 +289,24 @@ describe("makeGenerateFirstLesson", () => {
         baseLanguage: "en",
         contentLanguages: ["en"],
         lessonSummary: "s",
-        questions: [],
+        quizTargets: [],
         contextSnippets: [],
       }),
     });
 
     const result = await makeGenerateFirstLesson(deps)(INPUT);
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.detail).toContain("no questions");
-    expect(state.createdClasses).toHaveLength(0);
-    expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.FAILED });
+    // The quiz is no longer the lesson call's business: an empty targets
+    // list still succeeds — the quiz prompt derives targets from the text.
+    expect(result.ok).toBe(true);
+    expect(state.createdClasses).toHaveLength(1);
+    expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.ACTIVE });
+    expect(state.enqueued[0]?.jobName).toBe("class-quiz");
+    expect(state.enqueued[0]?.payload).toEqual({
+      classId: 77,
+      skillId: 10,
+      quizTargets: [],
+    });
   });
 
   it("propagates AiGenerationFailed from the AI adapter and settles FAILED", async () => {
@@ -312,15 +324,20 @@ describe("makeGenerateFirstLesson", () => {
     expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.FAILED });
   });
 
-  it("keeps the persisted class when embeddings fail after the persist (retry heals)", async () => {
+  it("keeps the skill ACTIVE when embeddings fail after the persist (memory is best-effort)", async () => {
     const { deps, state } = makeDeps({ failEmbeddings: true });
 
     const result = await makeGenerateFirstLesson(deps)(INPUT);
 
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
     expect(state.createdClasses).toHaveLength(1);
-    expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.FAILED });
+    expect(state.skillUpdates.at(-1)?.patch).toEqual({ status: SkillStatus.ACTIVE });
     expect(state.vectors).toHaveLength(0);
+    // Quiz + content vectors were still queued before the embedding step.
+    expect(state.enqueued.map((job) => job.jobName)).toEqual([
+      "class-quiz",
+      "class-content-vectors",
+    ]);
   });
 
   it("treats vector recording as best-effort: a store outage still settles ACTIVE", async () => {

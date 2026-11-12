@@ -72,6 +72,8 @@ export type VideoRepository = {
   /** Lease one generation window; bumps clipAttempts. */
   claimStaleClipClasses(olderThan: Date): Promise<Array<{ id: number; skillId: number }>>;
   setClipStatus(classId: number, status: ClassClipStatus): Promise<void>;
+  /** clipAttempts + 1 for a live-retried class; returns the new count. */
+  bumpClipAttempts(classId: number): Promise<number>;
   findClassForClips(
     classId: number,
   ): Promise<{

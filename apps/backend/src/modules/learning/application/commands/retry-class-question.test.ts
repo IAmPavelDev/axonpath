@@ -67,7 +67,10 @@ const makeDeps = (
     findQuestionCountsByClassIds: async () => {
       throw new Error("not used in retry tests");
     },
-    createWithQuestions: async () => {
+    create: async () => {
+      throw new Error("not used in retry tests");
+    },
+    addQuestions: async () => {
       throw new Error("not used in retry tests");
     },
     listBySkill: async () => {

@@ -15,14 +15,7 @@ const LESSON_JSON = JSON.stringify({
   baseLanguage: "en",
   contentLanguages: ["en"],
   lessonSummary: "The learner practiced outer joins and result filtering.",
-  questions: [
-    {
-      type: "MULTIPLE_CHOICE",
-      text: "Which join keeps unmatched left rows?",
-      choices: ["LEFT JOIN", "INNER JOIN"],
-      answerKey: "LEFT JOIN",
-    },
-  ],
+  quizTargets: ["left join unmatched rows", "result filtering"],
   contextSnippets: [
     "Struggled with LEFT JOIN basics",
     "Comfortable with SELECT filters",
@@ -147,10 +140,12 @@ const makeDeps = (
       findQuestionCountsByClassIds: async () => {
         throw new Error("not used in next-class tests");
       },
-      createWithQuestions: async (cls, questions) => {
+      create: async (cls) => {
         state.createdClasses.push(cls);
-        state.questionInputs.push(...questions);
         return { id: 77 };
+      },
+      addQuestions: async (_classId, _skillId, questions) => {
+        state.questionInputs.push(...questions);
       },
       listBySkill: async () => {
         throw new Error("not used in next-class tests");
@@ -274,16 +269,18 @@ describe("makeGenerateNextClass", () => {
         aiModel: "glm-5.3-flash",
       },
     ]);
-    // Composite persist: the questions ride in the same call as the class
-    // (classId 77 is assigned inside the fake, not carried in the input).
-    expect(state.questionInputs).toEqual([
+    // Quiz job rides the broker with the lesson's quizTargets; the composite
+    // question persist moved to the class-quiz worker.
+    expect(state.enqueued).toEqual([
       {
-        type: "MULTIPLE_CHOICE",
-        text: "Which join keeps unmatched left rows?",
-        choices: ["LEFT JOIN", "INNER JOIN"],
-        answerKey: "LEFT JOIN",
-        aiModel: "glm-5.3-flash",
+        jobName: "class-quiz",
+        payload: {
+          classId: 77,
+          skillId: 10,
+          quizTargets: ["left join unmatched rows", "result filtering"],
+        },
       },
+      { jobName: "class-content-vectors", payload: { classId: 77 } },
     ]);
 
     // Memory: summary as AI_NEXT first, snippets as AI_INITIAL — all at the
@@ -439,8 +436,16 @@ describe("makeGenerateNextClass", () => {
 
     const prompt = state.prompts[0] ?? "";
     expect(prompt).not.toContain("Questions the learner asked Axon");
-    // The content-vectorization job is enqueued with the fresh class id.
+    // The quiz job is enqueued with the fresh class id, then content vectors.
     expect(state.enqueued).toEqual([
+      {
+        jobName: "class-quiz",
+        payload: {
+          classId: 77,
+          skillId: 10,
+          quizTargets: ["left join unmatched rows", "result filtering"],
+        },
+      },
       { jobName: "class-content-vectors", payload: { classId: 77 } },
     ]);
   });
@@ -780,7 +785,10 @@ describe("makeGenerateNextClass", () => {
     });
 
     expect(result.ok).toBe(true);
+    // The pipeline settles ACTIVE twice by design now: once right after the
+    // class commit (learner-facing), once via settlePhase at the end.
     expect(state.skillUpdates).toEqual([
+      { id: 10, patch: { status: "ACTIVE" } },
       { id: 10, patch: { status: "ACTIVE" } },
     ]);
   });

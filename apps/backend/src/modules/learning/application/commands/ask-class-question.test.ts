@@ -52,7 +52,10 @@ const makeDeps = (
     findQuestionCountsByClassIds: async () => {
       throw new Error("not used in ask tests");
     },
-    createWithQuestions: async () => {
+    create: async () => {
+      throw new Error("not used in ask tests");
+    },
+    addQuestions: async () => {
       throw new Error("not used in ask tests");
     },
     listBySkill: async () => {

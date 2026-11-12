@@ -131,6 +131,15 @@ export const makeVideoRepository = (): VideoRepository => ({
     await prisma.class.update({ where: { id: classId }, data: { clipStatus: status } });
   },
 
+  bumpClipAttempts: async (classId) => {
+    const klass = await prisma.class.update({
+      where: { id: classId },
+      data: { clipAttempts: { increment: 1 } },
+      select: { clipAttempts: true },
+    });
+    return klass.clipAttempts;
+  },
+
   findClassForClips: async (classId) => {
     const klass = await prisma.class.findUnique({
       where: { id: classId },

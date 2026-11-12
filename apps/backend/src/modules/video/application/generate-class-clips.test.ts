@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 
 import {
   makeGenerateClassClips,
+  CLASS_VIDEO_CLIPS_JOB,
   type GenerateClassClipsDeps,
 } from "@/modules/video/application/generate-class-clips";
 import type { GeminiVideoClient } from "@/modules/video/infrastructure/gemini-video.client";
@@ -17,6 +18,7 @@ type Repo = Pick<
   VideoRepository,
   | "findClassForClips"
   | "setClipStatus"
+  | "bumpClipAttempts"
   | "replaceClassClips"
   | "upsertVideoAsset"
 >;
@@ -38,11 +40,16 @@ const makeRepo = (klass: typeof CLASS_ROW = CLASS_ROW) => {
   const state = {
     clips: [] as NewClassClip[],
     finalStatus: null as string | null,
+    attempts: 0,
   };
   const repo = {
     findClassForClips: async () => klass,
     setClipStatus: async (_id: number, status: string) => {
       state.finalStatus = status;
+    },
+    bumpClipAttempts: async () => {
+      state.attempts += 1;
+      return state.attempts;
     },
     replaceClassClips: async (_id: number, clips: NewClassClip[]) => {
       state.clips = clips;
@@ -79,14 +86,24 @@ const makeSearch = (): Pick<YouTubeScraperPort, "searchYouTube"> => ({
   }),
 });
 const makeGemini = (
-  result: { found: true; startSeconds: number; endSeconds: number; summary: string } | { found: false } | { error: true },
+  result:
+    | { found: true; startSeconds: number; endSeconds: number; summary: string }
+    | { found: false }
+    | { error: true; httpStatus?: number },
 ) => {
   const inputs: Parameters<GeminiVideoClient["selectClipSegment"]>[0][] = [];
   const gemini: GeminiVideoClient = {
     selectClipSegment: async (input) => {
       inputs.push(input);
       return "error" in result
-        ? { ok: false, error: { kind: "HttpRequestFailed", detail: "down" } }
+        ? {
+            ok: false,
+            error: {
+              kind: "HttpRequestFailed" as const,
+              detail: "down",
+              httpStatus: result.httpStatus,
+            },
+          }
         : ok(result);
     },
   };
@@ -95,6 +112,8 @@ const makeGemini = (
 
 const DEFAULT_PLAN =
   '{"helps":true,"concepts":[{"query":"sql inner joins explained","anchorParagraph":1}]}';
+
+const enqueued: Array<{ jobName: string; payload: unknown }> = [];
 
 const makeDeps = (
   repo: VideoRepository,
@@ -105,9 +124,17 @@ const makeDeps = (
   search: makeSearch(),
   ai,
   gemini,
+  jobs: {
+    enqueue: (jobName, payload) => {
+      enqueued.push({ jobName, payload });
+    },
+  },
 });
 
 describe("makeGenerateClassClips", () => {
+  beforeEach(() => {
+    enqueued.length = 0;
+  });
   it("selects a clamped clip and flips the class READY", async () => {
     const { repo, state } = makeRepo();
     const { gemini } = makeGemini({ found: true, startSeconds: 120, endSeconds: 400, summary: "joins" });
@@ -150,5 +177,32 @@ describe("makeGenerateClassClips", () => {
     await makeGenerateClassClips(makeDeps(repo, gemini))({ classId: 5 });
     expect(state.finalStatus).toBeNull();
     expect(state.clips).toEqual([]);
+  });
+
+  it("requeues immediately on a Gemini 5xx instead of idling the lease", async () => {
+    const { repo, state } = makeRepo();
+    const { gemini } = makeGemini({ error: true, httpStatus: 503 });
+    await makeGenerateClassClips(makeDeps(repo, gemini))({ classId: 5 });
+
+    expect(state.attempts).toBe(1);
+    expect(state.finalStatus).toBeNull();
+    expect(enqueued).toEqual([
+      { jobName: CLASS_VIDEO_CLIPS_JOB, payload: { classId: 5 } },
+    ]);
+  });
+
+  it("flips SKIPPED without requeue once the attempts budget is exhausted", async () => {
+    const { repo, state } = makeRepo();
+    const { gemini } = makeGemini({ error: true, httpStatus: 503 });
+    const run = makeGenerateClassClips(makeDeps(repo, gemini));
+
+    await run({ classId: 5 }); // attempt 1 → requeue
+    await run({ classId: 5 }); // attempt 2 → requeue
+    enqueued.length = 0;
+    await run({ classId: 5 }); // attempt 3 → budget spent
+
+    expect(state.attempts).toBe(3);
+    expect(state.finalStatus).toBe("SKIPPED");
+    expect(enqueued).toEqual([]);
   });
 });

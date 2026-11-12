@@ -12,16 +12,14 @@ import { CLASS_CONTENT_VECTORS_JOB } from "@/modules/memory/application/vectoriz
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
   buildInitSkillPrompt,
-  INIT_SKILL_SCHEMA,
+  LESSON_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
 import { validateLessonLanguages } from "@/modules/tutoring/domain/lesson-langs";
 import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
-import {
-  extractJsonObject,
-  toGeneratedQuestion,
-  type GeneratedQuestion,
-} from "@/modules/tutoring/domain/parse";
+import { extractJsonObject } from "@/modules/tutoring/domain/parse";
+import { logger } from "@/lib/logger";
+import { CLASS_QUIZ_JOB } from "@/modules/tutoring/application/generate-class-quiz";
 import type { EventRepository } from "@/modules/learning/domain/event/event.repository";
 import type { SkillRepository } from "@/modules/learning/domain/skill/skill.repository";
 import type { ClassRepository } from "@/modules/learning/domain/class/class.repository";
@@ -45,7 +43,7 @@ export type ParsedFirstLesson = {
   baseLanguage: string;
   contentLanguages: string[];
   lessonSummary: string;
-  questions: GeneratedQuestion[];
+  quizTargets: string[];
   contextSnippets: string[];
 };
 
@@ -164,7 +162,7 @@ export const makeGenerateFirstLesson =
     const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: TUTOR_SYSTEM, prompt },
-      { schemaName: "init_skill", responseSchema: INIT_SKILL_SCHEMA },
+      { schemaName: "init_skill", responseSchema: LESSON_SCHEMA },
     );
 
     if (!generation.ok) {
@@ -190,9 +188,9 @@ export const makeGenerateFirstLesson =
           ? raw.contentLanguages.filter((l): l is string => typeof l === "string")
           : [],
         lessonSummary: raw.lessonSummary ?? "",
-        questions: (Array.isArray(raw.questions) ? raw.questions : [])
-          .map(toGeneratedQuestion)
-          .filter((q): q is GeneratedQuestion => q !== null),
+        quizTargets: Array.isArray(raw.quizTargets)
+          ? raw.quizTargets.filter((t): t is string => typeof t === "string")
+          : [],
         contextSnippets: raw.contextSnippets ?? [],
       };
       const langViolation = validateLessonLanguages(
@@ -216,23 +214,10 @@ export const makeGenerateFirstLesson =
       });
     }
 
-    // A lesson without questions is a dead end — retry-skill is the only
-    // way forward. Fail the generation instead of persisting a hollow
-    // class (the skill settles FAILED; the client offers a retry).
-    if (parsed.questions.length === 0) {
-      recordAiAttempt({
-        userId: input.userId,
-        operation: "init_skill",
-        outcome: "empty",
-        latencyMs: Date.now() - generationStartedAt,
-        rawChars: generation.value.raw.length,
-        errorKind: "model returned no questions",
-      });
-      return await fail({
-        kind: "AiResponseInvalid",
-        detail: "model returned no questions",
-      });
-    }
+    // The quiz is written by the CLASS_QUIZ_JOB against the finished lesson
+    // text (see generate-class-quiz) — the lesson call only outputs
+    // quizTargets. An empty targets list is fine: the quiz prompt falls
+    // back to deriving targets from the lesson text.
 
     recordAiAttempt({
       userId: input.userId,
@@ -259,23 +244,25 @@ export const makeGenerateFirstLesson =
         response: generation.value.raw,
       },
     });
-    const createdClass = await classRepo.createWithQuestions(
-      {
-        skillId: input.skillId,
-        index: 0,
-        title: parsed.classTitle,
-        contentMd: parsed.classContentMd,
-        baseLanguage: parsed.baseLanguage,
-        aiModel: chatModel,
-      },
-      parsed.questions.map((question) => ({
-        type: question.type,
-        text: question.text,
-        choices: question.choices,
-        answerKey: question.answerKey,
-        aiModel: chatModel,
-      })),
-    );
+    const createdClass = await classRepo.create({
+      skillId: input.skillId,
+      index: 0,
+      title: parsed.classTitle,
+      contentMd: parsed.classContentMd,
+      baseLanguage: parsed.baseLanguage,
+      aiModel: chatModel,
+    });
+
+    // The learner-facing artifact is the conspect — settle ACTIVE the moment
+    // the class exists. Quiz, vectors, and clips all continue in background.
+    await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+
+    // Quiz: separate broker job against the finished lesson text.
+    jobs.enqueue(CLASS_QUIZ_JOB, {
+      classId: createdClass.id,
+      skillId: input.skillId,
+      quizTargets: parsed.quizTargets,
+    });
 
     // Conspect memory (Phase 8 D3): the class's top-level markdown blocks
     // become CONTENT_CHUNK vectors via the background vectorizer —
@@ -284,6 +271,8 @@ export const makeGenerateFirstLesson =
 
     // Lesson summary (AI_NEXT — the per-lesson memory unit) and the
     // learner-facing snippets (AI_INITIAL) share one embedding call.
+    // Best-effort: ACTIVE is already settled — memory degradation must not
+    // fail the skill (QA/personalization degrade gracefully without vectors).
     const vectorInputs: { text: string; source: VectorSource }[] = [];
     if (parsed.lessonSummary.trim().length > 0) {
       vectorInputs.push({
@@ -300,31 +289,31 @@ export const makeGenerateFirstLesson =
         vectorInputs.map((vector) => vector.text),
       );
       if (!embeddings.ok) {
-        return await fail(embeddings.error);
+        logger.warn(
+          { ...logCtx, detail: embeddings.error.detail },
+          "Snippet embedding failed; continuing without memory vectors",
+        );
+      } else {
+        const tokenCounts = embeddingTokenCounts(
+          embeddings.value.usage,
+          embeddings.value.embeddings.length,
+        );
+        const vectors: NewVector[] = embeddings.value.embeddings.map(
+          (embedding, i) => ({
+            skillId: input.skillId,
+            userId: input.userId,
+            classId: createdClass.id,
+            embedding,
+            source: vectorInputs[i].source,
+            textSnippet: vectorInputs[i].text,
+            classIndex: 0,
+            tokenCount: tokenCounts[i],
+          }),
+        );
+        await recordVectors(vectors);
       }
-      const tokenCounts = embeddingTokenCounts(
-        embeddings.value.usage,
-        embeddings.value.embeddings.length,
-      );
-      const vectors: NewVector[] = embeddings.value.embeddings.map(
-        (embedding, i) => ({
-          skillId: input.skillId,
-          userId: input.userId,
-          classId: createdClass.id,
-          embedding,
-          source: vectorInputs[i].source,
-          textSnippet: vectorInputs[i].text,
-          classIndex: 0,
-          tokenCount: tokenCounts[i],
-        }),
-      );
-      // Best-effort: the lesson is fully persisted by now — a vector-store
-      // outage must not fail the skill (the sweeper re-arms nothing for
-      // memory; QA/personalization degrade gracefully without the vectors).
-      await recordVectors(vectors);
     }
 
-    await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
     generationSucceeded(logCtx, {
       durationMs: Date.now() - startedAt,
       classId: createdClass.id,

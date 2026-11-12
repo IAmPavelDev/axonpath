@@ -35,8 +35,11 @@ import { getVectorizeClassContentJobHandler } from "./vectorizeClassContentJobHa
 import { getGradeOpenEndedJobHandler } from "./gradeOpenEndedJobHandler";
 import { getSkillRecommendationsJobHandler } from "./skill-recommendations-job-handler";
 import { getClassVideoClipsJobHandler } from "./class-video-clips-job-handler";
+import { getClassQuizJobHandler } from "./class-quiz-job-handler";
 import type { GenerateSkillRecommendations } from "@/modules/video/application/generate-skill-recommendations";
 import type { GenerateClassClips } from "@/modules/video/application/generate-class-clips";
+import type { GenerateClassQuiz } from "@/modules/tutoring/application/generate-class-quiz";
+import { CLASS_QUIZ_JOB } from "@/modules/tutoring/application/generate-class-quiz";
 import { SKILL_RECOMMENDATIONS_JOB } from "@/modules/video/application/generate-skill-recommendations";
 import { CLASS_VIDEO_CLIPS_JOB } from "@/modules/video/application/generate-class-clips";
 
@@ -57,6 +60,7 @@ export type JobRegistryDeps = {
   gradeOpenEnded: GradeOpenEnded;
   generateSkillRecommendations: GenerateSkillRecommendations;
   generateClassClips: GenerateClassClips;
+  generateClassQuiz: GenerateClassQuiz;
 };
 
 export const makeJobHandlers = ({
@@ -70,6 +74,7 @@ export const makeJobHandlers = ({
   gradeOpenEnded,
   generateSkillRecommendations,
   generateClassClips,
+  generateClassQuiz,
 }: JobRegistryDeps): Record<string, JobHandler> => ({
   [SKILL_INIT_JOB]: getGenerateSkillMetadataJobHandler(generateSkillMetadata),
   [SKILL_FIRST_LESSON_JOB]: getGenerateFirstLessonJobHandler(generateFirstLesson),
@@ -83,4 +88,5 @@ export const makeJobHandlers = ({
     generateSkillRecommendations,
   ),
   [CLASS_VIDEO_CLIPS_JOB]: getClassVideoClipsJobHandler(generateClassClips),
+  [CLASS_QUIZ_JOB]: getClassQuizJobHandler(generateClassQuiz),
 });

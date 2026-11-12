@@ -7,6 +7,7 @@ import {
 import { logger } from "@/lib/logger";
 
 import type { AiPort } from "@/modules/tutoring/ports";
+import type { JobQueuePort } from "@/modules/platform/ports/jobs";
 import { extractJsonObject } from "@/modules/tutoring/domain/parse";
 import type { GeminiVideoClient } from "@/modules/video/infrastructure/gemini-video.client";
 import { clampClipWindow } from "@/modules/video/domain/video-enrichment";
@@ -25,6 +26,9 @@ export type GenerateClassClipsDeps = {
   search: Pick<YouTubeScraperPort, "searchYouTube">;
   ai: Pick<AiPort, "generateJson">;
   gemini: GeminiVideoClient;
+  /** Broker enqueue: transient provider failures requeue immediately
+   * instead of waiting for the sweeper's lease window. */
+  jobs: Pick<JobQueuePort, "enqueue">;
   maxConcepts?: number;
   candidatesPerConcept?: number;
 };
@@ -60,6 +64,10 @@ const PLAN_CONTENT_CHARS = 8000;
 const MIN_CANDIDATE_SECONDS = 120;
 const MAX_CANDIDATE_SECONDS = 3600;
 
+/** Attempts budget before the silent give-up flips the class SKIPPED. The
+ * sweeper imports it — keep it beside the job that owns the semantics. */
+export const CLIPS_MAX_ATTEMPTS = 3;
+
 /**
  * Lesson (class) video clips: the model decides per class whether a video
  * would improve it; for at most `maxConcepts` concepts it picks the best
@@ -74,11 +82,14 @@ export const makeGenerateClassClips =
     search,
     ai,
     gemini,
+    jobs,
     maxConcepts = 2,
     candidatesPerConcept = 2,
   }: GenerateClassClipsDeps) =>
   async (input: { classId: number }): Promise<void> => {
     const pipelineStartedAt = Date.now();
+    /** Gemini 5xx hit at least one candidate — requeue immediately on skip. */
+    let transientFailure = false;
     const klass = await videoRepo.findClassForClips(input.classId);
     if (!klass) {
       generationSkipped(
@@ -219,6 +230,11 @@ export const makeGenerateClassClips =
           language: klass.baseLanguage,
         });
         if (!selection.ok) {
+          // 5xx = provider-side transient (overload); worth an immediate
+          // retry instead of idling out the sweeper's lease window.
+          if ((selection.error.httpStatus ?? 0) >= 500) {
+            transientFailure = true;
+          }
           logger.warn(
             {
               ...logCtx,
@@ -272,8 +288,34 @@ export const makeGenerateClassClips =
     }
 
     if (clips.length === 0) {
-      // Nothing usable surfaced this pass — leave PENDING so the sweeper can
-      // retry; the attempts budget turns it SKIPPED silently in the end.
+      if (transientFailure) {
+        // Provider-side outage (e.g. Gemini 503): retry now through the
+        // broker instead of idling the lease window. The attempts budget
+        // still applies — the give-up flips the class SKIPPED silently.
+        const attempts = await videoRepo.bumpClipAttempts(input.classId);
+        if (attempts < CLIPS_MAX_ATTEMPTS) {
+          jobs.enqueue(CLASS_VIDEO_CLIPS_JOB, { classId: input.classId });
+          generationSkipped(
+            logCtx,
+            {
+              durationMs: Date.now() - pipelineStartedAt,
+              reason: `transient provider failure; requeued immediately (attempt ${attempts}/${CLIPS_MAX_ATTEMPTS})`,
+            },
+          );
+          return;
+        }
+        await videoRepo.setClipStatus(input.classId, "SKIPPED");
+        generationSkipped(
+          logCtx,
+          {
+            durationMs: Date.now() - pipelineStartedAt,
+            reason: "transient provider failures exhausted the attempts budget",
+          },
+        );
+        return;
+      }
+      // Nothing usable surfaced and the provider was healthy — leave PENDING
+      // so the sweeper can retry; the attempts budget turns it SKIPPED.
       generationSkipped(
         logCtx,
         {

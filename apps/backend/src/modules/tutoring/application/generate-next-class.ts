@@ -12,16 +12,14 @@ import { err, ok, type Result } from "@/modules/platform/result";
 import type { AiPort } from "@/modules/tutoring/ports";
 import {
   buildNextClassPrompt,
-  NEXT_CLASS_SCHEMA,
+  LESSON_SCHEMA,
 } from "@/modules/tutoring/domain/prompts";
 import { validateLessonLanguages } from "@/modules/tutoring/domain/lesson-langs";
 import { TUTOR_SYSTEM } from "@/modules/tutoring/domain/personas";
 import { embeddingTokenCounts } from "@/modules/tutoring/domain/embedding-tokens";
-import {
-  extractJsonObject,
-  toGeneratedQuestion,
-  type GeneratedQuestion,
-} from "@/modules/tutoring/domain/parse";
+import { extractJsonObject } from "@/modules/tutoring/domain/parse";
+import { logger } from "@/lib/logger";
+import { CLASS_QUIZ_JOB } from "@/modules/tutoring/application/generate-class-quiz";
 import {
   outcomeForError,
   type RecordAiAttempt,
@@ -51,7 +49,7 @@ export type ParsedNextClass = {
   baseLanguage: string;
   contentLanguages: string[];
   lessonSummary: string;
-  questions: GeneratedQuestion[];
+  quizTargets: string[];
   contextSnippets: string[];
 };
 
@@ -291,7 +289,7 @@ export const makeGenerateNextClass =
     const generationStartedAt = Date.now();
     const generation = await ai.generateJson(
       { system: TUTOR_SYSTEM, prompt },
-      { schemaName: "next_class", responseSchema: NEXT_CLASS_SCHEMA },
+      { schemaName: "next_class", responseSchema: LESSON_SCHEMA },
     );
     if (!generation.ok) {
       recordAiAttempt({
@@ -331,9 +329,9 @@ export const makeGenerateNextClass =
           ? raw.contentLanguages.filter((l): l is string => typeof l === "string")
           : [],
         lessonSummary: raw.lessonSummary ?? "",
-        questions: (Array.isArray(raw.questions) ? raw.questions : [])
-          .map(toGeneratedQuestion)
-          .filter((q): q is GeneratedQuestion => q !== null),
+        quizTargets: Array.isArray(raw.quizTargets)
+          ? raw.quizTargets.filter((t): t is string => typeof t === "string")
+          : [],
         contextSnippets: raw.contextSnippets ?? [],
       };
       const langViolation = validateLessonLanguages(
@@ -374,40 +372,10 @@ export const makeGenerateNextClass =
       };
     }
 
-    // A lesson without questions is a dead end — the reconciler waits for
-    // answers through the newest class, which can never happen. Fail the
-    // generation instead of persisting a hollow class.
-    if (parsed.questions.length === 0) {
-      recordAiAttempt({
-        userId: input.userId,
-        operation: "next_class",
-        outcome: "empty",
-        latencyMs: Date.now() - generationStartedAt,
-        rawChars: generation.value.raw.length,
-        errorKind: "model returned no questions",
-      });
-      generationFailed(
-        {
-          pipeline: "next_class",
-          skillId: input.skillId,
-          skillName: skill.topic,
-          userId: input.userId,
-        },
-        {
-          durationMs: Date.now() - pipelineStartedAt,
-          errorKind: "AiResponseInvalid",
-          errorDetail: "model returned no questions",
-        },
-      );
-      await settlePhase();
-      return {
-        ok: false,
-        error: {
-          kind: "AiResponseInvalid",
-          detail: "model returned no questions",
-        },
-      };
-    }
+    // The quiz ships via CLASS_QUIZ_JOB against the finished lesson text —
+    // the lesson call emits quizTargets only. The reconciler tolerates a
+    // newest class with zero questions (no submissions possible yet); the
+    // quiz lands within the broker retry budget.
 
     recordAiAttempt({
       userId: input.userId,
@@ -435,23 +403,25 @@ export const makeGenerateNextClass =
     });
 
     const classIndex = (last?.index ?? -1) + 1;
-    const createdClass = await classRepo.createWithQuestions(
-      {
-        skillId: input.skillId,
-        index: classIndex,
-        title: parsed.classTitle,
-        contentMd: parsed.classContentMd,
-        baseLanguage: parsed.baseLanguage,
-        aiModel: chatModel,
-      },
-      parsed.questions.map((question) => ({
-        type: question.type,
-        text: question.text,
-        choices: question.choices,
-        answerKey: question.answerKey,
-        aiModel: chatModel,
-      })),
-    );
+    const createdClass = await classRepo.create({
+      skillId: input.skillId,
+      index: classIndex,
+      title: parsed.classTitle,
+      contentMd: parsed.classContentMd,
+      baseLanguage: parsed.baseLanguage,
+      aiModel: chatModel,
+    });
+
+    // Learner-visible artifact first: settle ACTIVE before the background
+    // enrichments (quiz job, vectors, clips).
+    await skillRepo.update(input.skillId, { status: SkillStatus.ACTIVE });
+
+    // Quiz: separate broker job against the finished lesson text.
+    jobs.enqueue(CLASS_QUIZ_JOB, {
+      classId: createdClass.id,
+      skillId: input.skillId,
+      quizTargets: parsed.quizTargets,
+    });
 
     // Conspect memory (Phase 8 D3): the class's top-level markdown blocks
     // become CONTENT_CHUNK vectors via the background vectorizer —
@@ -477,54 +447,43 @@ export const makeGenerateNextClass =
         vectorInputs.map((vector) => vector.text),
       );
       if (!embeddings.ok) {
-        generationFailed(
+        // Best-effort: the lesson is persisted and the skill already ACTIVE —
+        // memory degradation must not fail the generation.
+        logger.warn(
           {
             pipeline: "next_class",
             skillId: input.skillId,
-            skillName: skill.topic,
-            userId: input.userId,
+            detail: embeddings.error.detail,
           },
-          {
-            durationMs: Date.now() - pipelineStartedAt,
-            errorKind: embeddings.error.kind,
-            errorDetail: embeddings.error.detail,
-          },
+          "Memory embedding failed; continuing without vectors",
         );
-        await settlePhase();
-        return { ok: false, error: embeddings.error };
-      }
-      const tokenCounts = embeddingTokenCounts(
-        embeddings.value.usage,
-        embeddings.value.embeddings.length,
-      );
-      const recorded = await recordVectors(
-        embeddings.value.embeddings.map((embedding, i) => ({
-          skillId: input.skillId,
-          userId: input.userId,
-          classId: createdClass.id,
-          embedding,
-          source: vectorInputs[i].source,
-          textSnippet: vectorInputs[i].text,
-          classIndex,
-          tokenCount: tokenCounts[i],
-        })),
-      );
-      if (!recorded.ok) {
-        generationFailed(
-          {
-            pipeline: "next_class",
+      } else {
+        const tokenCounts = embeddingTokenCounts(
+          embeddings.value.usage,
+          embeddings.value.embeddings.length,
+        );
+        const recorded = await recordVectors(
+          embeddings.value.embeddings.map((embedding, i) => ({
             skillId: input.skillId,
-            skillName: skill.topic,
             userId: input.userId,
-          },
-          {
-            durationMs: Date.now() - pipelineStartedAt,
-            errorKind: recorded.error.kind,
-            errorDetail: recorded.error.detail,
-          },
+            classId: createdClass.id,
+            embedding,
+            source: vectorInputs[i].source,
+            textSnippet: vectorInputs[i].text,
+            classIndex,
+            tokenCount: tokenCounts[i],
+          })),
         );
-        await settlePhase();
-        return { ok: false, error: recorded.error };
+        if (!recorded.ok) {
+          logger.warn(
+            {
+              pipeline: "next_class",
+              skillId: input.skillId,
+              detail: recorded.error.detail,
+            },
+            "Memory vector store write failed; continuing without vectors",
+          );
+        }
       }
     }
 

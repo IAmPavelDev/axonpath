@@ -15,7 +15,7 @@
  * AiAttempt row so effectiveness (parse-failure rate, attempts, latency)
  * is comparable across prompt iterations.
  */
-export const PROMPT_VERSION = "2026-10-17.1";
+export const PROMPT_VERSION = "2026-11-06.1";
 import type { ReviewItem } from "@/modules/learning/domain/quiz/review-schedule";
 
 /** Verbatim fence: text inside is exactly the labeled author's words. */
@@ -55,8 +55,16 @@ ${speechLanguageRules}
 - contentLanguages: every language present in classContentMd, base language
   included, as BCP-47 codes.
 - lessonSummary: 2-4 self-contained sentences describing what this lesson covered and at what depth.
-- questions: 5-10 quiz questions per your instructions. Include 1–2 open-ended questions per lesson (type OPEN_ENDED, choices: [], answerKey: a model answer).
+- quizTargets: 5-10 short phrases naming the distinct concepts, skills and
+  pitfalls this lesson teaches — the checklist the quiz is written against,
+  ordered from most to least central.
 - contextSnippets: 5-10 atomic facts about this learner per your instructions.`;
+
+const quizJsonInstructions = `Return JSON with:
+- questions: 5-10 quiz questions testing exactly the quizTargets against the
+  lesson text included below. Include 1–2 open-ended questions per lesson
+  (type OPEN_ENDED, choices: [], answerKey: a model answer). Test the taught
+  material freshly phrased — never quote the lesson verbatim.`;
 
 export const buildInitSkillPrompt = (input: {
   topic: string;
@@ -84,13 +92,12 @@ ${learnedContext}
 };
 
 /**
- * Every generated lesson (init + next) returns the same shape. lessonSummary
- * is the per-lesson memory unit: embedded and stored as an AI_NEXT vector so
- * the next lesson knows what was already taught. baseLanguage + the
- * [[lang:]] markers drive read-aloud voice routing (see speechLanguageRules);
- * the generation jobs validate them after parse and fail retryably.
+ * Lesson calls (init + next) answer to LESSON_SCHEMA; the quiz is generated
+ * separately by the CLASS_QUIZ_JOB against the finished lesson text
+ * (QUIZ_SCHEMA) — splitting the completion roughly halves the wall-clock a
+ * learner waits for the conspect while the quiz keeps full lesson coherence.
  */
-export const INIT_SKILL_SCHEMA = {
+export const LESSON_SCHEMA = {
   type: "object",
   properties: {
     classTitle: { type: "string" },
@@ -107,6 +114,29 @@ export const INIT_SKILL_SCHEMA = {
       minItems: 1,
     },
     lessonSummary: { type: "string" },
+    quizTargets: {
+      type: "array",
+      description: "Concepts this lesson teaches, ordered most to least central",
+      items: { type: "string" },
+    },
+    contextSnippets: { type: "array", items: { type: "string" } },
+  },
+  required: [
+    "classTitle",
+    "classContentMd",
+    "baseLanguage",
+    "contentLanguages",
+    "lessonSummary",
+    "quizTargets",
+    "contextSnippets",
+  ],
+  additionalProperties: false,
+} as const;
+
+/** Quiz-job schema: questions against the finished lesson text. */
+export const QUIZ_SCHEMA = {
+  type: "object",
+  properties: {
     questions: {
       type: "array",
       items: {
@@ -124,22 +154,10 @@ export const INIT_SKILL_SCHEMA = {
         additionalProperties: false,
       },
     },
-    contextSnippets: { type: "array", items: { type: "string" } },
   },
-  required: [
-    "classTitle",
-    "classContentMd",
-    "baseLanguage",
-    "contentLanguages",
-    "lessonSummary",
-    "questions",
-    "contextSnippets",
-  ],
+  required: ["questions"],
   additionalProperties: false,
 } as const;
-
-/** Next-class lessons answer to the same schema as the initial one. */
-export const NEXT_CLASS_SCHEMA = INIT_SKILL_SCHEMA;
 
 export type NextClassMistake = {
   questionText: string;
@@ -266,6 +284,63 @@ The learner has not attempted the previous lesson's quiz yet — continue where 
   return prompt;
 };
 
+/**
+ * Quiz-job prompt: writes the quiz against the FINISHED lesson text (stronger
+ * coherence than the old single-completion quiz) plus the lesson's own
+ * quizTargets checklist. Personalization (missed questions, mastery review)
+ * steers what gets re-tested; the targets order difficulty.
+ */
+export const buildQuizPrompt = (input: {
+  topic: string;
+  lessonTitle: string;
+  lessonContentMd: string;
+  quizTargets: string[];
+  mistakes: NextClassMistake[];
+  review: ReviewItem[];
+}): string => {
+  let prompt = `Write the quiz for this finished lesson.
+
+Skill topic:
+${fence(input.topic)}
+Lesson: "${input.lessonTitle}"
+Lesson text:
+${fence(clamp(input.lessonContentMd, 12000))}
+
+Quiz targets (test these, most central first):
+${input.quizTargets.map((t) => `- ${t}`).join("\n") || "- (none listed — derive from the lesson text)"}
+
+${quizJsonInstructions}`;
+
+  if (input.mistakes.length > 0) {
+    const mistakeLines = input.mistakes
+      .map(
+        (m) =>
+          `- Question (Axon generated): ${m.questionText}\n  The learner typed: ${fence(m.userAnswer)}\n  The lesson's correct answer: ${fence(m.correctAnswer)}`,
+      )
+      .join("\n");
+    prompt += `
+
+The learner missed these questions in an earlier lesson's quiz. Include 1-2 new questions that check the same understanding — freshly phrased, never the same questions:
+${mistakeLines}
+`;
+  }
+
+  if (input.review.length > 0) {
+    const reviewLines = input.review
+      .map(
+        (item) =>
+          `- [${item.urgency}] ${fence(clamp(item.questionText, 200))} (${item.note})`,
+      )
+      .join("\n");
+    prompt += `
+
+Mastery ledger — older quiz results worth re-testing now. Include 1-2 questions checking these understandings, freshly phrased:
+${reviewLines}
+`;
+  }
+
+  return prompt;
+};
 
 /**
  * Open-ended grading (Phase 7 D4): one batched request judges every

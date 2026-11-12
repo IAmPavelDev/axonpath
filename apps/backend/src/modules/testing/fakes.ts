@@ -43,6 +43,7 @@ import { makeJobHandlers } from "@/modules/jobs/registry";
 import { makeGenerateSkillMetadata } from "@/modules/tutoring/application/generate-skill-metadata";
 import { makeGenerateFirstLesson } from "@/modules/tutoring/application/generate-first-lesson";
 import { makeGenerateNextClass } from "@/modules/tutoring/application/generate-next-class";
+import { makeGenerateClassQuiz } from "@/modules/tutoring/application/generate-class-quiz";
 import { makeAnswerClassQuestion } from "@/modules/tutoring/application/answer-class-question";
 import { makeNextClassWorker } from "@/modules/jobs/next-class-worker";
 import { makeMineAnswerVectors } from "@/modules/memory/application/mine-answer-vectors";
@@ -65,6 +66,8 @@ export type AiScript = {
   metadataRaw?: string;
   initRaw?: string;
   nextRaw?: string;
+  /** Quiz-job response; default is one TRUE_FALSE question. */
+  quizRaw?: string;
   /** Grading response for open-ended submits; default grades nothing (degrade). */
   gradingRaw?: string;
   /** Plain-text answer for class Q&A; default is a one-liner. */
@@ -158,6 +161,11 @@ const INIT_JSON = JSON.stringify({
   contentLanguages: ["en"],
   lessonSummary:
     "This lesson introduced inner and left joins with small datasets.",
+  quizTargets: ["inner join row matching", "unmatched rows are dropped"],
+  contextSnippets: ["First exposure to SQL joins"],
+});
+
+const QUIZ_JSON = JSON.stringify({
   questions: [
     {
       type: "TRUE_FALSE",
@@ -166,7 +174,6 @@ const INIT_JSON = JSON.stringify({
       answerKey: "True",
     },
   ],
-  contextSnippets: ["First exposure to SQL joins"],
 });
 
 const NEXT_JSON = JSON.stringify({
@@ -175,14 +182,7 @@ const NEXT_JSON = JSON.stringify({
   baseLanguage: "en",
   contentLanguages: ["en"],
   lessonSummary: "The learner practiced outer joins and result filtering.",
-  questions: [
-    {
-      type: "MULTIPLE_CHOICE",
-      text: "Which join keeps unmatched left rows?",
-      choices: ["LEFT JOIN", "INNER JOIN"],
-      answerKey: "LEFT JOIN",
-    },
-  ],
+  quizTargets: ["left join unmatched rows", "result filtering"],
   contextSnippets: ["Struggled with LEFT JOIN basics"],
 });
 
@@ -249,9 +249,11 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
             ? (script.initRaw ?? INIT_JSON)
             : request.schemaName === "next_class"
               ? (script.nextRaw ?? NEXT_JSON)
-              : request.schemaName === "grading"
-                ? (script.gradingRaw ?? GRADING_RAW_DEFAULT)
-                : null;
+              : request.schemaName === "class_quiz"
+                ? (script.quizRaw ?? QUIZ_JSON)
+                : request.schemaName === "grading"
+                  ? (script.gradingRaw ?? GRADING_RAW_DEFAULT)
+                  : null;
       if (raw === null) {
         throw new Error(`unexpected schema ${request.schemaName}`);
       }
@@ -455,7 +457,7 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         questionCount,
       }));
     },
-    createWithQuestions: async (cls, questions) => {
+    create: async (cls) => {
       const id = ++classIdSeq;
       state.classes.set(id, {
         id,
@@ -465,12 +467,15 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
         contentMd: cls.contentMd,
         baseLanguage: cls.baseLanguage,
       });
+      return { id };
+    },
+    addQuestions: async (classId, skillId, questions) => {
       for (const question of questions) {
         const questionId = ++questionIdSeq;
         state.questions.set(questionId, {
           id: questionId,
-          skillId: cls.skillId,
-          classId: id,
+          skillId,
+          classId,
           type: question.type,
           text: question.text,
           choices: question.choices,
@@ -478,7 +483,6 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
           aiModel: question.aiModel,
         });
       }
-      return { id };
     },
     listBySkill: async () => [],
     listBySkillByIndex: async (skillId) =>
@@ -1072,6 +1076,13 @@ export const makeLoopHarness = (script: AiScript = {}): LoopHarness => {
     gradeOpenEnded,
     generateSkillRecommendations: async () => undefined,
     generateClassClips: async () => undefined,
+    generateClassQuiz: makeGenerateClassQuiz({
+      ai,
+      recordAiAttempt: () => {},
+      skillRepo,
+      classRepo,
+      chatModel: "glm-5.3-flash",
+    }),
   });
 
   const runJob = async (jobName: string) => {

@@ -13,6 +13,7 @@ export type GenerationPipeline =
   | "skill_metadata"
   | "skill_first_lesson"
   | "next_class"
+  | "class_quiz"
   | "recommendations"
   | "class_clips";
 

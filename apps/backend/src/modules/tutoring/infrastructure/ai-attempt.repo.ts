@@ -8,6 +8,7 @@ export type AiOperation =
   | "init_skill"
   | "skill_metadata"
   | "next_class"
+  | "class_quiz"
   | "grade_open"
   | "qa_answer";
 

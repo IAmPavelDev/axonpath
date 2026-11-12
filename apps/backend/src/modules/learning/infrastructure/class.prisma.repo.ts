@@ -3,42 +3,34 @@ import type { ClassRepository } from "@/modules/learning/domain/class/class.repo
 import type { Class, ClassListItem } from "@/modules/learning/domain/class/class";
 
 export const makePrismaClassRepository = (): ClassRepository => ({
-  createWithQuestions: async (cls, questions): Promise<Pick<Class, "id">> =>
-    // Explicit budget: the default 5 s expired in prod (Neon HTTP latency
-    // spike, 10.3 s) AFTER the inserts landed, killing the generation
-    // pipeline between class-create and settle. 30 s keeps a cold connection
-    // from stranding a generated lesson.
-    prisma.$transaction(
-      async (tx) => {
-        const created = await tx.class.create({
-          data: {
-            skillId: cls.skillId,
-            index: cls.index,
-            title: cls.title,
-            contentMd: cls.contentMd,
-            baseLanguage: cls.baseLanguage,
-            aiModel: cls.aiModel,
-            clipStatus: "PENDING",
-          },
-          select: { id: true },
-        });
-        if (questions.length > 0) {
-          await tx.question.createMany({
-            data: questions.map((question) => ({
-              skillId: cls.skillId,
-              classId: created.id,
-              type: question.type,
-              text: question.text,
-              choices: question.choices,
-              answerKey: question.answerKey,
-              aiModel: question.aiModel,
-            })),
-          });
-        }
-        return created;
+  create: async (cls): Promise<Pick<Class, "id">> =>
+    prisma.class.create({
+      data: {
+        skillId: cls.skillId,
+        index: cls.index,
+        title: cls.title,
+        contentMd: cls.contentMd,
+        baseLanguage: cls.baseLanguage,
+        aiModel: cls.aiModel,
+        clipStatus: "PENDING",
       },
-      { timeout: 30_000, maxWait: 10_000 },
-    ),
+      select: { id: true },
+    }),
+
+  addQuestions: async (classId, skillId, questions) => {
+    if (questions.length === 0) return;
+    await prisma.question.createMany({
+      data: questions.map((question) => ({
+        skillId,
+        classId,
+        type: question.type,
+        text: question.text,
+        choices: question.choices,
+        answerKey: question.answerKey,
+        aiModel: question.aiModel,
+      })),
+    });
+  },
 
   listBySkill: async (skillId, userId): Promise<ClassListItem[]> => {
     const classes = await prisma.class.findMany({

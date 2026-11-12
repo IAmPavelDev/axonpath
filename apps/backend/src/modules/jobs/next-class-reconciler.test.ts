@@ -67,7 +67,8 @@ const makeDeps = ({
     classRepo: {
       findQuestionCountsByClassIds: async () =>
         notUsed("findQuestionCountsByClassIds"),
-      createWithQuestions: async () => notUsed("createWithQuestions"),
+      create: async () => notUsed("create"),
+      addQuestions: async () => notUsed("addQuestions"),
       listBySkill: async () => notUsed("listBySkill"),
       listBySkillByIndex: async () => notUsed("listBySkillByIndex"),
       listByIds: async () => notUsed("listByIds"),

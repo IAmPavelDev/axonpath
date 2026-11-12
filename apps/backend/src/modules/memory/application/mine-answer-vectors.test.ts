@@ -73,7 +73,8 @@ const makeFakeDeps = (options: {
     updateGrades: unused,
   };
   const classRepo: ClassRepository = {
-    createWithQuestions: unused,
+    create: unused,
+    addQuestions: unused,
     findQuestionCountsByClassIds: unused,
     listBySkill: unused,
     listBySkillByIndex: unused,

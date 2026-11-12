@@ -3,21 +3,26 @@ import type { Class, ClassListItem } from "./class";
 
 export type ClassRepository = {
   /**
-   * Persist a class and its quiz questions in one transaction — a crash can
-   * never strand a class without questions. Vectors stay best-effort AFTER
+   * Persist a class row. Questions are written separately by the quiz job
+   * (CLASS_QUIZ_JOB) — the broker guarantees at-least-once delivery, and the
+   * generation's failure path marks the skill FAILED so a crash can never
+   * strand a permanently question-less class. Vectors stay best-effort AFTER
    * the relational commit (Qdrant cannot join a relational transaction).
    */
-  createWithQuestions(
-    cls: {
-      skillId: number;
-      index: number;
-      title: string;
-      contentMd: string;
-      baseLanguage: string | null;
-      aiModel?: string;
-    },
+  create(cls: {
+    skillId: number;
+    index: number;
+    title: string;
+    contentMd: string;
+    baseLanguage: string | null;
+    aiModel?: string;
+  }): Promise<Pick<Class, "id">>;
+  /** Quiz-job completion side: persist the generated questions for a class. */
+  addQuestions(
+    classId: number,
+    skillId: number,
     questions: Array<Omit<NewQuestion, "skillId" | "classId">>,
-  ): Promise<Pick<Class, "id">>;
+  ): Promise<void>;
   listBySkill(skillId: number, userId: number): Promise<ClassListItem[]>;
   /**
    * Progress read: every lesson of a skill in curriculum order with its
